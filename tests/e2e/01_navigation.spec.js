@@ -5,13 +5,18 @@
  */
 import { test, expect } from '@playwright/test';
 
-// Helper: افتح الـ sidebar
-async function openSidebar(page) {
-  // زرار الـ toggle في أسفل الـ sidebar
-  const toggle = page.locator('.fe-toggle-btn').first();
-  if (await toggle.count() > 0) {
-    await toggle.click();
-    await page.waitForTimeout(400); // انتظر animation
+// ملاحظة: الـ sidebar يبدأ مفتوح useState(true) — مش محتاجين نفتحه
+// لو اتقفل، نفتحه تاني
+async function ensureSidebarOpen(page) {
+  await page.waitForTimeout(300);
+  // نتحقق إن النص ظاهر - لو لأ، نضغط Toggle
+  const empVisible = await page.getByText('Employees', { exact: true }).first().isVisible().catch(() => false);
+  if (!empVisible) {
+    const toggle = page.locator('.fe-toggle-btn').first();
+    if (await toggle.count() > 0) {
+      await toggle.click();
+      await page.waitForTimeout(400);
+    }
   }
 }
 
@@ -27,7 +32,7 @@ test.describe('Navigation & App Load', () => {
   test('الـ sidebar يظهر بالموديولات الصحيحة', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await openSidebar(page);
+    await ensureSidebarOpen(page);
 
     // بعد فتح الـ sidebar تظهر النصوص
     const navLabels = ['Employees', 'Clients', 'Partners', 'Finance', 'Analytics', 'Settings'];
@@ -47,7 +52,7 @@ test.describe('Navigation & App Load', () => {
   test('التنقل لـ Employees يعمل', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await openSidebar(page);
+    await ensureSidebarOpen(page);
     await page.getByText('Employees', { exact: true }).first().click();
     await expect(page.locator('.fe-topbar h1')).toContainText('Workforce', { timeout: 8_000 });
   });
@@ -55,7 +60,7 @@ test.describe('Navigation & App Load', () => {
   test('التنقل لـ Finance يعمل', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await openSidebar(page);
+    await ensureSidebarOpen(page);
     await page.getByText('Finance', { exact: true }).first().click();
     await expect(page.locator('.fe-topbar h1')).toContainText('Finance', { timeout: 8_000 });
   });
@@ -63,7 +68,7 @@ test.describe('Navigation & App Load', () => {
   test('التنقل لـ Analytics يعمل', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await openSidebar(page);
+    await ensureSidebarOpen(page);
     await page.getByText('Analytics', { exact: true }).first().click();
     await expect(page.locator('.fe-topbar h1')).toContainText('Analytics', { timeout: 8_000 });
   });
@@ -71,7 +76,7 @@ test.describe('Navigation & App Load', () => {
   test('التنقل لـ Settings يعمل', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await openSidebar(page);
+    await ensureSidebarOpen(page);
     await page.getByText('Settings', { exact: true }).first().click();
     await expect(page.locator('.fe-topbar h1')).toContainText('Settings', { timeout: 8_000 });
   });
@@ -79,7 +84,7 @@ test.describe('Navigation & App Load', () => {
   test('localStorage يحفظ آخر صفحة', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await openSidebar(page);
+    await ensureSidebarOpen(page);
     await page.getByText('Finance', { exact: true }).first().click();
     await page.waitForTimeout(500);
     const savedNav = await page.evaluate(() => localStorage.getItem('fisheye_nav'));
