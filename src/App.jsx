@@ -20,7 +20,7 @@ import {
   Target, CalendarDays, Receipt, AlertTriangle, RefreshCw, GitBranch
 } from "lucide-react";
 import { ActionCenter } from './ActionCenterV2';
-import { OperationsCalendar, ClientCommandCenter } from './ActionCenter'; // الباقي من القديم
+import { OperationsCalendar, ClientCommandCenter } from './Actioncenter'; // الباقي من القديم
 
 // ملاحظة: إضافة الموظفين تتم من خلال handleAddSingle داخل WorkforceView
 // WhatsApp Helper for Client Communications
