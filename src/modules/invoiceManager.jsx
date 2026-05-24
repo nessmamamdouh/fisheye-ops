@@ -728,7 +728,28 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
   const [showSOAReconcile, setShowSOAReconcile] = useState(false);
   const [filterYear, setFilterYear]           = useState('all');
 
-  const persist = (list) => { setInvoices(list); saveInvoices(list); };
+  // ── Load from Supabase on mount ───────────────────────────────────────────
+  useEffect(() => {
+    supabase.from('fisheye_invoices').select('*').then(({ data, error }) => {
+      if (!error && data && data.length > 0) {
+        saveInvoices(data);
+        setInvoices(data);
+      }
+    });
+  }, []);
+
+  const persist = (list) => {
+    setInvoices(list);
+    saveInvoices(list);
+    // sync to Supabase in background
+    const CHUNK = 50;
+    (async () => {
+      for (let i = 0; i < list.length; i += CHUNK) {
+        const { error } = await supabase.from('fisheye_invoices').upsert(list.slice(i, i + CHUNK), { onConflict: 'id' });
+        if (error) { console.warn('invoices sync error:', error.message); break; }
+      }
+    })();
+  };
 
   const updateStatus = (id, status) => {
     persist(invoices.map(inv =>

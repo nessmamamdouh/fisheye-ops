@@ -5236,13 +5236,27 @@ function FisheyeOpsPro({ employees, setEmployees }) {
     try { return JSON.parse(localStorage.getItem("fisheyeClients_v1")) || DEF_CLIENTS; }
     catch { return DEF_CLIENTS; }
   });
-  const saveClients = c => { setClients(c); localStorage.setItem("fisheyeClients_v1", JSON.stringify(c)); };
+  const saveClients = c => {
+    setClients(c);
+    localStorage.setItem("fisheyeClients_v1", JSON.stringify(c));
+    // sync to Supabase in background
+    supabase.from('fisheye_clients').upsert(c, { onConflict: 'id' }).then(({ error }) => {
+      if (error) console.warn('saveClients Supabase error:', error.message);
+    });
+  };
 
   const [partners, setPartners] = useState(() => {
     try { return JSON.parse(localStorage.getItem("fisheyePartners_v1")) || DEF_PARTNERS; }
     catch { return DEF_PARTNERS; }
   });
-  const savePartners = p => { setPartners(p); localStorage.setItem("fisheyePartners_v1", JSON.stringify(p)); };
+  const savePartners = p => {
+    setPartners(p);
+    localStorage.setItem("fisheyePartners_v1", JSON.stringify(p));
+    // sync to Supabase in background
+    supabase.from('fisheye_partners').upsert(p, { onConflict: 'id' }).then(({ error }) => {
+      if (error) console.warn('savePartners Supabase error:', error.message);
+    });
+  };
 
   const [nav, setNav]   = useState(() => localStorage.getItem("fisheye_nav") || "action");
   const [open, setOpen] = useState(true);

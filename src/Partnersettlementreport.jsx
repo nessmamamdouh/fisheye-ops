@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { supabase } from './utils/supabase';
 import {
   DollarSign, Users, Building2, TrendingUp, ChevronDown, ChevronRight,
   Copy, Check, MessageCircle, Mail, FileText, Download, FileDown, AlertCircle,
@@ -303,6 +304,16 @@ export default function PartnerSettlementReport({ employees = [] }) {
   const [invoiceVersion, setInvoiceVersion] = useState(0);
   const [batchInputs,   setBatchInputs]   = useState({}); // {partnerName: string}
   const [showBatchInput, setShowBatchInput] = useState({}); // {partnerName: bool}
+
+  // ── Load invoices from Supabase on mount ──────────────────────────────────
+  useEffect(() => {
+    supabase.from('fisheye_invoices').select('*').then(({ data, error }) => {
+      if (!error && data && data.length > 0) {
+        localStorage.setItem('fisheye_invoices_v1', JSON.stringify(data));
+        setInvoiceVersion(v => v + 1);
+      }
+    });
+  }, []);
 
   // ── One-time migration: mark Blue Cube commissioned invoices as paid + batch ──
   useEffect(() => {
