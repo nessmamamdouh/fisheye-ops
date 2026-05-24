@@ -5239,10 +5239,8 @@ function FisheyeOpsPro({ employees, setEmployees }) {
   const saveClients = c => {
     setClients(c);
     localStorage.setItem("fisheyeClients_v1", JSON.stringify(c));
-    // sync to Supabase in background
-    supabase.from('fisheye_clients').upsert(c, { onConflict: 'id' }).then(({ error }) => {
-      if (error) console.warn('saveClients Supabase error:', error.message);
-    });
+    supabase.from('fisheye_app_data').upsert({ key: 'fisheyeClients_v1', data: c }, { onConflict: 'key' })
+      .then(({ error }) => { if (error) console.warn('saveClients sync error:', error.message); });
   };
 
   const [partners, setPartners] = useState(() => {
@@ -5252,10 +5250,8 @@ function FisheyeOpsPro({ employees, setEmployees }) {
   const savePartners = p => {
     setPartners(p);
     localStorage.setItem("fisheyePartners_v1", JSON.stringify(p));
-    // sync to Supabase in background
-    supabase.from('fisheye_partners').upsert(p, { onConflict: 'id' }).then(({ error }) => {
-      if (error) console.warn('savePartners Supabase error:', error.message);
-    });
+    supabase.from('fisheye_app_data').upsert({ key: 'fisheyePartners_v1', data: p }, { onConflict: 'key' })
+      .then(({ error }) => { if (error) console.warn('savePartners sync error:', error.message); });
   };
 
   const [nav, setNav]   = useState(() => localStorage.getItem("fisheye_nav") || "action");
@@ -5314,10 +5310,29 @@ function FisheyeOpsPro({ employees, setEmployees }) {
     isOnline, uploadToCloud, downloadFromCloud, backup, bidirectionalSync,
   } = useSupabaseSync(employees, setEmployees);
 
-  // Load from Supabase + realtime
+  // ── Load ALL app data from Supabase on startup ───────────────────────────
   useEffect(() => {
     const loadData = async () => {
       try {
+        // 1. Load general app data (invoices, clients, partners, reminders, etc.)
+        const { data: appData } = await supabase.from('fisheye_app_data').select('*');
+        if (appData && appData.length > 0) {
+          appData.forEach(({ key, data }) => {
+            try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
+          });
+          console.log(`✅ Loaded ${appData.length} data keys from Supabase`);
+          // Update clients and partners state from freshly loaded localStorage
+          try {
+            const c = JSON.parse(localStorage.getItem('fisheyeClients_v1'));
+            if (c && c.length > 0) setClients(c);
+          } catch {}
+          try {
+            const p = JSON.parse(localStorage.getItem('fisheyePartners_v1'));
+            if (p && p.length > 0) setPartners(p);
+          } catch {}
+        }
+
+        // 2. Load employees
         const { data, error } = await supabase.from('employees_master').select('*');
         if (error) throw error;
         if (data && data.length > 0) {

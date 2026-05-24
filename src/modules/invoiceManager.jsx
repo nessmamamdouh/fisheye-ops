@@ -728,12 +728,18 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
   const [showSOAReconcile, setShowSOAReconcile] = useState(false);
   const [filterYear, setFilterYear]           = useState('all');
 
-  // ── Load from Supabase on mount ───────────────────────────────────────────
+  // ── Load from Supabase on mount (prefer fisheye_invoices, fallback to app_data) ──
   useEffect(() => {
     supabase.from('fisheye_invoices').select('*').then(({ data, error }) => {
       if (!error && data && data.length > 0) {
         saveInvoices(data);
         setInvoices(data);
+      } else {
+        // fallback: load from fisheye_app_data
+        supabase.from('fisheye_app_data').select('data').eq('key', 'fisheye_invoices_v1').single()
+          .then(({ data: row }) => {
+            if (row?.data?.length > 0) { saveInvoices(row.data); setInvoices(row.data); }
+          });
       }
     });
   }, []);
