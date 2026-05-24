@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Generate Invoice Import File</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f5f5f5; }
+    .card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.1); text-align: center; max-width: 480px; }
+    h2 { margin: 0 0 8px; color: #1a1a1a; }
+    p { color: #666; margin: 0 0 24px; }
+    button { background: #2563eb; color: white; border: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    .badge { display: inline-block; background: #e0f2fe; color: #0369a1; border-radius: 20px; padding: 4px 12px; font-size: 13px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h2>Invoice Import File</h2>
+  <p>9 invoices ready for upload to the invoice manager system.</p>
+  <button onclick="generateAndDownload()">⬇ Download Excel File</button>
+  <br>
+  <span class="badge">9 invoices · Sela (PO 2439)</span>
+</div>
+
+<script>
+function generateAndDownload() {
+  const invoices = [
+    {
+      "PO Number": "PO-30932",
+      "Invoice Number": "2300857",
+      "Invoice Date": "23/10/2025",
+      "Candidate Name": "Sami Albudairi",
+      "Pre-VAT (SAR)": 24300.00,
+      "VAT (SAR)": 3645.00,
+      "Total Amount Due (SAR)": 27945.00
+    },
+    {
+      "PO Number": "PO-30940",
+      "Invoice Number": "2301003",
+      "Invoice Date": "18/12/2025",
+      "Candidate Name": "Salem Bawazeer, Saleh Baqabl, Abdulaziz Saleh, Ali Baqabl, Osama Khalaf, Mohammed Alhashel, Fahad Albqumi",
+      "Pre-VAT (SAR)": 9514.22,
+      "VAT (SAR)": 1427.13,
+      "Total Amount Due (SAR)": 112219.13
+    },
+    {
+      "PO Number": "PO-31391",
+      "Invoice Number": "2301008",
+      "Invoice Date": "18/12/2025",
+      "Candidate Name": "Mohammed Alhabash",
+      "Pre-VAT (SAR)": 1683.33,
+      "VAT (SAR)": 252.50,
+      "Total Amount Due (SAR)": 21935.83
+    },
+    {
+      "PO Number": "PO-32679",
+      "Invoice Number": "2301016",
+      "Invoice Date": "21/12/2025",
+      "Candidate Name": "Ahmed Tapsoba, Ibrahim Alshaikhi, Mohammad Bakkar",
+      "Pre-VAT (SAR)": 258.00,
+      "VAT (SAR)": 38.70,
+      "Total Amount Due (SAR)": 25798.30
+    },
+    {
+      "PO Number": "PO-33450",
+      "Invoice Number": "2301207",
+      "Invoice Date": "08/03/2026",
+      "Candidate Name": "Saleh Aldossary",
+      "Pre-VAT (SAR)": 900.00,
+      "VAT (SAR)": 135.00,
+      "Total Amount Due (SAR)": 16035.00
+    },
+    {
+      "PO Number": "PO-33448",
+      "Invoice Number": "2301283",
+      "Invoice Date": "28/03/2026",
+      "Candidate Name": "Mustafa Ibrahim Abusamra",
+      "Pre-VAT (SAR)": 95560.00,
+      "VAT (SAR)": 14334.00,
+      "Total Amount Due (SAR)": 109894.00
+    },
+    {
+      "PO Number": "PO-34149",
+      "Invoice Number": "2301290",
+      "Invoice Date": "28/03/2026",
+      "Candidate Name": "Taif Tahlawi, Abrar Abu Sham",
+      "Pre-VAT (SAR)": 1080.00,
+      "VAT (SAR)": 162.00,
+      "Total Amount Due (SAR)": 19242.00
+    },
+    {
+      "PO Number": "PO-34032",
+      "Invoice Number": "2301291",
+      "Invoice Date": "28/03/2026",
+      "Candidate Name": "Anwar Aljezani",
+      "Pre-VAT (SAR)": 840.00,
+      "VAT (SAR)": 126.00,
+      "Total Amount Due (SAR)": 14966.00
+    },
+    {
+      "PO Number": "PO-33444",
+      "Invoice Number": "2301301",
+      "Invoice Date": "28/03/2026",
+      "Candidate Name": "Mohammed Al Amri, Mohammed Al Shammari, Mohammed Faisal Obaid",
+      "Pre-VAT (SAR)": 2680.00,
+      "VAT (SAR)": 402.00,
+      "Total Amount Due (SAR)": 47855.32
+    }
+  ];
+
+  const ws = XLSX.utils.json_to_sheet(invoices);
+
+  // Column widths
+  ws['!cols'] = [
+    { wch: 14 },  // PO Number
+    { wch: 16 },  // Invoice Number
+    { wch: 14 },  // Invoice Date
+    { wch: 55 },  // Candidate Name
+    { wch: 16 },  // Pre-VAT
+    { wch: 12 },  // VAT
+    { wch: 22 },  // Total Amount Due
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Invoices");
+  XLSX.writeFile(wb, "Sela_Invoices_Import.xlsx");
+}
+
+// Auto-trigger download on load
+window.onload = function() {
+  setTimeout(generateAndDownload, 600);
+};
+</script>
+</body>
+</html>

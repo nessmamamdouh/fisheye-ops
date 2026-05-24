@@ -1,0 +1,520 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   FISHEYE OPS — DESIGN SYSTEM v2
+   Brand: Maroon #800000 · Precision Operations Interface
+═══════════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+/* ─── CSS Variables ─────────────────────────────────────────────────── */
+:root {
+  /* Brand */
+  --brand:        #800000;
+  --brand-dark:   #5c0000;
+  --brand-mid:    #6d0000;
+  --brand-light:  #a83232;
+  --brand-pale:   #fdf5f5;
+  --brand-subtle: #fff0f0;
+
+  /* Neutrals — zinc scale */
+  --gray-50:  #fafafa;
+  --gray-100: #f4f4f5;
+  --gray-200: #e4e4e7;
+  --gray-300: #d4d4d8;
+  --gray-400: #a1a1aa;
+  --gray-500: #71717a;
+  --gray-600: #52525b;
+  --gray-700: #3f3f46;
+  --gray-800: #27272a;
+  --gray-900: #18181b;
+
+  /* Surfaces */
+  --surface:       #ffffff;
+  --surface-sub:   #f8f8f9;
+  --surface-dim:   #f4f4f5;
+  --surface-raised:#ffffff;
+
+  /* Borders */
+  --border:     #e4e4e7;
+  --border-sub: #f0eff1;
+
+  /* Text */
+  --text-1: #18181b;
+  --text-2: #52525b;
+  --text-3: #a1a1aa;
+
+  /* Shadows — layered for depth */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-xl: 0 24px 64px rgba(0,0,0,0.14), 0 8px 24px rgba(0,0,0,0.08);
+  --shadow-brand: 0 4px 20px rgba(128,0,0,0.22);
+
+  /* Border radius */
+  --r-xs:   4px;
+  --r-sm:   6px;
+  --r-md:   10px;
+  --r-lg:   14px;
+  --r-xl:   18px;
+  --r-2xl:  24px;
+  --r-full: 9999px;
+
+  /* Typography */
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SF Mono', 'Fira Code', monospace;
+
+  /* Easing */
+  --ease-out:    cubic-bezier(0.0, 0.0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0.0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ─── Reset ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  height: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  background: var(--surface-sub);
+  color: var(--text-1);
+}
+
+#root { height: 100%; }
+
+/* ─── Custom Scrollbar ───────────────────────────────────────────────── */
+::-webkit-scrollbar         { width: 4px; height: 4px; }
+::-webkit-scrollbar-track   { background: transparent; }
+::-webkit-scrollbar-thumb   { background: var(--gray-300); border-radius: var(--r-full); }
+::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
+::-webkit-scrollbar-corner  { background: transparent; }
+
+/* ─── Keyframe Animations ────────────────────────────────────────────── */
+@keyframes fe-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+@keyframes fe-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fe-scale-in {
+  from { opacity: 0; transform: scale(0.96) translateY(4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0);      }
+}
+@keyframes fe-slide-right {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0);    }
+}
+@keyframes fe-pulse-dot {
+  0%, 100% { opacity: 1;   transform: scale(1);   }
+  50%       { opacity: 0.6; transform: scale(1.4); }
+}
+@keyframes fe-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@keyframes fe-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Modal spring — bounces in with life */
+@keyframes fe-modal-spring {
+  0%   { opacity: 0; transform: translateY(20px) scale(0.96); }
+  55%  { opacity: 1; transform: translateY(-4px)  scale(1.01); }
+  100% { opacity: 1; transform: translateY(0)     scale(1);    }
+}
+
+/* Table row entrance */
+@keyframes fe-row-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+/* KPI number rise with blur */
+@keyframes fe-num-rise {
+  from { opacity: 0; transform: translateY(8px); filter: blur(3px); }
+  to   { opacity: 1; transform: translateY(0);   filter: blur(0);   }
+}
+
+/* Alert / banner slide-down */
+@keyframes fe-slide-down {
+  from { opacity: 0; transform: translateY(-10px) scaleY(0.95); }
+  to   { opacity: 1; transform: translateY(0)     scaleY(1);    }
+}
+
+/* Value flash highlight */
+@keyframes fe-flash {
+  0%   { background: rgba(128,0,0,0.10); }
+  100% { background: transparent; }
+}
+
+/* Stat card stagger */
+@keyframes fe-card-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+/* ─── Animation Utilities ────────────────────────────────────────────── */
+.fe-animate   { animation: fe-fade-up 220ms var(--ease-out) both; }
+.fe-fade-in   { animation: fe-fade-in 200ms var(--ease-out) both; }
+.fe-modal-in  { animation: fe-scale-in 200ms var(--ease-out) both; }
+.fe-pulse     { animation: fe-pulse-dot 2.2s ease-in-out infinite; }
+.fe-spin      { animation: fe-spin 0.8s linear infinite; }
+.fe-skeleton  {
+  background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 50%, var(--gray-100) 75%);
+  background-size: 200% 100%;
+  animation: fe-shimmer 1.6s ease-in-out infinite;
+  border-radius: var(--r-sm);
+}
+
+/* ─── Sidebar ────────────────────────────────────────────────────────── */
+.fe-sidebar {
+  transition: width 280ms var(--ease-in-out);
+  box-shadow: 4px 0 32px rgba(0,0,0,0.18);
+}
+
+/* Nav buttons */
+.fe-nav-btn {
+  position: relative;
+  transition: background 130ms var(--ease-out), color 130ms var(--ease-out),
+              box-shadow 130ms var(--ease-out), transform 100ms var(--ease-out);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.fe-nav-btn:hover:not(.fe-nav-active) {
+  background: rgba(255,255,255,0.12) !important;
+  color: rgba(255,255,255,0.95) !important;
+}
+.fe-nav-btn:active { transform: scale(0.97); }
+.fe-nav-active {
+  background: white !important;
+  color: var(--brand) !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.18) !important;
+}
+
+/* Sidebar toggle */
+.fe-toggle-btn {
+  transition: background 130ms, color 130ms;
+}
+.fe-toggle-btn:hover {
+  background: rgba(255,255,255,0.1) !important;
+  color: rgba(255,255,255,0.9) !important;
+}
+
+/* ─── Cards ──────────────────────────────────────────────────────────── */
+.fe-card {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.fe-card-interactive {
+  transition: box-shadow 200ms var(--ease-out), transform 200ms var(--ease-out), border-color 200ms;
+  cursor: pointer;
+}
+.fe-card-interactive:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+  border-color: var(--gray-300);
+}
+
+/* Stat card — staggered entrance + hover lift */
+.fe-stat-card {
+  position: relative;
+  overflow: hidden;
+  animation: fe-card-in 280ms var(--ease-spring) both;
+  transition: box-shadow 200ms var(--ease-out), transform 200ms var(--ease-out);
+}
+.fe-stat-card:nth-child(1) { animation-delay:   0ms; }
+.fe-stat-card:nth-child(2) { animation-delay:  55ms; }
+.fe-stat-card:nth-child(3) { animation-delay: 100ms; }
+.fe-stat-card:nth-child(4) { animation-delay: 140ms; }
+.fe-stat-card:nth-child(5) { animation-delay: 175ms; }
+.fe-stat-card:nth-child(6) { animation-delay: 205ms; }
+
+.fe-stat-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--brand), var(--brand-light));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 280ms var(--ease-spring);
+}
+.fe-stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.fe-stat-card:hover::after { transform: scaleX(1); }
+
+/* ─── Buttons ────────────────────────────────────────────────────────── */
+.fe-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  transition: background 130ms var(--ease-out), box-shadow 130ms var(--ease-out),
+              transform 100ms var(--ease-out), border-color 130ms, color 130ms;
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+}
+.fe-btn:active:not(:disabled) { transform: scale(0.95); }
+.fe-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Ripple flash on click */
+.fe-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at center, rgba(255,255,255,0.28) 0%, transparent 65%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 500ms;
+}
+.fe-btn:active::after { opacity: 1; transition: opacity 0ms; }
+
+.fe-btn-primary           { background: var(--brand); color: white; border: none; }
+.fe-btn-primary:hover     { background: var(--brand-dark); box-shadow: var(--shadow-brand); }
+
+.fe-btn-ghost             { background: white; color: var(--gray-700); border: 1px solid var(--border); }
+.fe-btn-ghost:hover       { background: var(--gray-100); border-color: var(--gray-300); }
+
+.fe-btn-danger            { background: #b91c1c; color: white; border: none; }
+.fe-btn-danger:hover      { background: #991b1b; box-shadow: 0 4px 16px rgba(185,28,28,0.28); }
+
+/* ─── Inputs & Selects ───────────────────────────────────────────────── */
+.fe-input, .fe-select {
+  font-family: var(--font-sans);
+  outline: none;
+  transition: border-color 140ms var(--ease-out), box-shadow 140ms var(--ease-out);
+}
+.fe-input:hover:not(:focus),
+.fe-select:hover:not(:focus) { border-color: var(--gray-300) !important; }
+
+.fe-input:focus,
+.fe-select:focus {
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 0 3px rgba(128,0,0,0.09) !important;
+}
+
+/* ─── Tables ─────────────────────────────────────────────────────────── */
+.fe-table { width: 100%; border-collapse: collapse; }
+.fe-table th {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--gray-400);
+  white-space: nowrap;
+  user-select: none;
+}
+/* Staggered row entrance */
+.fe-table tbody tr {
+  animation: fe-row-in 200ms var(--ease-out) both;
+  transition: background 110ms var(--ease-out);
+}
+.fe-table tbody tr:nth-child(1)   { animation-delay:   0ms; }
+.fe-table tbody tr:nth-child(2)   { animation-delay:  25ms; }
+.fe-table tbody tr:nth-child(3)   { animation-delay:  45ms; }
+.fe-table tbody tr:nth-child(4)   { animation-delay:  62ms; }
+.fe-table tbody tr:nth-child(5)   { animation-delay:  76ms; }
+.fe-table tbody tr:nth-child(6)   { animation-delay:  88ms; }
+.fe-table tbody tr:nth-child(7)   { animation-delay:  98ms; }
+.fe-table tbody tr:nth-child(8)   { animation-delay: 106ms; }
+.fe-table tbody tr:nth-child(9)   { animation-delay: 112ms; }
+.fe-table tbody tr:nth-child(10)  { animation-delay: 116ms; }
+.fe-table tbody tr:nth-child(n+11){ animation-delay: 120ms; }
+
+.fe-table tbody tr:hover > td { background: var(--gray-50); }
+.fe-table tbody tr:last-child > td { border-bottom: none !important; }
+
+/* Numbers in tables */
+.fe-table .fe-num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: -0.02em;
+}
+
+/* ─── Modal / Overlay ────────────────────────────────────────────────── */
+.fe-overlay {
+  animation: fe-fade-in 180ms var(--ease-out) both;
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
+}
+.fe-modal-box {
+  animation: fe-modal-spring 340ms var(--ease-spring) both;
+  border: 1px solid rgba(255,255,255,0.6);
+}
+
+/* ─── Topbar ─────────────────────────────────────────────────────────── */
+.fe-topbar {
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  background: rgba(255,255,255,0.88) !important;
+  border-bottom: 1px solid rgba(228,228,231,0.7) !important;
+}
+
+/* ─── Tab navigation ─────────────────────────────────────────────────── */
+.fe-tab {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 140ms var(--ease-out), border-color 140ms var(--ease-out);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fe-tab:hover { color: var(--brand) !important; }
+
+/* ─── Content area page transition ──────────────────────────────────── */
+.fe-page { animation: fe-fade-up 200ms var(--ease-out) both; }
+
+/* ─── Notification badge ─────────────────────────────────────────────── */
+.fe-notif-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* ─── Search results ─────────────────────────────────────────────────── */
+.fe-search-result {
+  transition: background 100ms;
+  font-family: var(--font-sans);
+}
+.fe-search-result:hover { background: var(--gray-50) !important; }
+
+/* ─── Global sidebar search input ────────────────────────────────────── */
+.fe-sidebar-search {
+  transition: background 140ms, border-color 140ms, box-shadow 140ms;
+}
+.fe-sidebar-search:focus {
+  background: rgba(255,255,255,0.18) !important;
+  border-color: rgba(255,255,255,0.4) !important;
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.1) !important;
+  outline: none;
+}
+.fe-sidebar-search::placeholder { color: rgba(255,255,255,0.45); }
+
+/* ─── Section dividers ───────────────────────────────────────────────── */
+.fe-divider {
+  height: 1px;
+  margin: 6px 4px;
+  background: rgba(255,255,255,0.08);
+}
+
+/* ─── Tooltip-style labels ───────────────────────────────────────────── */
+.fe-label {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--gray-400);
+}
+
+/* ─── Numeric display values ─────────────────────────────────────────── */
+.fe-value {
+  font-family: var(--font-mono);
+  letter-spacing: -0.03em;
+}
+
+/* ─── Status / workflow pills ────────────────────────────────────────── */
+.fe-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: var(--r-full);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+/* ─── Action row hover ───────────────────────────────────────────────── */
+.fe-action-row {
+  transition: background 120ms;
+  border-radius: var(--r-md);
+}
+.fe-action-row:hover { background: var(--gray-50); }
+
+/* ─── Staggered list animation ───────────────────────────────────────── */
+.fe-list-item { animation: fe-fade-up var(--ease-out) both; }
+.fe-list-item:nth-child(1)  { animation-duration: 140ms; animation-delay:   0ms; }
+.fe-list-item:nth-child(2)  { animation-duration: 160ms; animation-delay:  30ms; }
+.fe-list-item:nth-child(3)  { animation-duration: 170ms; animation-delay:  60ms; }
+.fe-list-item:nth-child(4)  { animation-duration: 180ms; animation-delay:  80ms; }
+.fe-list-item:nth-child(5)  { animation-duration: 190ms; animation-delay: 100ms; }
+.fe-list-item:nth-child(n+6){ animation-duration: 200ms; animation-delay: 110ms; }
+
+/* ─── Scrollable containers ──────────────────────────────────────────── */
+.fe-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ─── Focus ring (accessibility) ─────────────────────────────────────── */
+.fe-btn:focus-visible,
+.fe-input:focus-visible,
+.fe-select:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* ─── Empty state ────────────────────────────────────────────────────── */
+.fe-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 24px;
+  color: var(--gray-400);
+  font-size: 13px;
+  font-family: var(--font-sans);
+}
+
+/* ─── Mono numbers in KPI cards ──────────────────────────────────────── */
+.fe-kpi-value {
+  font-family: var(--font-mono);
+  letter-spacing: -0.04em;
+  font-weight: 600;
+  animation: fe-num-rise 380ms var(--ease-spring) both;
+}
+
+/* ─── Alert / banner slide-in ────────────────────────────────────────── */
+.fe-alert {
+  animation: fe-slide-down 260ms var(--ease-spring) both;
+}
+
+/* ─── Page section stagger (wrap each logical block) ─────────────────── */
+.fe-section { animation: fe-fade-up 240ms var(--ease-out) both; }
+.fe-section:nth-child(2) { animation-delay:  40ms; }
+.fe-section:nth-child(3) { animation-delay:  80ms; }
+.fe-section:nth-child(4) { animation-delay: 120ms; }
+
+/* ─── Value changed flash ─────────────────────────────────────────────── */
+.fe-flash { animation: fe-flash 600ms var(--ease-out) both; }

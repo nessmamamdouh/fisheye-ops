@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Invoice Audit — System vs SOA</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 24px; color: #1a1a1a; }
+  h1 { font-size: 20px; color: #800000; margin-bottom: 4px; }
+  .sub { font-size: 12px; color: #888; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .kpi { background: white; border-radius: 10px; padding: 14px 16px; border: 1px solid #e5e7eb; }
+  .kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #9ca3af; margin-bottom: 6px; }
+  .kpi-val { font-size: 22px; font-weight: 900; }
+  .section { background: white; border-radius: 10px; border: 1px solid #e5e7eb; margin-bottom: 16px; overflow: hidden; }
+  .section-header { padding: 12px 16px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { padding: 8px 12px; text-align: left; font-size: 10px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid #f3f4f6; background: #fdf8f8; white-space: nowrap; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f9fafb; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+  .badge-paid { background: #dcfce7; color: #16a34a; }
+  .badge-sent { background: #dbeafe; color: #2563eb; }
+  .badge-overdue { background: #fee2e2; color: #dc2626; }
+  .badge-ok { background: #dcfce7; color: #16a34a; }
+  .badge-mismatch { background: #fee2e2; color: #dc2626; }
+  .badge-missing { background: #fef9c3; color: #a16207; }
+  .badge-not-in-soa { background: #f3f4f6; color: #6b7280; }
+  .mono { font-family: monospace; font-weight: 700; }
+  .empty { padding: 24px; text-align: center; color: #9ca3af; font-size: 13px; }
+  .dup-badge { background: #fce7f3; color: #9d174d; }
+</style>
+</head>
+<body>
+
+<h1>📋 Invoice Audit — System vs SOA (April 2026)</h1>
+<p class="sub">Reads live data from fisheye_invoices_v1 · Compares against Sela SOA payment records</p>
+
+<div class="grid" id="kpis"></div>
+
+<div class="section" id="dup-section" style="display:none">
+  <div class="section-header" style="background:#fce7f3;color:#9d174d">⚠️ DUPLICATES — Same Invoice Number More Than Once</div>
+  <table><thead><tr><th>Invoice #</th><th>Count</th><th>Statuses</th><th>Imported At</th></tr></thead>
+  <tbody id="dup-body"></tbody></table>
+</div>
+
+<div class="section">
+  <div class="section-header">🔍 Status Mismatch — System says X but SOA says Y</div>
+  <table><thead><tr><th>Invoice #</th><th>System Status</th><th>SOA Status</th><th>Discrepancy</th></tr></thead>
+  <tbody id="mismatch-body"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+</table></div>
+
+<div class="section">
+  <div class="section-header">📄 All Invoices in System (vs SOA)</div>
+  <table><thead><tr><th>Invoice #</th><th>PO</th><th>Date</th><th>System Status</th><th>SOA Status</th><th>Match?</th><th>Total Due</th></tr></thead>
+  <tbody id="all-body"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+</table></div>
+
+<div class="section">
+  <div class="section-header">❌ Outstanding in SOA but NOT in System</div>
+  <table><thead><tr><th>Invoice #</th><th>SOA Amount</th><th>SOA Date</th><th>Note</th></tr></thead>
+  <tbody id="missing-body"></tbody></table>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// SOA DATA — compiled from April 2026 SOA PDF
+// ══════════════════════════════════════════════════════
+
+// All invoices that appear in a PAYMENT record in the SOA = PAID
+const SOA_PAID = new Set([
+  // Payment 800 (Jan 1 2026)
+  '2300855','2300856','2300887','2300929','2300930','2300932','2300933','2300934',
+  '2300935','2300937','2300938','2300940','2300968','2300969','2300970','2300971',
+  '2300973','2300974','2300975','2300976',
+  // Payment 826 (Feb 5 2026)
+  '2301012','2301013','2301015','2301017','2301018','2301019','2301020','2301021',
+  '2301022','2301023','2301051','2301052','2301053','2301054','2301055','2301056',
+  '2301143',
+  // Payment 845 (Mar 9 2026)
+  '2300854','2300931','2300972','2301004','2301005','2301006','2301007','2301009',
+  '2301066','2301079','2301080','2301081','2301083','2301084','2301085','2301086',
+  '2301088','2301089','2301090','2301114','2301115','2301116','2301117','2301118',
+  '2301119','2301120',
+  // Payment 910 applied (May 13 2026)
+  '2301082','2301087','2301121','2301127','2301128','2301129','2301130','2301131',
+  '2301132','2301134','2301135','2301136','2301146','2301147','2301148','2301149',
+  '2301150','2301151','2301152','2301153','2301154','2301196','2301197','2301198',
+  '2301199','2301200','2301201','2301202','2301203','2301204','2301205','2301206',
+  '2301208','2301209','2301210','2301211','2301212','2301213','2301215','2301216',
+  '2301217','2301218','2301219','2301220','2301221','2301222','2301223','2301224',
+  '2301225','2301228','2301229','2301230','2301231','2301232','2301233','2301235',
+  '2301236','2301237','2301238','2301239','2301240','2301241','2301242','2301248',
+  '2301250','2301251','2301252','2301253','2301254','2301255','2301256','2301258',
+  '2301309','2301375','2301377',
+  // Payment 907 (Apr 29 2026)
+  '2301281','2301282','2301284','2301285','2301286','2301287','2301288','2301289',
+  '2301292','2301293','2301294','2301295','2301296','2301297','2301298','2301299',
+  '2301300','2301302','2301303','2301304','2301305','2301306','2301307','2301308',
+  '2301310','2301311','2301312','2301313','2301331','2301332','2301333','2301334',
+  '2301335','2301336','2301337','2301338','2301339','2301341','2301342',
+  // Credit notes (treated as paid/adjusted)
+  '2301014','2301126','2301137',
+]);
+
+// All invoices issued in 2026 that are NOT paid → outstanding
+// (invoices from the opening balance that weren't paid are also outstanding)
+const SOA_OUTSTANDING = {
+  // From opening balance (2025 invoices, not paid in any 2026 payment)
+  '2300857': { amount: 27945.00,    date: '23 Oct 2025', note: 'In opening balance — no payment found' },
+  '2301003': { amount: 112219.13,   date: '18 Dec 2025', note: 'In opening balance — no payment found' },
+  '2301008': { amount: 21935.83,    date: '18 Dec 2025', note: 'In opening balance — no payment found' },
+  '2301016': { amount: 25798.30,    date: '21 Dec 2025', note: 'In opening balance — no payment found' },
+  // 2026 issued, not paid
+  '2301133': { amount: 29932.00,    date: '29 Jan 2026', note: 'Issued in SOA, not in any payment' },
+  '2301207': { amount: 16035.00,    date: '08 Mar 2026', note: 'Issued in SOA, not in any payment' },
+  '2301214': { amount: 14321.83,    date: '08 Mar 2026', note: 'Issued in SOA, not in any payment' },
+  '2301226': { amount: 48105.00,    date: '08 Mar 2026', note: 'Issued in SOA, not in any payment' },
+  '2301227': { amount: 24587.00,    date: '08 Mar 2026', note: 'Issued in SOA, not in any payment' },
+  '2301234': { amount: 25783.00,    date: '08 Mar 2026', note: 'Issued in SOA, not in any payment' },
+  '2301243': { amount: 3492.07,     date: '08 Mar 2026', note: 'Issued in SOA, not in any payment' },
+  '2301249': { amount: 36570.00,    date: '12 Mar 2026', note: 'Issued in SOA, not in any payment' },
+  '2301257': { amount: 17572.00,    date: '12 Mar 2026', note: 'Issued in SOA, not in any payment' },
+  '2301283': { amount: 109894.00,   date: '28 Mar 2026', note: 'Issued in SOA, not in any payment' },
+  '2301290': { amount: 19242.00,    date: '28 Mar 2026', note: 'Issued in SOA, not in any payment' },
+  '2301291': { amount: 14966.00,    date: '28 Mar 2026', note: 'Issued in SOA, not in any payment' },
+  '2301301': { amount: 47855.32,    date: '28 Mar 2026', note: 'Issued in SOA, not in any payment' },
+  // Apr 19 batch
+  '2301359': { amount: 27105.50,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301360': { amount: 25548.30,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301361': { amount: 67347.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301362': { amount: 19242.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301363': { amount: 14966.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301364': { amount: 47292.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301365': { amount: 17388.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301366': { amount: 48105.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301367': { amount: 24587.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301368': { amount: 25783.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301369': { amount: 47855.32,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301370': { amount: 22024.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301371': { amount: 10690.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301372': { amount: 36570.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301373': { amount: 12190.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301374': { amount: 14081.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301376': { amount: 10690.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301378': { amount: 10690.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301379': { amount: 12190.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301380': { amount: 17572.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301381': { amount: 17288.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301382': { amount: 12828.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301383': { amount: 5529.00,   date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301384': { amount: 16035.00,  date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301385': { amount: 303.20,    date: '19 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  // Apr 23 batch
+  '2301408': { amount: 110877.50, date: '23 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301409': { amount: 137907.33, date: '23 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301410': { amount: 18707.50,  date: '23 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301411': { amount: 113309.72, date: '23 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301412': { amount: 15126.00,  date: '23 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  '2301413': { amount: 19545.74,  date: '23 Apr 2026', note: 'Issued in SOA, not in any payment' },
+  // May 5 batch
+  '2301426': { amount: 107327.60, date: '05 May 2026', note: 'Issued in SOA, not in any payment' },
+  '2301427': { amount: 286165.00, date: '05 May 2026', note: 'Issued in SOA, not in any payment' },
+  '2301428': { amount: 8533.00,   date: '05 May 2026', note: 'Issued in SOA, not in any payment' },
+  // May 13 batch (partially funded by payment 910 but issued after)
+  '2301440': { amount: 13897.00,  date: '13 May 2026', note: 'Partially funded by payment 910' },
+  '2301441': { amount: 13897.00,  date: '13 May 2026', note: 'Partially funded by payment 910' },
+  '2301442': { amount: 13897.00,  date: '13 May 2026', note: 'Partially funded by payment 910' },
+  '2301443': { amount: 13897.00,  date: '13 May 2026', note: 'Partially funded by payment 910' },
+  '2301444': { amount: 13897.00,  date: '13 May 2026', note: 'Partially funded by payment 910' },
+  '2301445': { amount: 13897.00,  date: '13 May 2026', note: 'Partially funded by payment 910' },
+  '2301446': { amount: 13897.00,  date: '13 May 2026', note: 'Partially funded by payment 910' },
+  '2301447': { amount: 13897.00,  date: '13 May 2026', note: 'Partially funded by payment 910' },
+};
+
+function getSoaStatus(invNum) {
+  const n = String(invNum).trim();
+  if (SOA_PAID.has(n)) return 'paid';
+  if (SOA_OUTSTANDING[n]) return 'outstanding';
+  return 'not_in_soa';
+}
+
+function fmt(n) {
+  return Number(n||0).toLocaleString('en-SA', { minimumFractionDigits: 2 });
+}
+
+function run() {
+  let raw = [];
+  try { raw = JSON.parse(localStorage.getItem('fisheye_invoices_v1') || '[]'); } catch {}
+
+  if (!raw.length) {
+    document.getElementById('all-body').innerHTML = '<tr><td colspan="7" class="empty">⚠️ No invoices found in localStorage (fisheye_invoices_v1). Open the system first.</td></tr>';
+    document.getElementById('mismatch-body').innerHTML = '<tr><td colspan="4" class="empty">No data</td></tr>';
+    document.getElementById('kpis').innerHTML = '<div class="kpi"><div class="kpi-label">Error</div><div class="kpi-val" style="color:#dc2626">No Data</div></div>';
+    return;
+  }
+
+  // ── Find duplicates ──────────────────────────────────────────────────────────
+  const byNum = {};
+  raw.forEach(inv => {
+    const n = String(inv.invoiceNumber || '').trim();
+    if (!n) return;
+    if (!byNum[n]) byNum[n] = [];
+    byNum[n].push(inv);
+  });
+  const dups = Object.entries(byNum).filter(([, arr]) => arr.length > 1);
+
+  if (dups.length > 0) {
+    document.getElementById('dup-section').style.display = '';
+    const dupBody = document.getElementById('dup-body');
+    dupBody.innerHTML = dups.map(([num, arr]) => `
+      <tr>
+        <td class="mono">${num}</td>
+        <td><span class="badge dup-badge">${arr.length}×</span></td>
+        <td>${[...new Set(arr.map(x=>x.status))].map(s=>`<span class="badge badge-${s}">${s}</span>`).join(' ')}</td>
+        <td style="font-size:10px;color:#888">${arr.map(x=>(x.importedAt||'').substring(0,10)).join(', ')}</td>
+      </tr>`).join('');
+  }
+
+  // ── Build full table ─────────────────────────────────────────────────────────
+  const allRows = raw.sort((a,b) => String(a.invoiceNumber).localeCompare(String(b.invoiceNumber)));
+  let mismatches = [];
+
+  const allHtml = allRows.map(inv => {
+    const num = String(inv.invoiceNumber || '').trim();
+    const soaStatus = getSoaStatus(num);
+    const sysStatus = inv.status;
+
+    // Determine match
+    let matchLabel, matchClass;
+    if (soaStatus === 'not_in_soa') {
+      matchLabel = 'Not in SOA'; matchClass = 'badge-not-in-soa';
+    } else if (soaStatus === 'paid' && sysStatus === 'paid') {
+      matchLabel = '✓ Match'; matchClass = 'badge-ok';
+    } else if (soaStatus === 'outstanding' && (sysStatus === 'sent' || sysStatus === 'overdue')) {
+      matchLabel = '✓ Match'; matchClass = 'badge-ok';
+    } else if (soaStatus === 'paid' && sysStatus !== 'paid') {
+      matchLabel = '⚠ Should be Paid'; matchClass = 'badge-mismatch';
+      mismatches.push({ num, sysStatus, soaStatus: 'paid', note: `SOA shows paid but system says "${sysStatus}"` });
+    } else if (soaStatus === 'outstanding' && sysStatus === 'paid') {
+      matchLabel = '⚠ Shows Paid?'; matchClass = 'badge-mismatch';
+      mismatches.push({ num, sysStatus, soaStatus: 'outstanding', note: `System says paid but SOA shows outstanding` });
+    } else {
+      matchLabel = '?'; matchClass = 'badge-not-in-soa';
+    }
+
+    const soaBadge = soaStatus === 'paid'
+      ? '<span class="badge badge-paid">Paid (SOA)</span>'
+      : soaStatus === 'outstanding'
+      ? '<span class="badge badge-sent">Outstanding</span>'
+      : '<span class="badge badge-not-in-soa">Not in SOA</span>';
+
+    const isDup = (byNum[num] || []).length > 1;
+
+    return `<tr>
+      <td class="mono">${num || '—'}${isDup ? ' <span class="badge dup-badge">DUP</span>' : ''}</td>
+      <td style="font-size:11px;color:#6b7280">${inv.poNumber || '—'}</td>
+      <td style="font-size:11px;color:#6b7280;white-space:nowrap">${inv.invoiceDate || '—'}</td>
+      <td><span class="badge badge-${sysStatus}">${sysStatus}</span></td>
+      <td>${soaBadge}</td>
+      <td><span class="badge ${matchClass}">${matchLabel}</span></td>
+      <td style="text-align:right;font-family:monospace;font-weight:700;font-size:11px">${fmt(inv.totalDue)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('all-body').innerHTML = allHtml || '<tr><td colspan="7" class="empty">No invoices</td></tr>';
+
+  // ── Mismatch table ───────────────────────────────────────────────────────────
+  if (mismatches.length === 0) {
+    document.getElementById('mismatch-body').innerHTML = '<tr><td colspan="4" class="empty">✅ No status mismatches found</td></tr>';
+  } else {
+    document.getElementById('mismatch-body').innerHTML = mismatches.map(m => `
+      <tr>
+        <td class="mono">${m.num}</td>
+        <td><span class="badge badge-${m.sysStatus}">${m.sysStatus}</span></td>
+        <td><span class="badge ${m.soaStatus==='paid'?'badge-paid':'badge-sent'}">${m.soaStatus==='paid'?'Paid (SOA)':'Outstanding (SOA)'}</span></td>
+        <td style="color:#dc2626;font-size:11px">${m.note}</td>
+      </tr>`).join('');
+  }
+
+  // ── Outstanding in SOA but missing from system ───────────────────────────────
+  const systemNums = new Set(raw.map(inv => String(inv.invoiceNumber||'').trim()).filter(Boolean));
+  const missingFromSystem = Object.entries(SOA_OUTSTANDING).filter(([num]) => !systemNums.has(num));
+
+  if (missingFromSystem.length === 0) {
+    document.getElementById('missing-body').innerHTML = '<tr><td colspan="4" class="empty">✅ All outstanding SOA invoices are in the system</td></tr>';
+  } else {
+    document.getElementById('missing-body').innerHTML = missingFromSystem.map(([num, info]) => `
+      <tr>
+        <td class="mono">${num}</td>
+        <td style="text-align:right;font-family:monospace;font-weight:700">${fmt(info.amount)}</td>
+        <td style="font-size:11px;color:#6b7280;white-space:nowrap">${info.date}</td>
+        <td style="font-size:11px;color:#a16207">${info.note}</td>
+      </tr>`).join('');
+  }
+
+  // ── KPIs ─────────────────────────────────────────────────────────────────────
+  const total = raw.length;
+  const dupCount = dups.reduce((s, [, arr]) => s + arr.length - 1, 0);
+  const mismatchCount = mismatches.length;
+  const missingCount = missingFromSystem.length;
+
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi">
+      <div class="kpi-label">Total in System</div>
+      <div class="kpi-val" style="color:#1d4ed8">${total}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Duplicates</div>
+      <div class="kpi-val" style="color:${dupCount>0?'#9d174d':'#16a34a'}">${dupCount}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Status Mismatch</div>
+      <div class="kpi-val" style="color:${mismatchCount>0?'#dc2626':'#16a34a'}">${mismatchCount}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Missing from System</div>
+      <div class="kpi-val" style="color:${missingCount>0?'#a16207':'#16a34a'}">${missingCount}</div>
+    </div>`;
+}
+
+run();
+</script>
+</body>
+</html>
