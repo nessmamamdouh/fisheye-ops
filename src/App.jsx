@@ -1527,6 +1527,8 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
   const [csvApplying, setCsvApplying] = useState(false);      // loading state for apply btn
   const [pendingAddCSV, setPendingAddCSV] = useState(null);   // { resolved, needsClient }
   const [csvClientAssign, setCsvClientAssign] = useState({}); // { [project]: clientName }
+  const csvAddRef    = useRef(null); // file input for "Add from CSV"
+  const csvUpdateRef = useRef(null); // file input for "Update from CSV"
   // ── Sprint 3: Side panel
   const [sideEmp, setSideEmp] = useState(null);
   const [selected, setSelected] = useState([]);
@@ -1984,28 +1986,11 @@ const submitRenew = async () => {
                   }}>{icon}</button>
                 ))}
               </div>
-              {/* Import dropdown */}
-              <div style={{ position: "relative" }}>
-                <button
-                  onClick={() => setShowImportMenu(m => !m)}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 11px", borderRadius: 8, border: "1px solid #e5e7eb", backgroundColor: "white", color: "#374151", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                >
-                  <Upload size={13} /> Import <ChevronDown size={11} style={{ marginLeft: 1 }} />
-                </button>
-                {showImportMenu && (
-                  <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50, backgroundColor: "white", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.10)", width: 180, overflow: "hidden" }}
-                    onMouseLeave={() => setShowImportMenu(false)}>
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer" }}
-                      onMouseEnter={e => e.currentTarget.style.backgroundColor="#f9fafb"}
-                      onMouseLeave={e => e.currentTarget.style.backgroundColor="transparent"}>
-                      <FileUp size={13} style={{ color: M }} /> Add from CSV
-                      <input type="file" accept=".csv" onChange={e => { handleCSVImport(e); setShowImportMenu(false); }} style={{ display: "none" }} />
-                    </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer", borderTop: "1px solid #f3f4f6" }}
-                      onMouseEnter={e => e.currentTarget.style.backgroundColor="#f9fafb"}
-                      onMouseLeave={e => e.currentTarget.style.backgroundColor="transparent"}>
-                      <Upload size={13} style={{ color: "#0369a1" }} /> Update from CSV
-                      <input type="file" accept=".csv" style={{ display: "none" }} onChange={async (e) => {
+              {/* ── Hidden file inputs — OUTSIDE dropdown so they survive menu close ── */}
+              <input ref={csvAddRef} type="file" accept=".csv" style={{ display:"none" }}
+                onChange={e => { handleCSVImport(e); setShowImportMenu(false); }} />
+              <input ref={csvUpdateRef} type="file" accept=".csv" style={{ display:"none" }}
+                onChange={async (e) => {
                         setShowImportMenu(false);
                         const file = e.target.files[0];
                         if (!file) return;
@@ -2111,7 +2096,28 @@ const submitRenew = async () => {
                         setPendingCSVDiff({ changes, notFound, skippedCount, applyFn });
                         e.target.value = '';
                       }} />
-                    </label>
+
+              {/* Import dropdown — buttons only, no file inputs inside */}
+              <div style={{ position: "relative" }}>
+                <button onClick={() => setShowImportMenu(m => !m)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 11px", borderRadius: 8, border: "1px solid #e5e7eb", backgroundColor: "white", color: "#374151", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  <Upload size={13} /> Import <ChevronDown size={11} style={{ marginLeft: 1 }} />
+                </button>
+                {showImportMenu && (
+                  <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50, backgroundColor: "white", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.10)", width: 180, overflow: "hidden" }}
+                    onMouseLeave={() => setShowImportMenu(false)}>
+                    <button onClick={() => { csvAddRef.current?.click(); setShowImportMenu(false); }}
+                      onMouseEnter={e => e.currentTarget.style.backgroundColor="#f9fafb"}
+                      onMouseLeave={e => e.currentTarget.style.backgroundColor="transparent"}
+                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer", width: "100%", border: "none", backgroundColor: "transparent", textAlign: "left" }}>
+                      <FileUp size={13} style={{ color: M }} /> Add from CSV
+                    </button>
+                    <button onClick={() => { csvUpdateRef.current?.click(); setShowImportMenu(false); }}
+                      onMouseEnter={e => e.currentTarget.style.backgroundColor="#f9fafb"}
+                      onMouseLeave={e => e.currentTarget.style.backgroundColor="transparent"}
+                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer", width: "100%", border: "none", borderTop: "1px solid #f3f4f6", backgroundColor: "transparent", textAlign: "left" }}>
+                      <Upload size={13} style={{ color: "#0369a1" }} /> Update from CSV
+                    </button>
                   </div>
                 )}
               </div>
