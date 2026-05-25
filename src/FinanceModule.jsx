@@ -346,9 +346,6 @@ function PayrollTab({ employees }) {
         const end = parseDate(e.endDate);
         if (!end || end < monthStart) return false;
       }
-      const isSela = (e.client || '').toLowerCase() === 'sela';
-      const hasPO  = e.poNumbers && String(e.poNumbers).trim() !== '';
-      if (isSela && !hasPO) return false;
       const start = parseDate(e.startDate);
       if (start && start > monthEnd) return false;
       const end2 = parseDate(e.endDate);
@@ -758,7 +755,7 @@ function PayrollTab({ employees }) {
                         {isL   && <span style={{ fontSize: 9, fontWeight: 800, backgroundColor: "#fef2f2", color: "#dc2626", padding: "1px 5px", borderRadius: 999 }}>LEAVE</span>}
                         {isB   && <span style={{ fontSize: 9, fontWeight: 800, backgroundColor: "#f3f4f6", color: "#6b7280",  padding: "1px 5px", borderRadius: 999 }}>J+L</span>}
                         {isExp && <span style={{ fontSize: 9, fontWeight: 800, backgroundColor: "#fef2f2", color: "#991b1b",  padding: "1px 5px", borderRadius: 999 }}>EXPIRED</span>}
-                        {isSela && !hasPO && filterPO !== "no_po" && <span style={{ fontSize: 9, fontWeight: 800, backgroundColor: "#fff7ed", color: "#c2410c", padding: "1px 5px", borderRadius: 999 }}>NO PO</span>}
+                        {!hasPO && filterPO !== "no_po" && <span style={{ fontSize: 9, fontWeight: 800, backgroundColor: "#fff7ed", color: "#c2410c", padding: "1px 5px", borderRadius: 999 }}>No PO</span>}
                       </div>
                       <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 1 }}>{emp.position || ""}</div>
                     </td>
