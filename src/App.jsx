@@ -17,7 +17,7 @@ import {
   Download, MessageCircle, Calendar, AlertCircle, Trash2, BarChart2,
   Menu, ChevronDown, Copy, Check, Mail, Filter, FileUp,
   Edit3, Save, Hash, Zap, ClipboardList, Briefcase, Archive, Globe, Link, Inbox, UserPlus, Database,
-  Target, CalendarDays, Receipt, AlertTriangle, RefreshCw, GitBranch
+  Target, CalendarDays, Receipt, AlertTriangle, RefreshCw, GitBranch, Sun
 } from "lucide-react";
 import { ActionCenter } from './ActionCenterV2';
 import { OperationsCalendar, ClientCommandCenter } from './Actioncenter'; // الباقي من القديم
@@ -5690,6 +5690,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
     // ── FINANCE (consolidated: Payroll · Billing · Settlements) ────────────
     { k:"finance",    l:"Finance",           i:DollarSign },
     // ── INSIGHTS ───────────────────────────────────────────────────────────
+    { k:"report",     l:"Morning Report",    i:Sun        },
     { k:"analytics",  l:"Analytics",         i:BarChart2  },
     { k:"weeklyreport", l:"Reports",         i:FileText   },
     // ── SYSTEM ─────────────────────────────────────────────────────────────
