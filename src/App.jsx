@@ -1525,7 +1525,8 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
   const [pendingCSVDiff, setPendingCSVDiff] = useState(null); // { changes, notFound, skipped, applyFn }
   const [importBackup, setImportBackup] = useState(null);     // snapshot for rollback
   const [csvApplying, setCsvApplying] = useState(false);      // loading state for apply btn
-  const [pendingAddCSV, setPendingAddCSV] = useState(null);   // { records, file } waiting for client selection
+  const [pendingAddCSV, setPendingAddCSV] = useState(null);   // { resolved, needsClient }
+  const [csvClientAssign, setCsvClientAssign] = useState({}); // { [project]: clientName }
   // ── Sprint 3: Side panel
   const [sideEmp, setSideEmp] = useState(null);
   const [selected, setSelected] = useState([]);
@@ -1689,7 +1690,8 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
   // 3. رفع CSV
   const handleCSVImport = async (e) => {
     const file = e.target.files[0];
-    if (!file) return;
+    console.log('📂 CSV import triggered, file:', file?.name);
+    if (!file) { console.warn('No file selected'); return; }
     e.target.value = '';
 
     const text = await file.text();
@@ -2766,67 +2768,63 @@ const submitRenew = async () => {
       })()}
 
       {/* ── Add CSV: Client Selector Modal (for unrecognized projects) ── */}
-      {pendingAddCSV && (() => {
+      {pendingAddCSV && (()=>{
         const { resolved = [], needsClient = [] } = pendingAddCSV;
-        // Group needsClient by project
         const byProject = {};
         needsClient.forEach(r => { const p = r.project || "Unknown"; if (!byProject[p]) byProject[p] = []; byProject[p].push(r); });
         const projects = Object.keys(byProject);
-        // clientAssignments: { [project]: clientName }
-        const [assignments, setAssignments] = React.useState({});
-
-        const allAssigned = projects.every(p => assignments[p]);
-        const handleApply = async () => {
-          const withClients = needsClient.map(r => ({ ...r, client: assignments[r.project || "Unknown"] || "Unknown" }));
-          await doInsertCSV([...resolved, ...withClients]);
-        };
-
+        const allAssigned = projects.every(p => csvClientAssign[p]);
+        const total = resolved.length + needsClient.length;
         return (
           <div style={{ position:"fixed", inset:0, zIndex:9999, backgroundColor:"rgba(0,0,0,0.55)", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
             <div style={{ backgroundColor:"white", borderRadius:16, width:"100%", maxWidth:480, maxHeight:"85vh", overflow:"auto", padding:28, boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
-              <h3 style={{ margin:"0 0 4px", fontSize:16, fontWeight:700, color:"#111827" }}>📂 تعيين Client للبروجكتات الجديدة</h3>
+              <h3 style={{ margin:"0 0 4px", fontSize:16, fontWeight:700, color:"#111827" }}>📂 تعيين Client للبروجكتات</h3>
               <p style={{ margin:"0 0 20px", fontSize:12, color:"#6b7280" }}>
-                {resolved.length > 0 && <span style={{color:"#16a34a", fontWeight:600}}>{resolved.length} موظف اتعرفوا تلقائياً ✅ &nbsp;</span>}
-                {needsClient.length} موظف في {projects.length} بروجكت جديد — اختاري الـ Client لكل بروجكت:
+                {resolved.length > 0 && <span style={{color:"#16a34a", fontWeight:600}}>{resolved.length} موظف اتعرفوا تلقائياً ✅&nbsp;&nbsp;</span>}
+                {needsClient.length > 0 && <span>{needsClient.length} موظف في {projects.length} بروجكت — اختاري الـ Client:</span>}
               </p>
-
-              <div style={{ display:"flex", flexDirection:"column", gap:14, marginBottom:20 }}>
-                {projects.map(proj => (
-                  <div key={proj} style={{ padding:"12px 14px", borderRadius:10, border:"1px solid #e5e7eb", backgroundColor:"#f9fafb" }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                      <span style={{ fontWeight:700, fontSize:13, color:"#111827" }}>{proj}</span>
-                      <span style={{ fontSize:11, color:"#9ca3af" }}>{byProject[proj].length} موظف</span>
+              {projects.length > 0 && (
+                <div style={{ display:"flex", flexDirection:"column", gap:14, marginBottom:20 }}>
+                  {projects.map(proj => (
+                    <div key={proj} style={{ padding:"12px 14px", borderRadius:10, border:"1px solid #e5e7eb", backgroundColor:"#f9fafb" }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                        <span style={{ fontWeight:700, fontSize:13, color:"#111827" }}>{proj}</span>
+                        <span style={{ fontSize:11, color:"#9ca3af" }}>{byProject[proj].length} موظف</span>
+                      </div>
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                        {CLIENTS_LIST.map(c => {
+                          const meta = CLIENT_META[c] || {};
+                          const sel = csvClientAssign[proj] === c;
+                          return (
+                            <button key={c} onClick={() => setCsvClientAssign(a => ({ ...a, [proj]: c }))} style={{
+                              padding:"5px 11px", borderRadius:999, fontSize:11, fontWeight:700, cursor:"pointer",
+                              border:`1px solid ${sel ? (meta.dot||M) : "#e5e7eb"}`,
+                              backgroundColor: sel ? (meta.badge||`${M}15`) : "white",
+                              color: sel ? (meta.text||M) : "#6b7280",
+                            }}>{c}</button>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                      {CLIENTS_LIST.map(c => {
-                        const meta = CLIENT_META[c] || {};
-                        const selected = assignments[proj] === c;
-                        return (
-                          <button key={c} onClick={() => setAssignments(a => ({ ...a, [proj]: c }))} style={{
-                            padding:"5px 11px", borderRadius:999, fontSize:11, fontWeight:700, cursor:"pointer",
-                            border:`1px solid ${selected ? (meta.dot||M) : "#e5e7eb"}`,
-                            backgroundColor: selected ? (meta.badge||`${M}15`) : "white",
-                            color: selected ? (meta.text||M) : "#6b7280",
-                          }}>{c}</button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
+                  ))}
+                </div>
+              )}
               <div style={{ display:"flex", gap:10 }}>
-                <button onClick={() => setPendingAddCSV(null)} style={{
+                <button onClick={() => { setPendingAddCSV(null); setCsvClientAssign({}); }} style={{
                   flex:1, padding:"9px", borderRadius:8, border:"1px solid #e5e7eb",
                   backgroundColor:"white", cursor:"pointer", fontSize:13, color:"#6b7280", fontWeight:600,
                 }}>❌ Cancel</button>
-                <button onClick={handleApply} disabled={!allAssigned} style={{
+                <button onClick={async () => {
+                  const withClients = needsClient.map(r => ({ ...r, client: csvClientAssign[r.project || "Unknown"] || "Unknown" }));
+                  await doInsertCSV([...resolved, ...withClients]);
+                  setCsvClientAssign({});
+                }} disabled={!allAssigned && needsClient.length > 0} style={{
                   flex:2, padding:"9px", borderRadius:8, border:"none",
-                  backgroundColor: allAssigned ? M : "#e5e7eb",
-                  color: allAssigned ? "white" : "#9ca3af",
-                  cursor: allAssigned ? "pointer" : "not-allowed",
+                  backgroundColor: (allAssigned || needsClient.length === 0) ? M : "#e5e7eb",
+                  color: (allAssigned || needsClient.length === 0) ? "white" : "#9ca3af",
+                  cursor: (allAssigned || needsClient.length === 0) ? "pointer" : "not-allowed",
                   fontSize:13, fontWeight:700,
-                }}>✅ رفع {resolved.length + needsClient.length} موظف</button>
+                }}>✅ رفع {total} موظف</button>
               </div>
             </div>
           </div>
