@@ -5635,6 +5635,23 @@ function FisheyeOpsPro({ employees, setEmployees }) {
         const { data, error } = await supabase.from('employees_master').select('*');
         if (error) throw error;
         if (data && data.length > 0) {
+          // Auto-expire: any employee whose endDate has passed and isn't already expired/resigned
+          const todayStr = new Date().toISOString().split('T')[0];
+          const toExpire = data.filter(e =>
+            e.endDate && e.endDate < todayStr &&
+            e.status !== 'expired' && e.status !== 'resigned'
+          );
+          if (toExpire.length > 0) {
+            console.log(`⏰ Auto-expiring ${toExpire.length} employees with past end dates`);
+            // Batch update in Supabase
+            const expiredIds = toExpire.map(e => e._id);
+            await supabase
+              .from('employees_master')
+              .update({ status: 'expired' })
+              .in('_id', expiredIds);
+            // Update local data array too
+            toExpire.forEach(e => { e.status = 'expired'; });
+          }
           setEmployees(data);
           localStorage.setItem("fisheyeData_v3", JSON.stringify(data));
         } else {
