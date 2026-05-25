@@ -1522,6 +1522,9 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
   const [fPartner, setFPartner] = useState("");
   const [fNationality, setFNationality] = useState("");
   const [showImportMenu, setShowImportMenu] = useState(false);
+  const [pendingCSVDiff, setPendingCSVDiff] = useState(null); // { changes, notFound, skipped, applyFn }
+  const [importBackup, setImportBackup] = useState(null);     // snapshot for rollback
+  const [csvApplying, setCsvApplying] = useState(false);      // loading state for apply btn
   // ── Sprint 3: Side panel
   const [sideEmp, setSideEmp] = useState(null);
   const [selected, setSelected] = useState([]);
@@ -2010,75 +2013,80 @@ const submitRenew = async () => {
                           if (parseInt(parts[0]) > 12) return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
                           return `${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
                         };
-                        let updated = 0; let errors = 0; let skipped = 0;
+                        // ── CALCULATE DIFF (don't apply yet) ──────────────────
+                        const changes = []; const notFound = []; let skippedCount = 0;
                         for (let i = 1; i < lines.length; i++) {
                           const cols  = parseCSVLine(lines[i]).map(c => c.trim());
                           const empId = cols[empIdIdx];
                           if (!empId) continue;
-                          const candidates = employees.filter(e => e.employeeId === empId);
-                          if (candidates.length === 0) { errors++; continue; }
+                          const candidates = employees.filter(emp => emp.employeeId === empId);
+                          if (candidates.length === 0) { notFound.push(empId); continue; }
                           let emp = null;
-                          if (candidates.length === 1) {
-                            emp = candidates[0];
-                          } else {
+                          if (candidates.length === 1) { emp = candidates[0]; }
+                          else {
                             const csvContractId = contractIdIdx !== -1 ? cols[contractIdIdx] : null;
                             if (csvContractId) emp = candidates.find(c => c.contractId === csvContractId);
                             if (!emp) {
                               const csvStart = startIdx !== -1 ? normalizeDate(cols[startIdx]) : null;
                               const csvEnd   = endIdx   !== -1 ? normalizeDate(cols[endIdx])   : null;
-                              if (csvStart || csvEnd) {
-                                emp = candidates.find(c => {
-                                  const matchStart = !csvStart || normalizeDate(c.startDate) === csvStart;
-                                  const matchEnd   = !csvEnd   || normalizeDate(c.endDate)   === csvEnd;
-                                  return matchStart && matchEnd;
-                                });
-                              }
+                              if (csvStart || csvEnd) emp = candidates.find(c => {
+                                return (!csvStart || normalizeDate(c.startDate) === csvStart) &&
+                                       (!csvEnd   || normalizeDate(c.endDate)   === csvEnd);
+                              });
                             }
-                            if (!emp) {
-                              const activeContracts = candidates.filter(c => (c.status || "").toLowerCase() === "active");
-                              if (activeContracts.length === 1) emp = activeContracts[0];
-                            }
-                            if (!emp) { skipped++; continue; }
+                            if (!emp) { const active = candidates.filter(c => (c.status||'').toLowerCase()==='active'); emp = active.length===1 ? active[0] : null; }
+                            if (!emp) { skippedCount++; continue; }
                           }
                           const fieldsToUpdate = {};
                           headers.forEach((h, idx) => {
-                            const field = ALLOWED[h];
-                            if (!field) return;
+                            const field = ALLOWED[h]; if (!field) return;
                             const val = cols[idx];
                             if (field === 'poNumbers') {
-                              const hasCsvPO = val && String(val).trim() !== "";
-                              if (!hasCsvPO) return;
+                              if (!val || !String(val).trim()) return;
                               fieldsToUpdate[field] = val.trim();
-                              const hadPO = emp.poNumbers && String(emp.poNumbers).trim() !== "";
-                              if (!hadPO) fieldsToUpdate.poAddedDate = new Date().toISOString().split("T")[0];
+                              if (!emp.poNumbers || !String(emp.poNumbers).trim()) fieldsToUpdate.poAddedDate = new Date().toISOString().split('T')[0];
                               return;
                             }
                             if (val) fieldsToUpdate[field] = val;
                           });
                           if (fieldsToUpdate.workflowStatus) {
-                            const currentWF = emp.workflowStatus;
-                            if (['Qiwa Submitted','Qiwa Approved','Iqama Transferred'].includes(currentWF))
+                            if (['Qiwa Submitted','Qiwa Approved','Iqama Transferred'].includes(emp.workflowStatus))
                               delete fieldsToUpdate.workflowStatus;
                           }
                           if (Object.keys(fieldsToUpdate).length === 0) continue;
-                          const EXTENDED_FIELDS = ['iban', 'bank', 'requesterName', 'poAddedDate'];
-                          const coreFields = {}; const extFields = {};
-                          Object.entries(fieldsToUpdate).forEach(([k, v]) => {
-                            if (EXTENDED_FIELDS.includes(k)) extFields[k] = v; else coreFields[k] = v;
-                          });
-                          if (Object.keys(coreFields).length > 0) {
-                            const { error } = await supabase.from('employees_master').update(coreFields).eq('_id', Number(emp._id));
-                            if (error) { errors++; continue; }
-                            setEmployees(prev => prev.map(e => e._id === emp._id ? { ...e, ...coreFields } : e));
-                            updated++;
-                          }
-                          if (Object.keys(extFields).length > 0) {
-                            const { error: extErr } = await supabase.from('employees_master').update(extFields).eq('_id', Number(emp._id));
-                            if (!extErr) setEmployees(prev => prev.map(e => e._id === emp._id ? { ...e, ...extFields } : e));
-                          }
+                          // Build field-level diff
+                          const fieldDiffs = Object.entries(fieldsToUpdate).map(([field, newVal]) => ({
+                            field, oldVal: emp[field] ?? '—', newVal
+                          }));
+                          changes.push({ emp, fieldsToUpdate, fieldDiffs });
                         }
-                        const msg = [`✅ Updated: ${updated}`, errors > 0 ? `❌ Errors: ${errors}` : null, skipped > 0 ? `⚠️ Skipped: ${skipped}` : null].filter(Boolean).join('\n');
-                        alert(msg);
+                        if (changes.length === 0 && notFound.length === 0) {
+                          alert('No changes detected in this CSV.'); e.target.value = ''; return;
+                        }
+                        // ── Show diff preview modal ───────────────────────────
+                        const applyFn = async () => {
+                          const EXTENDED_FIELDS = ['iban', 'bank', 'requesterName', 'poAddedDate'];
+                          let updated = 0; let errors = 0;
+                          for (const { emp, fieldsToUpdate } of changes) {
+                            const coreFields = {}; const extFields = {};
+                            Object.entries(fieldsToUpdate).forEach(([k, v]) => {
+                              if (EXTENDED_FIELDS.includes(k)) extFields[k] = v; else coreFields[k] = v;
+                            });
+                            if (Object.keys(coreFields).length > 0) {
+                              const { error } = await supabase.from('employees_master').update(coreFields).eq('_id', Number(emp._id));
+                              if (error) { errors++; continue; }
+                              setEmployees(prev => prev.map(e => e._id === emp._id ? { ...e, ...coreFields } : e));
+                              updated++;
+                            }
+                            if (Object.keys(extFields).length > 0) {
+                              const { error: extErr } = await supabase.from('employees_master').update(extFields).eq('_id', Number(emp._id));
+                              if (!extErr) setEmployees(prev => prev.map(e => e._id === emp._id ? { ...e, ...extFields } : e));
+                            }
+                          }
+                          setPendingCSVDiff(null);
+                          alert(`✅ Applied: ${updated} employees updated${errors > 0 ? `\n❌ Errors: ${errors}` : ''}`);
+                        };
+                        setPendingCSVDiff({ changes, notFound, skippedCount, applyFn });
                         e.target.value = '';
                       }} />
                     </label>
@@ -2583,6 +2591,157 @@ const submitRenew = async () => {
               )}
             </div>
           </Modal>
+        );
+      })()}
+
+      {/* ── CSV Diff Preview Modal ── */}
+      {pendingCSVDiff && (() => {
+        const { changes, notFound, skippedCount, applyFn } = pendingCSVDiff;
+        const applying = csvApplying;
+
+        // Flatten rows: one row per (employee × changed field)
+        const rows = changes.flatMap(({ emp, fieldDiffs }) =>
+          fieldDiffs.map(({ field, oldVal, newVal }) => ({
+            name: emp.name,
+            empId: emp.employeeId,
+            field,
+            oldVal: oldVal === undefined || oldVal === null ? '—' : String(oldVal),
+            newVal: String(newVal),
+          }))
+        );
+
+        const FIELD_LABEL = {
+          workflowStatus: 'Workflow Status', idNumber: 'ID Number', project: 'Project',
+          phone: 'Phone', email: 'Email', poNumbers: 'PO Numbers', poAddedDate: 'PO Added Date',
+          invoiceNumbers: 'Invoice Numbers', requesterName: 'Requester Name',
+          bank: 'Bank', iban: 'IBAN',
+        };
+
+        return (
+          <div style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            backgroundColor: "rgba(0,0,0,0.55)", display: "flex",
+            alignItems: "center", justifyContent: "center", padding: 20,
+          }}>
+            <div style={{
+              backgroundColor: "white", borderRadius: 16, width: "100%", maxWidth: 780,
+              maxHeight: "88vh", display: "flex", flexDirection: "column",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+            }}>
+              {/* Header */}
+              <div style={{
+                padding: "18px 22px", borderBottom: "1px solid #e5e7eb",
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                flexShrink: 0,
+              }}>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#111827" }}>
+                    📋 CSV Update Preview
+                  </h2>
+                  <p style={{ margin: "4px 0 0", fontSize: 12, color: "#6b7280" }}>
+                    راجع التغييرات قبل تطبيقها — {changes.length} موظف · {rows.length} تعديل
+                    {skippedCount > 0 && ` · ${skippedCount} skipped (ambiguous)`}
+                  </p>
+                </div>
+                <button onClick={() => setPendingCSVDiff(null)} disabled={applying}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: 4, fontSize: 18, lineHeight: 1 }}>✕</button>
+              </div>
+
+              {/* Body — scrollable */}
+              <div style={{ overflowY: "auto", flex: 1, padding: "16px 22px" }}>
+
+                {/* Changes table */}
+                {rows.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ backgroundColor: "#f9fafb" }}>
+                          {["Employee", "ID", "Field", "Old Value", "New Value"].map(h => (
+                            <th key={h} style={{
+                              padding: "8px 10px", textAlign: "left", fontWeight: 700,
+                              color: "#374151", borderBottom: "1px solid #e5e7eb", whiteSpace: "nowrap",
+                            }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((r, i) => {
+                          const changed = r.oldVal !== r.newVal;
+                          return (
+                            <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "white" : "#f9fafb" }}>
+                              <td style={{ padding: "7px 10px", color: "#111827", fontWeight: 600, borderBottom: "1px solid #f3f4f6" }}>{r.name}</td>
+                              <td style={{ padding: "7px 10px", color: "#6b7280", borderBottom: "1px solid #f3f4f6", fontFamily: "monospace" }}>{r.empId}</td>
+                              <td style={{ padding: "7px 10px", color: "#374151", fontWeight: 600, borderBottom: "1px solid #f3f4f6" }}>{FIELD_LABEL[r.field] || r.field}</td>
+                              <td style={{
+                                padding: "7px 10px", color: changed ? "#dc2626" : "#6b7280",
+                                borderBottom: "1px solid #f3f4f6",
+                                textDecoration: changed ? "line-through" : "none",
+                                opacity: changed ? 0.8 : 1,
+                              }}>{r.oldVal}</td>
+                              <td style={{
+                                padding: "7px 10px",
+                                color: changed ? "#16a34a" : "#6b7280",
+                                fontWeight: changed ? 700 : 400,
+                                borderBottom: "1px solid #f3f4f6",
+                              }}>{r.newVal}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Not found */}
+                {notFound.length > 0 && (
+                  <div style={{
+                    padding: "12px 14px", borderRadius: 10, backgroundColor: "#fffbeb",
+                    border: "1px solid #fde68a", marginBottom: 16,
+                  }}>
+                    <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 12, color: "#92400e" }}>
+                      ⚠️ {notFound.length} Employee ID{notFound.length > 1 ? "s" : ""} not found in system:
+                    </p>
+                    <p style={{ margin: 0, fontSize: 11, color: "#78350f", fontFamily: "monospace", lineHeight: 1.8 }}>
+                      {notFound.join(" · ")}
+                    </p>
+                  </div>
+                )}
+
+                {changes.length === 0 && (
+                  <p style={{ textAlign: "center", color: "#9ca3af", fontSize: 13, padding: "20px 0" }}>
+                    No changes to apply.
+                  </p>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div style={{
+                padding: "14px 22px", borderTop: "1px solid #e5e7eb",
+                display: "flex", justifyContent: "flex-end", gap: 10,
+                flexShrink: 0, backgroundColor: "#f9fafb", borderRadius: "0 0 16px 16px",
+              }}>
+                <button onClick={() => setPendingCSVDiff(null)} disabled={applying}
+                  style={{
+                    padding: "8px 18px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+                    border: "1px solid #e5e7eb", backgroundColor: "white", cursor: "pointer",
+                    color: "#374151", opacity: applying ? 0.5 : 1,
+                  }}>❌ Cancel</button>
+                <button
+                  disabled={applying || changes.length === 0}
+                  onClick={async () => { setCsvApplying(true); await applyFn(); setCsvApplying(false); }}
+                  style={{
+                    padding: "8px 22px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                    border: "none", cursor: changes.length === 0 ? "not-allowed" : "pointer",
+                    backgroundColor: changes.length === 0 ? "#e5e7eb" : M,
+                    color: changes.length === 0 ? "#9ca3af" : "white",
+                    opacity: applying ? 0.7 : 1,
+                    display: "flex", alignItems: "center", gap: 6,
+                  }}>
+                  {applying ? "⏳ Applying..." : `✅ Apply ${changes.length} Changes`}
+                </button>
+              </div>
+            </div>
+          </div>
         );
       })()}
 
