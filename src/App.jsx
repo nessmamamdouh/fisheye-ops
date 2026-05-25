@@ -3830,14 +3830,14 @@ function PartnerHub({ employees, partners, savePartners }) {
   const updContact=(pid,ci,f,v)=>save(partners.map(p=>p.id===pid?{...p,contacts:p.contacts.map((c,i)=>i===ci?{...c,[f]:v}:c)}:p));
   const addRequest=(pid,req)=>save(partners.map(p=>p.id===pid?{...p,requestLog:[...p.requestLog,req]}:p));
   const updReqStatus=(pid,ri,st)=>save(partners.map(p=>p.id===pid?{...p,requestLog:p.requestLog.map((r,i)=>i===ri?{...r,status:st}:r)}:p));
-  const getLinked=pid=>{const p=partners.find(x=>x.id===pid);if(!p)return[];return employees.filter(e=>!isExcluded(e)&&(e.partnerAssigned===p.id||e.partnerAssigned===p.name));};
+  const getLinked=pid=>{const p=partners.find(x=>x.id===pid);if(!p)return[];return employees.filter(e=>!isExcluded(e)&&e.profitMode==="partner"&&(e.partnerAssigned===p.id||e.partnerAssigned===p.name));};
   const displayed=partners.filter(p=>filter==="all"||(filter==="archived"?p.status==="archived":p.status!=="archived"));
 
   // ── Global stats ──
   const totalPending=partners.reduce((s,p)=>s+(p.requestLog||[]).filter(r=>r.status==="Pending").length,0);
   const totalOverdue=partners.reduce((s,p)=>s+(p.requestLog||[]).filter(r=>r.status==="Pending"&&Math.floor((Date.now()-new Date(r.ts))/864e5)>5).length,0);
-  const totalAssigned=employees.filter(e=>e.partnerAssigned&&!isExcluded(e)).length;
-  const totalExpiring=employees.filter(e=>e.partnerAssigned&&!isExcluded(e)&&(d=>d>=0&&d<=30)(daysUntil(e.endDate))).length;
+  const totalAssigned=employees.filter(e=>e.partnerAssigned&&e.profitMode==="partner"&&!isExcluded(e)).length;
+  const totalExpiring=employees.filter(e=>e.partnerAssigned&&e.profitMode==="partner"&&!isExcluded(e)&&(d=>d>=0&&d<=30)(daysUntil(e.endDate))).length;
 
   // ── Detail modal data ──
   const openPartner=partners.find(p=>p.id===openId)||null;
