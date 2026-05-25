@@ -2010,7 +2010,7 @@ const submitRenew = async () => {
                         };
                         const empIdIdx      = headers.indexOf('employee id');
                         const contractIdIdx = headers.indexOf('contract id');
-                        const nameIdx       = ['full name','name','employee name'].reduce((found, h) => found !== -1 ? found : headers.indexOf(h), -1);
+                        const nameIdx       = ['candidate name','full name','name','employee name'].reduce((found, h) => found !== -1 ? found : headers.indexOf(h), -1);
                         const startIdx      = ['contract start date', 'start date', 'startdate', 'start'].reduce((found, h) => found !== -1 ? found : headers.indexOf(h), -1);
                         const endIdx        = ['contract end date', 'end date', 'enddate', 'end'].reduce((found, h) => found !== -1 ? found : headers.indexOf(h), -1);
                         if (empIdIdx === -1) { alert('❌ CSV must contain an Employee ID column'); return; }
@@ -2085,6 +2085,8 @@ const submitRenew = async () => {
                               if (!emp.poNumbers || !String(emp.poNumbers).trim()) fieldsToUpdate.poAddedDate = new Date().toISOString().split('T')[0];
                               return;
                             }
+                            // Skip invalid phone (just country code with no number)
+                            if (field === 'phone' && val && /^\+\d{1,4}$/.test(val.trim())) return;
                             if (val) fieldsToUpdate[field] = val;
                           });
                           if (fieldsToUpdate.workflowStatus) {
