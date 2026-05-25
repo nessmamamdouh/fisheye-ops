@@ -2033,47 +2033,15 @@ const submitRenew = async () => {
                           if (candidates.length === 0) { notFound.push(empId); continue; }
                           let emp = null;
                           let matchedBy = 'unique';
-                          if (candidates.length === 1) { emp = candidates[0]; }
-                          else {
-                            const csvContractId = contractIdIdx !== -1 ? cols[contractIdIdx]?.trim() : null;
-                            const csvName       = nameIdx !== -1 ? cols[nameIdx]?.trim().toLowerCase() : null;
-                            console.log(`🔍 Multiple for ${empId} (${candidates.length}). contractId:"${csvContractId}" name:"${csvName}"`);
-
-                            // 1. Match by Contract ID (most reliable)
-                            if (csvContractId) {
-                              emp = candidates.find(c => String(c.contractId||'').trim() === csvContractId);
-                              if (emp) matchedBy = `contract:${csvContractId}`;
-                            }
-                            // 2. Match by Name (fixes cases where contractId is wrong in DB)
-                            if (!emp && csvName) {
-                              const nameMatches = candidates.filter(c =>
-                                (c.name||'').toLowerCase().trim() === csvName
-                              );
-                              if (nameMatches.length === 1) { emp = nameMatches[0]; matchedBy = `name:${csvName}`; }
-                              else if (nameMatches.length > 1 && csvContractId) {
-                                // Both name AND try partial contract match
-                                emp = nameMatches[0]; matchedBy = `name(multi):${csvName}`;
-                              }
-                            }
-                            // 3. Match by dates
-                            if (!emp) {
-                              const csvStart = startIdx !== -1 ? normalizeDate(cols[startIdx]) : null;
-                              const csvEnd   = endIdx   !== -1 ? normalizeDate(cols[endIdx])   : null;
-                              if (csvStart || csvEnd) {
-                                emp = candidates.find(c =>
-                                  (!csvStart || normalizeDate(c.startDate) === csvStart) &&
-                                  (!csvEnd   || normalizeDate(c.endDate)   === csvEnd)
-                                );
-                                if (emp) matchedBy = `dates:${csvStart}→${csvEnd}`;
-                              }
-                            }
-                            // 4. Last resort: single active
-                            if (!emp) {
-                              const active = candidates.filter(c => (c.status||'').toLowerCase()==='active');
-                              emp = active.length === 1 ? active[0] : null;
-                              if (emp) matchedBy = 'active-status';
-                            }
-                            if (!emp) { skippedCount++; console.warn(`⚠️ Ambiguous: ${empId} — skipped`); continue; }
+                          // Match ONLY by Contract ID — it's now unique in the DB
+                          const csvContractId = contractIdIdx !== -1 ? cols[contractIdIdx]?.trim() : null;
+                          if (candidates.length === 1 && !csvContractId) {
+                            emp = candidates[0];
+                          } else {
+                            if (!csvContractId) { skippedCount++; console.warn(`⚠️ No Contract ID in CSV row for ${empId} — skipped`); continue; }
+                            emp = employees.find(c => String(c.contractId||'').trim() === csvContractId);
+                            if (!emp) { skippedCount++; console.warn(`⚠️ Contract ID ${csvContractId} not found in DB — skipped`); continue; }
+                            matchedBy = `contract:${csvContractId}`;
                           }
                           const fieldsToUpdate = {};
                           headers.forEach((h, idx) => {
@@ -2093,6 +2061,8 @@ const submitRenew = async () => {
                             if (['Qiwa Submitted','Qiwa Approved','Iqama Transferred'].includes(emp.workflowStatus))
                               delete fieldsToUpdate.workflowStatus;
                           }
+                          // contractId is the match key — never update it
+                          delete fieldsToUpdate.contractId;
                           if (Object.keys(fieldsToUpdate).length === 0) continue;
                           // Build field-level diff — only show fields that actually changed
                           const fieldDiffs = Object.entries(fieldsToUpdate)
