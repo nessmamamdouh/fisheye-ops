@@ -125,6 +125,15 @@ const M = "#800000";
 const fmt = d => d ? new Date(d).toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" }) : "—";
 const fmtSAR = n => n ? `SR ${Number(n).toLocaleString()}` : "SR 0";
 
+// Pre-VAT helper: handles cases where vat is null/0 (e.g. lost during Supabase sync)
+// Priority: use vat if valid → derive from amountPreVat → reverse-calc 15% VAT from totalDue
+const getPreVat = inv => {
+  const total = inv.totalDue || 0;
+  if (inv.vat != null && inv.vat > 0) return total - inv.vat;
+  if (inv.amountPreVat != null && inv.amountPreVat > 0) return inv.amountPreVat;
+  return Math.round(total * (100 / 115) * 100) / 100;
+};
+
 // ── mirrors App.jsx calcProfit exactly ───────────────────────────────────────
 function calcProfit(e) {
   const margin = calcClientBilling(e); // Fisheye margin from client
@@ -384,7 +393,7 @@ export default function PartnerSettlementReport({ employees = [] }) {
         const poMap = new Map();
         byBatch.get(batch).forEach(x => { const po=x.inv.poNumber||'—'; if(!poMap.has(po))poMap.set(po,[]); poMap.get(po).push(x); });
         poMap.forEach((items, po) => {
-          const preVat     = items.reduce((s,x)=>s+((x.inv.totalDue||0)-(x.inv.vat||0)),0);
+          const preVat     = items.reduce((s,x)=>s+(getPreVat(x.inv)),0);
           const commission = items.reduce((s,x)=>s+x.commission,0);
           // Rate = commission ÷ invoiced amount (actual rate, not hardcoded)
           const ratePct    = preVat > 0 ? (commission / preVat * 100).toFixed(2) + '%' : '—';
@@ -400,7 +409,7 @@ export default function PartnerSettlementReport({ employees = [] }) {
     const poMap = new Map();
     pending.forEach(x => { const po=x.inv.poNumber||'—'; if(!poMap.has(po))poMap.set(po,[]); poMap.get(po).push(x); });
     poMap.forEach((items, po) => {
-      const preVat     = items.reduce((s,x)=>s+((x.inv.totalDue||0)-(x.inv.vat||0)),0);
+      const preVat     = items.reduce((s,x)=>s+(getPreVat(x.inv)),0);
       const commission = items.reduce((s,x)=>s+x.commission,0);
       const ratePct    = preVat > 0 ? (commission / preVat * 100).toFixed(2) + '%' : '—';
       rows.push([esc(po),esc(items.map(x=>x.inv.invoiceNumber).join(', ')),esc(preVat.toFixed(2)),esc(ratePct),esc(commission.toFixed(2))].join(','));
@@ -539,8 +548,7 @@ export default function PartnerSettlementReport({ employees = [] }) {
 
     const calcCommission = (emp, inv) => {
       if (!emp) return 0;
-      // Base = Pre-VAT (same as Invoiced Amount column)
-      const base = (inv.totalDue || 0) - (inv.vat || 0);
+      const base = getPreVat(inv);
       return emp.partnerCostType === 'percent'
         ? Math.round((emp.partnerCost / 100) * base * 100) / 100
         : (emp.partnerCost || 0);
@@ -1103,7 +1111,7 @@ export default function PartnerSettlementReport({ employees = [] }) {
                                   poMap.get(po).push(x);
                                 });
                                 return [...poMap.entries()].map(([po, items], i) => {
-                                  const preVat     = items.reduce((s,x)=>s+((x.inv.totalDue||0)-(x.inv.vat||0)),0);
+                                  const preVat     = items.reduce((s,x)=>s+(getPreVat(x.inv)),0);
                                   const commission = items.reduce((s,x)=>s+x.commission,0);
                                   // Actual rate = commission ÷ invoiced (derived, not hardcoded)
                                   const ratePct    = preVat > 0 ? (commission / preVat * 100).toFixed(2) + '%' : '—';
@@ -1212,7 +1220,7 @@ export default function PartnerSettlementReport({ employees = [] }) {
                             {poRows.filter(r => r.invoices.some(x=>!x.inv.partnerCommissionPaid)).map(({ po, invoices: poInvs }) => {
                               const unpaid      = poInvs.filter(x=>!x.inv.partnerCommissionPaid);
                               if (!unpaid.length) return null;
-                              const preVat      = unpaid.reduce((s,x)=>s+((x.inv.totalDue||0)-(x.inv.vat||0)),0);
+                              const preVat      = unpaid.reduce((s,x)=>s+(getPreVat(x.inv)),0);
                               const fisheyeFees = Math.round(preVat*0.06*100)/100;
                               const commission  = unpaid.reduce((s,x)=>s+x.commission,0);
                               return (
@@ -1229,8 +1237,8 @@ export default function PartnerSettlementReport({ employees = [] }) {
                           <tfoot>
                             <tr style={{ backgroundColor: "#fee2e2", borderTop: "2px solid #fca5a5" }}>
                               <td colSpan={2} style={{ ...tdBase, fontWeight: 800, color: "#dc2626" }}>{pending.length} invoices pending</td>
-                              <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontWeight: 900, color: M }}>{pending.reduce((s,x)=>s+((x.inv.totalDue||0)-(x.inv.vat||0)),0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                              <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontWeight: 900, color: "#374151" }}>{(Math.round(pending.reduce((s,x)=>s+((x.inv.totalDue||0)-(x.inv.vat||0)),0)*0.06*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                              <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontWeight: 900, color: M }}>{pending.reduce((s,x)=>s+(getPreVat(x.inv)),0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                              <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontWeight: 900, color: "#374151" }}>{(Math.round(pending.reduce((s,x)=>s+(getPreVat(x.inv)),0)*0.06*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                               <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontWeight: 900, color: "#dc2626" }}>{totalCommissionPending.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                             </tr>
                           </tfoot>
