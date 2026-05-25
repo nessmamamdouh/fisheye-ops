@@ -2029,20 +2029,32 @@ const submitRenew = async () => {
                           const candidates = employees.filter(emp => emp.employeeId === empId);
                           if (candidates.length === 0) { notFound.push(empId); continue; }
                           let emp = null;
+                          let matchedBy = 'unique';
                           if (candidates.length === 1) { emp = candidates[0]; }
                           else {
-                            const csvContractId = contractIdIdx !== -1 ? cols[contractIdIdx] : null;
-                            if (csvContractId) emp = candidates.find(c => c.contractId === csvContractId);
+                            const csvContractId = contractIdIdx !== -1 ? cols[contractIdIdx]?.trim() : null;
+                            console.log(`🔍 Multiple matches for ${empId} (${candidates.length}). CSV contractId: "${csvContractId}". DB contractIds:`, candidates.map(c => `"${c.contractId}"`));
+                            if (csvContractId) {
+                              emp = candidates.find(c => String(c.contractId||'').trim() === csvContractId);
+                              if (emp) matchedBy = `contract:${csvContractId}`;
+                            }
                             if (!emp) {
                               const csvStart = startIdx !== -1 ? normalizeDate(cols[startIdx]) : null;
                               const csvEnd   = endIdx   !== -1 ? normalizeDate(cols[endIdx])   : null;
-                              if (csvStart || csvEnd) emp = candidates.find(c => {
-                                return (!csvStart || normalizeDate(c.startDate) === csvStart) &&
-                                       (!csvEnd   || normalizeDate(c.endDate)   === csvEnd);
-                              });
+                              if (csvStart || csvEnd) {
+                                emp = candidates.find(c =>
+                                  (!csvStart || normalizeDate(c.startDate) === csvStart) &&
+                                  (!csvEnd   || normalizeDate(c.endDate)   === csvEnd)
+                                );
+                                if (emp) matchedBy = `dates:${csvStart}→${csvEnd}`;
+                              }
                             }
-                            if (!emp) { const active = candidates.filter(c => (c.status||'').toLowerCase()==='active'); emp = active.length===1 ? active[0] : null; }
-                            if (!emp) { skippedCount++; continue; }
+                            if (!emp) {
+                              const active = candidates.filter(c => (c.status||'').toLowerCase()==='active');
+                              emp = active.length === 1 ? active[0] : null;
+                              if (emp) matchedBy = 'active-status';
+                            }
+                            if (!emp) { skippedCount++; console.warn(`⚠️ Ambiguous: ${empId} — skipped`); continue; }
                           }
                           const fieldsToUpdate = {};
                           headers.forEach((h, idx) => {
@@ -2069,7 +2081,7 @@ const submitRenew = async () => {
                           // Only keep fieldsToUpdate entries that actually changed
                           const realFields = {};
                           fieldDiffs.forEach(({ field, newVal }) => { realFields[field] = newVal; });
-                          changes.push({ emp, fieldsToUpdate: realFields, fieldDiffs });
+                          changes.push({ emp, fieldsToUpdate: realFields, fieldDiffs, matchedBy });
                         }
                         if (changes.length === 0 && notFound.length === 0) {
                           alert('No changes detected in this CSV.'); e.target.value = ''; return;
@@ -2632,10 +2644,12 @@ const submitRenew = async () => {
         const applying = csvApplying;
 
         // Flatten rows: one row per (employee × changed field)
-        const rows = changes.flatMap(({ emp, fieldDiffs }) =>
+        const rows = changes.flatMap(({ emp, fieldDiffs, matchedBy }) =>
           fieldDiffs.map(({ field, oldVal, newVal }) => ({
             name: emp.name,
             empId: emp.employeeId,
+            contractId: emp.contractId || '—',
+            matchedBy: matchedBy || 'unique',
             field,
             oldVal: oldVal === undefined || oldVal === null ? '—' : String(oldVal),
             newVal: String(newVal),
@@ -2688,7 +2702,7 @@ const submitRenew = async () => {
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                       <thead>
                         <tr style={{ backgroundColor: "#f9fafb" }}>
-                          {["Employee", "ID", "Field", "Old Value", "New Value"].map(h => (
+                          {["Employee", "Contract ID", "Matched By", "Field", "Old Value", "New Value"].map(h => (
                             <th key={h} style={{
                               padding: "8px 10px", textAlign: "left", fontWeight: 700,
                               color: "#374151", borderBottom: "1px solid #e5e7eb", whiteSpace: "nowrap",
@@ -2699,21 +2713,28 @@ const submitRenew = async () => {
                       <tbody>
                         {rows.map((r, i) => {
                           const changed = r.oldVal !== r.newVal;
+                          const isWeakMatch = r.matchedBy !== 'unique' && !r.matchedBy.startsWith('contract:');
                           return (
-                            <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "white" : "#f9fafb" }}>
-                              <td style={{ padding: "7px 10px", color: "#111827", fontWeight: 600, borderBottom: "1px solid #f3f4f6" }}>{r.name}</td>
-                              <td style={{ padding: "7px 10px", color: "#6b7280", borderBottom: "1px solid #f3f4f6", fontFamily: "monospace" }}>{r.empId}</td>
+                            <tr key={i} style={{ backgroundColor: isWeakMatch ? "#fffbeb" : (i % 2 === 0 ? "white" : "#f9fafb") }}>
+                              <td style={{ padding: "7px 10px", color: "#111827", fontWeight: 600, borderBottom: "1px solid #f3f4f6", whiteSpace: "nowrap" }}>{r.name}</td>
+                              <td style={{ padding: "7px 10px", color: "#6b7280", borderBottom: "1px solid #f3f4f6", fontFamily: "monospace", whiteSpace: "nowrap" }}>{r.contractId}</td>
+                              <td style={{ padding: "7px 10px", borderBottom: "1px solid #f3f4f6", whiteSpace: "nowrap" }}>
+                                <span style={{
+                                  padding: "2px 7px", borderRadius: 999, fontSize: 10, fontWeight: 700,
+                                  backgroundColor: r.matchedBy.startsWith('contract:') ? "#dcfce7" : isWeakMatch ? "#fef3c7" : "#f3f4f6",
+                                  color: r.matchedBy.startsWith('contract:') ? "#15803d" : isWeakMatch ? "#92400e" : "#6b7280",
+                                }}>
+                                  {r.matchedBy.startsWith('contract:') ? '✅ Contract' : isWeakMatch ? '⚠️ '+r.matchedBy : '—'}
+                                </span>
+                              </td>
                               <td style={{ padding: "7px 10px", color: "#374151", fontWeight: 600, borderBottom: "1px solid #f3f4f6" }}>{FIELD_LABEL[r.field] || r.field}</td>
                               <td style={{
-                                padding: "7px 10px", color: changed ? "#dc2626" : "#6b7280",
+                                padding: "7px 10px", color: "#dc2626",
                                 borderBottom: "1px solid #f3f4f6",
-                                textDecoration: changed ? "line-through" : "none",
-                                opacity: changed ? 0.8 : 1,
+                                textDecoration: "line-through", opacity: 0.8,
                               }}>{r.oldVal}</td>
                               <td style={{
-                                padding: "7px 10px",
-                                color: changed ? "#16a34a" : "#6b7280",
-                                fontWeight: changed ? 700 : 400,
+                                padding: "7px 10px", color: "#16a34a", fontWeight: 700,
                                 borderBottom: "1px solid #f3f4f6",
                               }}>{r.newVal}</td>
                             </tr>
