@@ -1525,6 +1525,7 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
   const [pendingCSVDiff, setPendingCSVDiff] = useState(null); // { changes, notFound, skipped, applyFn }
   const [importBackup, setImportBackup] = useState(null);     // snapshot for rollback
   const [csvApplying, setCsvApplying] = useState(false);      // loading state for apply btn
+  const [pendingAddCSV, setPendingAddCSV] = useState(null);   // { records, file } waiting for client selection
   // ── Sprint 3: Side panel
   const [sideEmp, setSideEmp] = useState(null);
   const [selected, setSelected] = useState([]);
@@ -1687,68 +1688,87 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
 };
   // 3. رفع CSV
   const handleCSVImport = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
 
-  // اختيار العميل يدوياً لأن ملفك لا يحتوي على عمود باسم "Client" صريح
-  const selectedClient = (client && client !== "All") ? client : prompt("Enter Client Name (e.g., Sela, Channel Play):", "Sela");
-  if (!selectedClient) return;
+    const text = await file.text();
+    const allLines = text.replace(/^﻿/, '').split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+    const dataLines = allLines.slice(1);
 
-  const reader = new FileReader();
-  reader.onload = async (event) => {
-    try {
-      const text = event.target.result;
-      const allLines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-      const dataLines = allLines.slice(1); // تخطي سطر العنوان (Header)
+    const records = dataLines.map((line, index) => {
+      const col = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v?.replace(/^"|"$/g, '').trim());
+      if (col.length < 3) return null;
+      return {
+        _id:             String(Date.now()) + String(index),
+        employeeId:      col[0]  || `EMP-${index + 1}`,
+        contractId:      col[1]  || "",
+        name:            col[2]  || "Unknown",
+        email:           col[3]  || "",
+        phone:           col[4]  || "",
+        idNumber:        col[5]  || "",
+        position:        col[6]  || "",
+        project:         col[7]  || "",
+        sourcingThrough: col[8]  || "Client",
+        nationalityType: col[9]  || "expat",
+        startDate:       col[10] || new Date().toISOString().split('T')[0],
+        endDate:         col[11] || null,
+        totalPackage:    parseFloat(String(col[12]).replace(/[^0-9.]/g, '')) || 0,
+        status:          col[13]?.toLowerCase() || "active",
+        workflowStatus:  col[14] || "Onboarding",
+        poNumbers:       col[15] || "",
+        invoiceNumbers:  col[16] || "",
+        auditLog: [{ ts: new Date().toISOString(), action: `Imported via CSV` }]
+      };
+    }).filter(Boolean);
 
-      const recordsToSupabase = dataLines.map((line, index) => {
-        // تقسيم السطر مع معالجة الفواصل داخل النصوص
-        const col = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v?.replace(/^"|"$/g, '').trim());
-        
-        if (col.length < 3) return null; 
+    if (records.length === 0) { alert('❌ No valid rows found in CSV'); return; }
 
-        return {
-  
-          // ترتيب الأعمدة بناءً على صورتك (تبدأ من col[0]):
-          employeeId:      col[0]  || `EMP-${index + 1}`,
-          contractId:      col[1]  || "",
-          name:            col[2]  || "Unknown",
-          email:           col[3]  || "",
-          phone:     col[4]  || "",
-          idNumber:        col[5]  || "",
-          position:        col[6]  || "",
-          project:         col[7]  || "",
-          sourcingThrough: col[8]  || "Client", // العمود التاسع في صورتك
-          nationalityType: col[9]  || "expat",
-          startDate:       col[10] || new Date().toISOString().split('T')[0],
-          endDate:         col[11] || null,
-          totalPackage:    parseFloat(String(col[12]).replace(/[^0-9.]/g, '')) || 0,
-          status:          col[13]?.toLowerCase() || "active",
-          workflowStatus:  col[14] || "Onboarding",
-          poNumbers:       col[15] || "",
-          invoiceNumbers:  col[16] || "",
-          
-          // العميل الذي اخترناه من القائمة (لأن الملف لا يحتوي عليه)
-          client:          selectedClient, 
-          
-          auditLog: [{ ts: new Date().toISOString(), action: `Imported via CSV for ${selectedClient} on ${new Date().toLocaleString()}` }]
-        };
-      }).filter(Boolean);
+    // ── auto-map project → client from existing employees ──
+    const projectClientMap = {};
+    employees.forEach(e => { if (e.project && e.client) projectClientMap[e.project.trim().toLowerCase()] = e.client; });
 
-      const { data, error } = await supabase.from('employees_master').insert(recordsToSupabase).select();
-      
-      if (error) throw error;
+    const resolved = []; // { record, client }
+    const needsClient = []; // records whose project isn't found
 
-      setEmployees(prev => [...data, ...prev]);
-      alert(`تم رفع ${data.length} موظف بجميع بياناتهم بنجاح! ✅`);
+    records.forEach(r => {
+      const proj = (r.project || "").trim().toLowerCase();
+      const mapped = projectClientMap[proj];
+      if (mapped) {
+        resolved.push({ ...r, client: mapped });
+      } else if (client && client !== "All") {
+        resolved.push({ ...r, client });
+      } else {
+        needsClient.push(r);
+      }
+    });
 
-    } catch (err) {
-      console.error("CSV Error:", err);
-      alert(`حدث خطأ: ${err.message}`);
+    if (needsClient.length === 0) {
+      // كل الموظفين اتحددلهم client تلقائياً
+      await doInsertCSV(resolved);
+    } else {
+      // فيه موظفين محتاجين اختيار client يدوي
+      setPendingAddCSV({ resolved, needsClient });
     }
   };
-  reader.readAsText(file);
-};
+
+  const doInsertCSV = async (records) => {
+    try {
+      // Insert in chunks of 50
+      let allInserted = [];
+      for (let i = 0; i < records.length; i += 50) {
+        const { data, error } = await supabase.from('employees_master').insert(records.slice(i, i + 50)).select();
+        if (error) throw error;
+        allInserted = [...allInserted, ...data];
+      }
+      setEmployees(prev => [...allInserted, ...prev]);
+      setPendingAddCSV(null);
+      alert(`✅ تم رفع ${allInserted.length} موظف بنجاح!`);
+    } catch (err) {
+      console.error("CSV Insert Error:", err);
+      alert(`❌ خطأ: ${err.message}`);
+    }
+  };
    // 4. الدوال المساعدة
   const save = async (updated) => {
   const { _id, ...fieldsToUpdate } = updated;
@@ -2739,6 +2759,74 @@ const submitRenew = async () => {
                   }}>
                   {applying ? "⏳ Applying..." : `✅ Apply ${changes.length} Changes`}
                 </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Add CSV: Client Selector Modal (for unrecognized projects) ── */}
+      {pendingAddCSV && (() => {
+        const { resolved = [], needsClient = [] } = pendingAddCSV;
+        // Group needsClient by project
+        const byProject = {};
+        needsClient.forEach(r => { const p = r.project || "Unknown"; if (!byProject[p]) byProject[p] = []; byProject[p].push(r); });
+        const projects = Object.keys(byProject);
+        // clientAssignments: { [project]: clientName }
+        const [assignments, setAssignments] = React.useState({});
+
+        const allAssigned = projects.every(p => assignments[p]);
+        const handleApply = async () => {
+          const withClients = needsClient.map(r => ({ ...r, client: assignments[r.project || "Unknown"] || "Unknown" }));
+          await doInsertCSV([...resolved, ...withClients]);
+        };
+
+        return (
+          <div style={{ position:"fixed", inset:0, zIndex:9999, backgroundColor:"rgba(0,0,0,0.55)", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+            <div style={{ backgroundColor:"white", borderRadius:16, width:"100%", maxWidth:480, maxHeight:"85vh", overflow:"auto", padding:28, boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
+              <h3 style={{ margin:"0 0 4px", fontSize:16, fontWeight:700, color:"#111827" }}>📂 تعيين Client للبروجكتات الجديدة</h3>
+              <p style={{ margin:"0 0 20px", fontSize:12, color:"#6b7280" }}>
+                {resolved.length > 0 && <span style={{color:"#16a34a", fontWeight:600}}>{resolved.length} موظف اتعرفوا تلقائياً ✅ &nbsp;</span>}
+                {needsClient.length} موظف في {projects.length} بروجكت جديد — اختاري الـ Client لكل بروجكت:
+              </p>
+
+              <div style={{ display:"flex", flexDirection:"column", gap:14, marginBottom:20 }}>
+                {projects.map(proj => (
+                  <div key={proj} style={{ padding:"12px 14px", borderRadius:10, border:"1px solid #e5e7eb", backgroundColor:"#f9fafb" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                      <span style={{ fontWeight:700, fontSize:13, color:"#111827" }}>{proj}</span>
+                      <span style={{ fontSize:11, color:"#9ca3af" }}>{byProject[proj].length} موظف</span>
+                    </div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                      {CLIENTS_LIST.map(c => {
+                        const meta = CLIENT_META[c] || {};
+                        const selected = assignments[proj] === c;
+                        return (
+                          <button key={c} onClick={() => setAssignments(a => ({ ...a, [proj]: c }))} style={{
+                            padding:"5px 11px", borderRadius:999, fontSize:11, fontWeight:700, cursor:"pointer",
+                            border:`1px solid ${selected ? (meta.dot||M) : "#e5e7eb"}`,
+                            backgroundColor: selected ? (meta.badge||`${M}15`) : "white",
+                            color: selected ? (meta.text||M) : "#6b7280",
+                          }}>{c}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display:"flex", gap:10 }}>
+                <button onClick={() => setPendingAddCSV(null)} style={{
+                  flex:1, padding:"9px", borderRadius:8, border:"1px solid #e5e7eb",
+                  backgroundColor:"white", cursor:"pointer", fontSize:13, color:"#6b7280", fontWeight:600,
+                }}>❌ Cancel</button>
+                <button onClick={handleApply} disabled={!allAssigned} style={{
+                  flex:2, padding:"9px", borderRadius:8, border:"none",
+                  backgroundColor: allAssigned ? M : "#e5e7eb",
+                  color: allAssigned ? "white" : "#9ca3af",
+                  cursor: allAssigned ? "pointer" : "not-allowed",
+                  fontSize:13, fontWeight:700,
+                }}>✅ رفع {resolved.length + needsClient.length} موظف</button>
               </div>
             </div>
           </div>
