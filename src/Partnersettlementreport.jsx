@@ -95,14 +95,108 @@ const BC_BATCHES = [
   },
 ];
 
+// ── 4th Invoice (PENDING — not yet paid to Blue Cube) ────────────────────────
+// Exact bcFee values from "Blue Cube - Sela Invoices .xlsx" → 4th Invoice sheet
+const BC_4TH_ROWS = [
+  { po:'PO-34866', invNums:['2301375','2301307','2301252','2301440','2301441','2301442','2301443','2301444','2301445','2301446','2301447'], invoicedAmt:144221.59, bcFee:692.22 },
+  { po:'PO-34954', invNums:['2301377','2301309','2301254'], invoicedAmt:101919.93, bcFee:489.21 },
+  { po:'PO-32100', invNums:['2301281','2301196','2300970','2300969','2301080'], invoicedAmt:77781.0, bcFee:373.36 },
+  { po:'PO-32679', invNums:['2301282','2301199','2301083'], invoicedAmt:76528.8, bcFee:367.35 },
+  { po:'PO-33426', invNums:['2301284','2301208','2301119'], invoicedAmt:189690.0, bcFee:910.5 },
+  { po:'PO-33273', invNums:['2301285','2301209','2301121'], invoicedAmt:149724.93, bcFee:718.68 },
+  { po:'PO-33669', invNums:['2301286'], invoicedAmt:66780.0, bcFee:320.54 },
+  { po:'PO-33756', invNums:['2301287','2301215','2301146','2301147'], invoicedAmt:42400.0, bcFee:203.52 },
+  { po:'PO-32652', invNums:['2301288','2301216','2301148'], invoicedAmt:48600.0, bcFee:233.28 },
+  { po:'PO-34026', invNums:['2301289','2301217','2301151'], invoicedAmt:95880.0, bcFee:460.23 },
+  { po:'PO-34426', invNums:['2301292','2301222'], invoicedAmt:93792.0, bcFee:450.20 },
+  { po:'PO-34680', invNums:['2301294','2301225'], invoicedAmt:30240.0, bcFee:145.16 },
+  { po:'PO-34611', invNums:['2301295'], invoicedAmt:47700.0, bcFee:228.96 },
+  { po:'PO-34596', invNums:['2301296'], invoicedAmt:24380.0, bcFee:117.02 },
+  { po:'PO-34469', invNums:['2301297','2301228'], invoicedAmt:33920.0, bcFee:162.82 },
+  { po:'PO-34279', invNums:['2301298','2301229'], invoicedAmt:33920.0, bcFee:162.82 },
+  { po:'PO-34663', invNums:['2301299','2301231'], invoicedAmt:124886.66, bcFee:599.46 },
+  { po:'PO-34579', invNums:['2301300'], invoicedAmt:22420.0, bcFee:107.62 },
+  { po:'PO-34319', invNums:['2301302','2301240'], invoicedAmt:43520.0, bcFee:208.90 },
+  { po:'PO-34317', invNums:['2301303','2301241'], invoicedAmt:21200.0, bcFee:101.76 },
+  { po:'PO-34979', invNums:['2301304'], invoicedAmt:31800.0, bcFee:152.64 },
+  { po:'PO-34986', invNums:['2301305','2301250'], invoicedAmt:21200.0, bcFee:101.76 },
+  { po:'PO-34765', invNums:['2301306','2301251'], invoicedAmt:27880.0, bcFee:133.82 },
+  { po:'PO-34931', invNums:['2301308','2301253'], invoicedAmt:21200.0, bcFee:101.76 },
+  { po:'PO-34769', invNums:['2301310','2301255'], invoicedAmt:21200.0, bcFee:101.76 },
+  { po:'PO-34775', invNums:['2301311','2301256'], invoicedAmt:24200.0, bcFee:116.16 },
+  { po:'PO-34781', invNums:['2301312'], invoicedAmt:15280.0, bcFee:73.34 },
+  { po:'PO-34993', invNums:['2301313','2301258'], invoicedAmt:34240.0, bcFee:164.36 },
+  { po:'PO-35140', invNums:['2301331'], invoicedAmt:46219.08, bcFee:221.85 },
+  { po:'PO-35067', invNums:['2301332'], invoicedAmt:12720.0, bcFee:61.06 },
+  { po:'PO-35125', invNums:['2301333'], invoicedAmt:27880.0, bcFee:133.82 },
+  { po:'PO-35123', invNums:['2301334'], invoicedAmt:5460.0, bcFee:26.21 },
+  { po:'PO-35079', invNums:['2301335'], invoicedAmt:29840.0, bcFee:143.23 },
+  { po:'PO-35071', invNums:['2301336','2301342'], invoicedAmt:162180.0, bcFee:778.46 },
+  { po:'PO-35055', invNums:['2301337','2301341'], invoicedAmt:31800.0, bcFee:152.64 },
+  { po:'PO-35056', invNums:['2301338','2301339'], invoicedAmt:102212.0, bcFee:490.62 },
+  { po:'PO-33444', invNums:['2301237'], invoicedAmt:47453.32, bcFee:227.78 },
+  { po:'PO-34243', invNums:['2301236'], invoicedAmt:6520.0, bcFee:31.30 },
+  { po:'PO-34425', invNums:['2301235'], invoicedAmt:10600.0, bcFee:50.88 },
+  { po:'PO-34497', invNums:['2301233'], invoicedAmt:57240.0, bcFee:274.75 },
+  { po:'PO-34508', invNums:['2301224','2301293'], invoicedAmt:31800.0, bcFee:152.64 },
+  { po:'PO-34032', invNums:['2301219'], invoicedAmt:14840.0, bcFee:71.23 },
+  { po:'PO-34149', invNums:['2301218','2301152','2301153'], invoicedAmt:57240.0, bcFee:274.74 },
+  { po:'PO-33448', invNums:['2301206','2301117'], invoicedAmt:191120.0, bcFee:917.38 },
+  { po:'PO-32408', invNums:['2301197','2301013','2301081'], invoicedAmt:79500.0, bcFee:381.60 },
+  { po:'PO-32782', invNums:['2301198','2301082','2301015','2301143'], invoicedAmt:249562.0, bcFee:1197.88 },
+  { po:'PO-32895', invNums:['2301200','2301020','2301086'], invoicedAmt:470794.62, bcFee:2259.81 },
+  { po:'PO-33181', invNums:['2301202','2301054','2301088'], invoicedAmt:247621.32, bcFee:1188.57 },
+  { po:'PO-33179', invNums:['2301203','2301055','2301089'], invoicedAmt:44520.0, bcFee:213.69 },
+  { po:'PO-33371', invNums:['2301204','2301115'], invoicedAmt:539810.0, bcFee:2591.08 },
+  { po:'PO-33812', invNums:['2301205','2301116'], invoicedAmt:40280.0, bcFee:193.34 },
+  { po:'PO-33899', invNums:['2301136'], invoicedAmt:14167.33, bcFee:68.00 },
+  { po:'PO-33857', invNums:['2301132'], invoicedAmt:15900.0, bcFee:76.32 },
+  { po:'PO-34125', invNums:['2301149'], invoicedAmt:9540.0, bcFee:45.79 },
+  { po:'PO-34156', invNums:['2301150'], invoicedAmt:102820.0, bcFee:493.54 },
+  { po:'PO-34034', invNums:['2301154'], invoicedAmt:444387.71, bcFee:2133.06 },
+  { po:'PO-30940', invNums:['2300854','2300931'], invoicedAmt:112219.13, bcFee:538.65 },
+  { po:'PO-31391', invNums:['2300937','2301079'], invoicedAmt:43366.66, bcFee:208.16 },
+  { po:'PO-32287', invNums:['2300974','2301009'], invoicedAmt:115916.49, bcFee:556.40 },
+  { po:'PO-32490', invNums:['2301012'], invoicedAmt:21200.0, bcFee:101.76 },
+  { po:'PO-32807', invNums:['2301017','2301084'], invoicedAmt:85944.0, bcFee:412.54 },
+  { po:'PO-32489', invNums:['2301018','2301085'], invoicedAmt:21200.0, bcFee:101.76 },
+  { po:'PO-32488', invNums:['2301019'], invoicedAmt:9540.0, bcFee:45.79 },
+  { po:'PO-32762', invNums:['2301021'], invoicedAmt:377360.0, bcFee:1811.33 },
+  { po:'PO-31910', invNums:['2301023'], invoicedAmt:19080.0, bcFee:91.58 },
+  { po:'PO-33077', invNums:['2301056','2301090'], invoicedAmt:111229.32, bcFee:533.90 },
+  { po:'PO-29453', invNums:['2300788'], invoicedAmt:56180.0, bcFee:269.66 },
+  { po:'PO-31371', invNums:['2301005'], invoicedAmt:8480.0, bcFee:40.70 },
+  { po:'PO-30954', invNums:['2301004'], invoicedAmt:7420.0, bcFee:35.62 },
+  { po:'PO-33025', invNums:['2301066'], invoicedAmt:16150.0, bcFee:77.52 },
+  { po:'PO-31306', invNums:['2301007'], invoicedAmt:31692.0, bcFee:152.12 },
+  { po:'PO-31665', invNums:['2301006'], invoicedAmt:93982.0, bcFee:451.11 },
+  { po:'PO-33376', invNums:['2301114'], invoicedAmt:15280.0, bcFee:73.34 },
+  { po:'PO-33450', invNums:['2301118'], invoicedAmt:15900.0, bcFee:76.32 },
+  { po:'PO-33382', invNums:['2301120'], invoicedAmt:77380.0, bcFee:371.42 },
+  { po:'PO-29491', invNums:['2300743'], invoicedAmt:8480.0, bcFee:40.70 },
+];
+
+// Lookup: invoice number → exact bcFee (prorated equally per PO)
+// This ensures per-invoice amounts sum to the exact Excel total per PO
+const BC_4TH_INV_FEE = new Map();
+BC_4TH_ROWS.forEach(r => {
+  const feeEach = Math.round((r.bcFee / r.invNums.length) * 100) / 100;
+  const remainder = Math.round((r.bcFee - feeEach * r.invNums.length) * 100) / 100;
+  r.invNums.forEach((inv, i) => {
+    // Add remainder to last invoice so PO total is exact
+    BC_4TH_INV_FEE.set(inv, i === r.invNums.length - 1 ? feeEach + remainder : feeEach);
+  });
+});
+
 // All invoice numbers that have been commissioned to Blue Cube
 const BC_COMMISSIONED_INVS = new Set(
   BC_BATCHES.flatMap(b => b.rows.flatMap(r => r.invNums))
 );
 // All PO numbers that belong to Blue Cube (normalize to uppercase, strip _2 suffix)
-const BC_PO_SET = new Set(
-  BC_BATCHES.flatMap(b => b.rows.map(r => r.po.replace(/_\d+$/, '').toUpperCase()))
-);
+const BC_PO_SET = new Set([
+  ...BC_BATCHES.flatMap(b => b.rows.map(r => r.po.replace(/_\d+$/, '').toUpperCase())),
+  ...BC_4TH_ROWS.map(r => r.po.replace(/_\d+$/, '').toUpperCase()),
+]);
 const normPO = po => String(po || '').toUpperCase().trim().replace(/_\d+$/, '');
 
 // Lookup: invoice number → which batch it was commissioned in
@@ -548,6 +642,9 @@ export default function PartnerSettlementReport({ employees = [] }) {
 
     const calcCommission = (emp, inv) => {
       if (!emp) return 0;
+      // Use exact hardcoded fee from Excel if available (avoids rounding/VAT issues)
+      const invNum = String(inv.invoiceNumber || '').trim();
+      if (BC_4TH_INV_FEE.has(invNum)) return BC_4TH_INV_FEE.get(invNum);
       const base = getPreVat(inv);
       return emp.partnerCostType === 'percent'
         ? Math.round((emp.partnerCost / 100) * base * 100) / 100
