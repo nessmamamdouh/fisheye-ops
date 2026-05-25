@@ -2061,11 +2061,15 @@ const submitRenew = async () => {
                               delete fieldsToUpdate.workflowStatus;
                           }
                           if (Object.keys(fieldsToUpdate).length === 0) continue;
-                          // Build field-level diff
-                          const fieldDiffs = Object.entries(fieldsToUpdate).map(([field, newVal]) => ({
-                            field, oldVal: emp[field] ?? '—', newVal
-                          }));
-                          changes.push({ emp, fieldsToUpdate, fieldDiffs });
+                          // Build field-level diff — only show fields that actually changed
+                          const fieldDiffs = Object.entries(fieldsToUpdate)
+                            .map(([field, newVal]) => ({ field, oldVal: emp[field] ?? '—', newVal }))
+                            .filter(({ oldVal, newVal }) => String(oldVal).trim() !== String(newVal).trim());
+                          if (fieldDiffs.length === 0) continue;
+                          // Only keep fieldsToUpdate entries that actually changed
+                          const realFields = {};
+                          fieldDiffs.forEach(({ field, newVal }) => { realFields[field] = newVal; });
+                          changes.push({ emp, fieldsToUpdate: realFields, fieldDiffs });
                         }
                         if (changes.length === 0 && notFound.length === 0) {
                           alert('No changes detected in this CSV.'); e.target.value = ''; return;
