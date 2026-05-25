@@ -3365,8 +3365,8 @@ const DEF_CLIENTS=[
   {id:"C-05",name:"Combuzz HR",region:"Riyadh",email:"info@combuzz.sa",status:"active",contacts:[{name:"Support Team",role:"General",phone:"+966505555555"}],notes:"Multiple brands handling",requestLog:[]},
 ];
 
-function ClientHub({ employees }) {
-  const [clients,setClients]=useState(()=>{try{return JSON.parse(localStorage.getItem("fisheyeClients_v1"))||DEF_CLIENTS;}catch{return DEF_CLIENTS;}});
+function ClientHub({ employees, clients, saveClients }) {
+  if (!clients) clients = [];
   const [showAdd,setShowAdd]=useState(false);
   const [filter,setFilter]=useState("active");
   const [openId,setOpenId]=useState(null);
@@ -3375,7 +3375,7 @@ function ClientHub({ employees }) {
   const [infoForm,setInfoForm]=useState({name:"",region:"",email:""});
   const [nC,setNC]=useState({name:"",region:"",email:"",notes:""});
 
-  const save=c=>{setClients(c);localStorage.setItem("fisheyeClients_v1",JSON.stringify(c));};
+  const save=c=>{ if(saveClients) saveClients(c); else { localStorage.setItem("fisheyeClients_v1",JSON.stringify(c)); } };
   const add=()=>{save([...clients,{...nC,id:`C-${String(clients.length+1).padStart(2,"0")}`,status:"active",contacts:[],requestLog:[]}]);setShowAdd(false);setNC({name:"",region:"",email:"",notes:""});};
   const archive=id=>save(clients.map(c=>c.id===id?{...c,status:"archived"}:c));
   const unarchive=id=>save(clients.map(c=>c.id===id?{...c,status:"active"}:c));
@@ -3811,8 +3811,8 @@ const DEF_PARTNERS=[
   {id:"P-03",name:"Blue Cube",           partnerType:"commission",  region:"Riyadh",           email:"",                     status:"active",contacts:[],notes:"Commission-only partner — no operational involvement.",requestLog:[]},
 ];
 
-function PartnerHub({ employees, setAppPartners }) {
-  const [partners,setPartners]=useState(()=>{try{return JSON.parse(localStorage.getItem("fisheyePartners_v1"))||DEF_PARTNERS;}catch{return DEF_PARTNERS;}});
+function PartnerHub({ employees, partners, savePartners }) {
+  if (!partners) partners = [];
   const [showAdd,setShowAdd]=useState(false);
   const [filter,setFilter]=useState("active");
   const [openId,setOpenId]=useState(null);
@@ -3821,7 +3821,7 @@ function PartnerHub({ employees, setAppPartners }) {
   const [infoForm,setInfoForm]=useState({name:"",region:"",email:""});
   const [nP,setNP]=useState({name:"",region:"",email:"",notes:""});
 
-  const save=p=>{setPartners(p);localStorage.setItem("fisheyePartners_v1",JSON.stringify(p));if(setAppPartners)setAppPartners(p);};
+  const save=p=>{ if(savePartners) savePartners(p); else { localStorage.setItem("fisheyePartners_v1",JSON.stringify(p)); } };
   const add=()=>{save([...partners,{...nP,id:`P-${String(partners.length+1).padStart(2,"0")}`,status:"active",contacts:[],requestLog:[]}]);setShowAdd(false);setNP({name:"",region:"",email:"",notes:""});};
   const archive=id=>save(partners.map(p=>p.id===id?{...p,status:"archived"}:p));
   const unarchive=id=>save(partners.map(p=>p.id===id?{...p,status:"active"}:p));
@@ -5523,6 +5523,9 @@ function FisheyeOpsPro({ employees, setEmployees }) {
       .then(({ error }) => { if (error) console.warn('savePartners sync error:', error.message); });
   };
 
+  const [morningReportChecks, setMorningReportChecks] = useState({});
+  const [reportSendTo, setReportSendTo] = useState('client');
+
   const [nav, setNav]   = useState(() => localStorage.getItem("fisheye_nav") || "action");
   const [open, setOpen] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -5929,7 +5932,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
           {nav==="calendar"    && <OperationsCalendar employees={employees}/>}
           {nav==="weeklyreport"&& <WeeklyReportGenerator employees={employees}/>}
           {nav==="reports"     && <WeeklyMonthlyReports employees={employees}/>}
-          {nav==="report"      && <MorningReportView employees={employees}/>}
+          {nav==="report"      && <MorningReportView employees={employees} morningReportChecks={morningReportChecks} setMorningReportChecks={setMorningReportChecks} reportSendTo={reportSendTo} setReportSendTo={setReportSendTo}/>}
           {nav==="tickets"     && <TicketingView/>}
           {nav==="dashboard"   && <DashboardView employees={employees} isOnline={isOnline} syncStatus={syncStatus} syncMessage={syncMessage} lastSync={lastSync} uploadToCloud={uploadToCloud} downloadFromCloud={downloadFromCloud} backup={backup} bidirectionalSync={bidirectionalSync}/>}
         </div>
