@@ -2005,9 +2005,12 @@ const submitRenew = async () => {
                           'requester name': 'requesterName',
                           'bank name': 'bank',
                           'iban number': 'iban',
+                          'contract id': 'contractId',   // تصحيح رقم العقد
+                          'full name': 'name',            // تصحيح الاسم
                         };
                         const empIdIdx      = headers.indexOf('employee id');
                         const contractIdIdx = headers.indexOf('contract id');
+                        const nameIdx       = ['full name','name','employee name'].reduce((found, h) => found !== -1 ? found : headers.indexOf(h), -1);
                         const startIdx      = ['contract start date', 'start date', 'startdate', 'start'].reduce((found, h) => found !== -1 ? found : headers.indexOf(h), -1);
                         const endIdx        = ['contract end date', 'end date', 'enddate', 'end'].reduce((found, h) => found !== -1 ? found : headers.indexOf(h), -1);
                         if (empIdIdx === -1) { alert('❌ CSV must contain an Employee ID column'); return; }
@@ -2033,11 +2036,26 @@ const submitRenew = async () => {
                           if (candidates.length === 1) { emp = candidates[0]; }
                           else {
                             const csvContractId = contractIdIdx !== -1 ? cols[contractIdIdx]?.trim() : null;
-                            console.log(`🔍 Multiple matches for ${empId} (${candidates.length}). CSV contractId: "${csvContractId}". DB contractIds:`, candidates.map(c => `"${c.contractId}"`));
+                            const csvName       = nameIdx !== -1 ? cols[nameIdx]?.trim().toLowerCase() : null;
+                            console.log(`🔍 Multiple for ${empId} (${candidates.length}). contractId:"${csvContractId}" name:"${csvName}"`);
+
+                            // 1. Match by Contract ID (most reliable)
                             if (csvContractId) {
                               emp = candidates.find(c => String(c.contractId||'').trim() === csvContractId);
                               if (emp) matchedBy = `contract:${csvContractId}`;
                             }
+                            // 2. Match by Name (fixes cases where contractId is wrong in DB)
+                            if (!emp && csvName) {
+                              const nameMatches = candidates.filter(c =>
+                                (c.name||'').toLowerCase().trim() === csvName
+                              );
+                              if (nameMatches.length === 1) { emp = nameMatches[0]; matchedBy = `name:${csvName}`; }
+                              else if (nameMatches.length > 1 && csvContractId) {
+                                // Both name AND try partial contract match
+                                emp = nameMatches[0]; matchedBy = `name(multi):${csvName}`;
+                              }
+                            }
+                            // 3. Match by dates
                             if (!emp) {
                               const csvStart = startIdx !== -1 ? normalizeDate(cols[startIdx]) : null;
                               const csvEnd   = endIdx   !== -1 ? normalizeDate(cols[endIdx])   : null;
@@ -2049,6 +2067,7 @@ const submitRenew = async () => {
                                 if (emp) matchedBy = `dates:${csvStart}→${csvEnd}`;
                               }
                             }
+                            // 4. Last resort: single active
                             if (!emp) {
                               const active = candidates.filter(c => (c.status||'').toLowerCase()==='active');
                               emp = active.length === 1 ? active[0] : null;
@@ -2661,6 +2680,7 @@ const submitRenew = async () => {
           phone: 'Phone', email: 'Email', poNumbers: 'PO Numbers', poAddedDate: 'PO Added Date',
           invoiceNumbers: 'Invoice Numbers', requesterName: 'Requester Name',
           bank: 'Bank', iban: 'IBAN',
+          contractId: '🔑 Contract ID', name: '👤 Name',
         };
 
         return (
