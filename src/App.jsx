@@ -5390,6 +5390,7 @@ function PartnerFlowTab({ flows, saveFlows, employees }) {
 
 // ─── MAIN APP ────────────────────────────────────────────────────────────
 function FisheyeOpsPro({ employees, setEmployees }) {
+  const [isLoading, setIsLoading] = useState(true);
 
   const [clients, setClients] = useState(() => {
     try { return JSON.parse(localStorage.getItem("fisheyeClients_v1")) || DEF_CLIENTS; }
@@ -5505,6 +5506,8 @@ function FisheyeOpsPro({ employees, setEmployees }) {
         console.error("Error loading data from Supabase:", err.message);
         const local = localStorage.getItem("fisheyeData_v3");
         if (local) setEmployees(JSON.parse(local));
+      } finally {
+        setIsLoading(false);
       }
     };
     loadData();
@@ -5526,6 +5529,16 @@ function FisheyeOpsPro({ employees, setEmployees }) {
     testConnection().then(r => r.success && console.log('✅ متصل بـ Supabase'));
   }, []);
 
+  // ── جاري التحميل من Supabase ──
+  if (isLoading) return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: 16, backgroundColor: "#0f172a" }}>
+      <div style={{ width: 48, height: 48, border: "4px solid #334155", borderTopColor: "#38bdf8", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <p style={{ color: "#94a3b8", fontSize: 14, margin: 0 }}>جاري تحميل البيانات من Supabase…</p>
+    </div>
+  );
+
+  // ── لا توجد بيانات بعد التحميل → شاشة الرفع ──
   if (!employees || !employees.length) return (
     <UploadScreen onUpload={data => {
       localStorage.setItem("fisheyeData_v3", JSON.stringify(data));
