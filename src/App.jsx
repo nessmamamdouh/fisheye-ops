@@ -488,10 +488,33 @@ function EmployeeModal({ emp, onClose, onSave, partners, allEmployees = [], useO
   }, [allEmployees, emp._id, useOpsIssues]);
 
   const save = () => {
-    const original   = allEmployees.find(e => e._id === form._id) || {};
-    const hadPO      = original.poNumbers && String(original.poNumbers).trim() !== "";
-    const hasPO      = form.poNumbers  && String(form.poNumbers).trim()  !== "";
+    const original    = allEmployees.find(e => e._id === form._id) || {};
+    const hadPO       = original.poNumbers && String(original.poNumbers).trim() !== "";
+    const hasPO       = form.poNumbers  && String(form.poNumbers).trim()  !== "";
     const poJustAdded = hasPO && !hadPO;
+    const ts          = new Date().toISOString();
+
+    // Build detailed change log
+    const changes = [];
+    const track = (field, label, fmt = v => v || '—') => {
+      const oldV = original[field]; const newV = form[field];
+      if (String(oldV ?? '') !== String(newV ?? ''))
+        changes.push({ ts, field, action: `${label}: "${fmt(oldV)}" → "${fmt(newV)}"` });
+    };
+
+    track('workflowStatus', 'Workflow');
+    track('status',         'Status');
+    track('totalPackage',   'Package',     v => v ? `SAR ${Number(v).toLocaleString()}` : '—');
+    track('poNumbers',      'PO');
+    track('partnerAssigned','Partner');
+    track('client',         'Client');
+    track('startDate',      'Start Date');
+    track('endDate',        'End Date');
+    track('jobTitle',       'Job Title');
+    track('profitMode',     'Profit Mode');
+
+    // If nothing tracked (minor field), add a generic entry
+    if (!changes.length) changes.push({ ts, field: 'other', action: 'Profile updated' });
 
     const updated = {
       ...form,
@@ -501,8 +524,7 @@ function EmployeeModal({ emp, onClose, onSave, partners, allEmployees = [], useO
       ...(poJustAdded ? { poAddedDate: new Date().toISOString().split("T")[0] } : {}),
       auditLog: [
         ...(Array.isArray(form.auditLog) ? form.auditLog : []),
-        { ts: new Date().toISOString(), action: "Profile updated" },
-        ...(poJustAdded ? [{ ts: new Date().toISOString(), action: `PO added: ${form.poNumbers}` }] : []),
+        ...changes,
       ]
     };
     onSave(updated);
@@ -531,7 +553,7 @@ function EmployeeModal({ emp, onClose, onSave, partners, allEmployees = [], useO
   const timelineEntries = useMemo(() => {
     const entries = [];
     const log = Array.isArray(form.auditLog) ? form.auditLog : [];
-    log.forEach(l => entries.push({ ts: l.ts, label: l.action, type: "log" }));
+    log.forEach(l => entries.push({ ts: l.ts, label: l.action, type: "log", field: l.field || 'other' }));
     if (form.startDate) entries.push({ ts: form.startDate + "T00:00:00Z", label: "Contract started", type: "contract" });
     if (form.endDate)   entries.push({ ts: form.endDate   + "T00:00:00Z", label: "Contract ends",   type: daysUntil(form.endDate) < 0 ? "expired" : "contract" });
     return entries.sort((a, b) => new Date(b.ts) - new Date(a.ts));
@@ -765,11 +787,17 @@ function EmployeeModal({ emp, onClose, onSave, partners, allEmployees = [], useO
                 {timelineEntries.map((entry,i)=>{
                   const isContract = entry.type==="contract";
                   const isExpired  = entry.type==="expired";
-                  const dotColor   = isExpired?"#dc2626":isContract?"#2563eb":M;
+                  const field      = entry.field || '';
+                  const isWorkflow = field==="workflowStatus";
+                  const isPackage  = field==="totalPackage";
+                  const isPO       = field==="poNumbers" || field==="po";
+                  const isStatus   = field==="status";
+                  const dotColor   = isExpired?"#dc2626":isContract?"#2563eb":isWorkflow?"#7c3aed":isPackage?"#059669":isPO?"#0369a1":isStatus?"#ea580c":M;
+                  const Icon = isExpired?AlertCircle:isContract?FileText:isWorkflow?Zap:isPackage?DollarSign:isPO?Hash:Clock;
                   return (
                     <div key={i} style={{display:"flex",gap:16,padding:"8px 0",paddingLeft:4,position:"relative"}}>
                       <div style={{width:24,height:24,borderRadius:"50%",backgroundColor:dotColor,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,zIndex:1,marginTop:2}}>
-                        {isExpired ? <AlertCircle size={10} style={{color:"white"}}/> : isContract ? <FileText size={10} style={{color:"white"}}/> : <Clock size={10} style={{color:"white"}}/>}
+                        <Icon size={10} style={{color:"white"}}/>
                       </div>
                       <div style={{flex:1,paddingBottom:12,borderBottom:i<timelineEntries.length-1?"1px solid #f3f4f6":"none"}}>
                         <p style={{fontWeight:600,fontSize:13,margin:"0 0 2px",color:"#1f2937"}}>{entry.label}</p>

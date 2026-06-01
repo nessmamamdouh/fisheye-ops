@@ -775,6 +775,9 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
     if (!window.confirm('Delete this invoice record?')) return;
     setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
     persist(invoices.filter(inv => inv.id !== id));
+    // Hard-delete from Supabase (persist only upserts, doesn't remove rows)
+    supabase.from('fisheye_invoices').delete().eq('id', id)
+      .then(({ error }) => { if (error) console.warn('Supabase delete failed:', error.message); });
   };
 
   // Mark a specific set of invoices as paid (used by SOA reconciliation)
@@ -809,8 +812,16 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
   const deleteSelected = () => {
     if (selectedIds.size === 0) return;
     if (!window.confirm(`Delete ${selectedIds.size} selected invoice${selectedIds.size !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+    const idsToDelete = [...selectedIds];
     persist(invoices.filter(inv => !selectedIds.has(inv.id)));
     setSelectedIds(new Set());
+    // Hard-delete from Supabase
+    (async () => {
+      for (const id of idsToDelete) {
+        const { error } = await supabase.from('fisheye_invoices').delete().eq('id', id);
+        if (error) console.warn('Supabase delete failed for', id, error.message);
+      }
+    })();
   };
 
   const bulkSetStatus = (status) => {

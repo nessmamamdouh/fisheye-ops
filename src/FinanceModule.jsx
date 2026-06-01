@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import PartnerSettlementReport from './Partnersettlementreport';
 import { InvoiceManager } from './modules/invoiceManager';
 import {
@@ -1616,6 +1616,252 @@ function PartnerFlowTab({ employees }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// PO RECONCILIATION TAB
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Budgets extracted from Sela PO PDF files (Total Value incl. VAT)
+// Last updated from POs folder — amended POs use latest revision
+const PO_PDF_BUDGETS = {"PO-28358":71475.95,"PO-28551":73140.0,"PO-28568":230391.0,"PO-28681":16035.0,"PO-28763":9752.0,"PO-28788":9752.0,"PO-28823":245019.0,"PO-28847":11092.9,"PO-28867":75605.6,"PO-28874":21942.0,"PO-28893":249251.0,"PO-28946":55692.0,"PO-29001":14915.5,"PO-29102":144315.0,"PO-29304":107004.0,"PO-29402":52844.8,"PO-29453":113314.0,"PO-29491":8552.0,"PO-29525":8533.0,"PO-29572":112405.2,"PO-29592":8552.0,"PO-29608":19242.0,"PO-29725":16035.0,"PO-29742":43747.85,"PO-29745":56202.6,"PO-29841":36552.53,"PO-29875":86095.0,"PO-29884":8533.0,"PO-29987":8552.0,"PO-30144":18564.0,"PO-30185":154722.0,"PO-30436":12828.0,"PO-30932":65205.0,"PO-30940":315653.61,"PO-30954":22449.0,"PO-31043":12828.0,"PO-31306":76968.0,"PO-31371":25656.0,"PO-31391":65807.5,"PO-31665":216158.6,"PO-31910":19242.0,"PO-32100":189738.5,"PO-32264":59852.9,"PO-32265":121465.3,"PO-32279":34495.5,"PO-32287":218515.37,"PO-32339":20787.0,"PO-32355":58512.0,"PO-32408":80175.0,"PO-32488":9621.0,"PO-32489":21380.0,"PO-32490":21380.0,"PO-32652":49140.0,"PO-32679":127994.5,"PO-32762":380564.0,"PO-32782":251716.3,"PO-32807":86775.6,"PO-32811":84842.4,"PO-32895":474781.37,"PO-33025":16285.0,"PO-33077":127913.73,"PO-33179":51198.0,"PO-33181":249606.73,"PO-33227":13541.0,"PO-33261":27936.53,"PO-33266":35527.0,"PO-33273":150996.25,"PO-33371":620781.5,"PO-33376":15472.0,"PO-33382":78037.0,"PO-33426":218143.5,"PO-33444":143566.0,"PO-33448":289110.0,"PO-33450":32070.0,"PO-33669":269388.0,"PO-33740":62641.99,"PO-33756":42760.0,"PO-33778":16035.0,"PO-33802":40622.0,"PO-33812":40622.0,"PO-33819":19562.0,"PO-33857":18285.0,"PO-33859":24380.0,"PO-33886":17816.67,"PO-33891":8644.0,"PO-33894":29932.0,"PO-33899":28643.68,"PO-33923":5865.0,"PO-33995":3367.0,"PO-33999":150729.0,"PO-34026":96762.0,"PO-34032":44898.0,"PO-34034":447989.92,"PO-34125":9621.0,"PO-34149":96210.0,"PO-34156":103693.0,"PO-34159":48105.0,"PO-34217":3492.07,"PO-34243":6574.0,"PO-34273":175541.27,"PO-34279":34208.0,"PO-34284":9621.0,"PO-34317":32070.0,"PO-34318":357675.78,"PO-34319":132144.0,"PO-34425":10690.0,"PO-34426":236460.0,"PO-34469":34208.0,"PO-34495":10690.0,"PO-34497":57726.0,"PO-34508":32070.0,"PO-34579":77349.0,"PO-34596":147522.0,"PO-34611":240525.0,"PO-34663":125945.67,"PO-34680":104328.0,"PO-34765":42243.0,"PO-34769":53450.0,"PO-34775":60950.0,"PO-34781":87860.0,"PO-34786":7314.0,"PO-34866":152867.0,"PO-34931":53450.0,"PO-34954":102808.0,"PO-34969":19472.5,"PO-34979":109710.0,"PO-34986":36570.0,"PO-34993":51864.0,"PO-35055":64140.0,"PO-35056":103477.8,"PO-35067":107327.6,"PO-35071":163557.0,"PO-35079":30092.0,"PO-35123":33174.0,"PO-35125":28162.0,"PO-35140":46611.5,"PO-35337":45378.0,"PO-35338":58637.22,"PO-35343":413723.0,"PO-35406":113309.72,"PO-35410":56122.5,"PO-35422":40227.0,"PO-35463":110877.5,"PO-35492":51198.0,"PO-35517":286165.0,"PO-35648":331390.0,"PO-35667":84388.24,"PO-35753":191136.5,"PO-35817":44898.0,"PO-35920":17104.0,"PO-35987":96210.0,"PO-36028":32070.0,"PO-36032":73876.0,"PO-36043":113954.0,"PO-36047":34208.0,"PO-36063":32230.0,"PO-36083":100364.33,"PO-36193":92644.0};
+
+const PO_BUDGET_KEY = 'fisheye_po_budgets_v1';
+function loadPOBudgets() {
+  // Merge PDF-extracted budgets with any manual overrides from localStorage
+  try {
+    const manual = JSON.parse(localStorage.getItem(PO_BUDGET_KEY) || '{}');
+    return { ...PO_PDF_BUDGETS, ...manual }; // manual overrides PDF values
+  } catch { return { ...PO_PDF_BUDGETS }; }
+}
+
+function POReconciliationTab({ employees }) {
+  const [invoices, setInvoices]   = useState([]);
+  const [budgets,  setBudgets]    = useState(() => loadPOBudgets());
+  const [editing,  setEditing]    = useState({}); // po → draft string
+  const M = "#800000";
+
+  // Load invoices from Supabase (supabase imported at top of file)
+  useEffect(() => {
+    supabase.from('fisheye_invoices').select('*').then(({ data }) => {
+      if (data && data.length) setInvoices(data);
+      else {
+        try { setInvoices(JSON.parse(localStorage.getItem('fisheye_invoices_v1') || '[]')); }
+        catch { setInvoices([]); }
+      }
+    });
+  }, []);
+
+  // Same normalization as invoiceManager.jsx
+  const normPO = po => String(po || '').replace(/\s+/g, '').toUpperCase().replace(/_\d+$/, '');
+
+  // Build PO map: normPO → { po, employees[], invoices[], invoiced, paid, pending }
+  const poMap = useMemo(() => {
+    const map = new Map();
+
+    // Index ALL employees (including expired/resigned) so historical POs show names
+    employees.filter(e => e.poNumbers && String(e.poNumbers).trim()).forEach(e => {
+      String(e.poNumbers).split(/[,;\n]/).map(p => normPO(p)).filter(Boolean).forEach(po => {
+        if (!map.has(po)) map.set(po, { po, emps: [], invoices: [] });
+        // avoid duplicates
+        if (!map.get(po).emps.find(x => x._id === e._id)) map.get(po).emps.push(e);
+      });
+    });
+
+    // Index invoices by PO
+    invoices.forEach(inv => {
+      const po = normPO(inv.poNumber);
+      if (!po) return;
+      if (!map.has(po)) map.set(po, { po, emps: [], invoices: [] });
+      map.get(po).invoices.push(inv);
+    });
+
+    // Compute totals
+    return Array.from(map.values()).map(row => {
+      const isCreditNote = i => (i.status || '').toLowerCase().includes('credit');
+      const realInvoices = row.invoices.filter(i => !isCreditNote(i));
+      const invoiced = realInvoices.reduce((s, i) => s + Number(i.totalDue || 0), 0);
+      const paid     = realInvoices.filter(i => i.status === 'paid').reduce((s, i) => s + Number(i.totalDue || 0), 0);
+      const pending  = invoiced - paid;
+      const budget   = Number(budgets[row.po] || 0);
+      const remaining = budget ? budget - invoiced : null;
+      const overBudget = budget && invoiced > budget + 0.05; // allow 5 halalas rounding tolerance
+      return { ...row, invoiced, paid, pending, budget, remaining, overBudget };
+    }).sort((a, b) => a.po.localeCompare(b.po));
+  }, [invoices, employees, budgets]);
+
+  const saveBudget = (po, val) => {
+    const num = parseFloat(String(val).replace(/,/g, '')) || 0;
+    // Save only manual overrides to localStorage
+    const stored = (() => { try { return JSON.parse(localStorage.getItem(PO_BUDGET_KEY) || '{}'); } catch { return {}; } })();
+    const nextStored = { ...stored, [po]: num };
+    localStorage.setItem(PO_BUDGET_KEY, JSON.stringify(nextStored));
+    setBudgets(prev => ({ ...prev, [po]: num }));
+    setEditing(prev => { const n = { ...prev }; delete n[po]; return n; });
+  };
+
+  const fmtSAR = n => Number(n || 0).toLocaleString('en-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const exportToExcel = async () => {
+    let XLSX = window.XLSX;
+    if (!XLSX) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = () => { XLSX = window.XLSX; resolve(); };
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    const rows = poMap.map(r => ({
+      'PO Number':       r.po,
+      'Employees':       r.emps.map(e => e.name + (isExcluded(e) ? ' (ended)' : '')).join(', ') || '—',
+      'Invoices':        r.invoices.filter(i => !(i.status||'').toLowerCase().includes('credit')).length,
+      'Invoiced (SAR)':  r.invoiced,
+      'Paid (SAR)':      r.paid,
+      'Pending (SAR)':   r.pending,
+      'Budget (SAR)':    r.budget || '',
+      'Remaining (SAR)': r.remaining !== null ? r.remaining : '',
+      'Status':          r.overBudget ? 'Over Budget' : r.remaining !== null && Math.abs(r.remaining) < 0.05 ? 'Fully Used' : r.remaining !== null ? 'Active' : 'No Budget',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    // Column widths
+    ws['!cols'] = [14,40,10,16,16,16,16,16,14].map(w => ({ wch: w }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'PO Reconciliation');
+    XLSX.writeFile(wb, `PO_Reconciliation_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
+  const alerts = poMap.filter(r => r.overBudget).length;
+  const noBudget = poMap.filter(r => r.invoices.length > 0 && !r.budget).length;
+
+  const tdS = { padding: '10px 12px', fontSize: 12, borderBottom: '1px solid #f3f4f6', verticalAlign: 'middle' };
+
+  return (
+    <div style={{ padding: 16 }}>
+      {/* Summary Pills */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ background: '#fff5f5', border: `1px solid ${M}33`, borderRadius: 8, padding: '8px 14px', fontSize: 12 }}>
+          <span style={{ color: '#6b7280' }}>POs </span>
+          <strong style={{ color: M }}>{poMap.length}</strong>
+        </div>
+        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '8px 14px', fontSize: 12 }}>
+          <span style={{ color: '#6b7280' }}>Total Invoiced </span>
+          <strong style={{ color: '#059669' }}>SAR {fmtSAR(poMap.reduce((s, r) => s + r.invoiced, 0))}</strong>
+        </div>
+        <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '8px 14px', fontSize: 12 }}>
+          <span style={{ color: '#6b7280' }}>Pending </span>
+          <strong style={{ color: '#ea580c' }}>SAR {fmtSAR(poMap.reduce((s, r) => s + r.pending, 0))}</strong>
+        </div>
+        {alerts > 0 && (
+          <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '8px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ color: '#dc2626' }}>⚠️ {alerts} PO{alerts > 1 ? 's' : ''} over budget</span>
+          </div>
+        )}
+        {noBudget > 0 && (
+          <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 14px', fontSize: 12 }}>
+            <span style={{ color: '#92400e' }}>💡 {noBudget} PO{noBudget > 1 ? 's' : ''} without invoices yet</span>
+          </div>
+        )}
+        <button onClick={exportToExcel} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, background: '#059669', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          ⬇️ Export Excel
+        </button>
+      </div>
+
+      {/* Table */}
+      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden', maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+              {['PO Number', 'Employees', 'Invoices', 'Invoiced (SAR)', 'Paid (SAR)', 'Pending (SAR)', 'Budget (SAR)', 'Remaining (SAR)', ''].map(h => (
+                <th key={h} style={{ ...tdS, fontWeight: 700, color: '#374151', textAlign: h === '' ? 'center' : 'left', position: 'sticky', top: 0, background: '#f9fafb', zIndex: 1, boxShadow: '0 1px 0 #e5e7eb' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {poMap.map(row => {
+              const isOver = row.overBudget;
+              const rowBg = isOver ? '#fff5f5' : '#fff';
+              const isDraft = editing[row.po] !== undefined;
+              return (
+                <tr key={row.po} style={{ background: rowBg }}>
+                  <td style={{ ...tdS, fontWeight: 700, color: isOver ? '#dc2626' : M, fontFamily: 'monospace' }}>
+                    {isOver && <span style={{ marginRight: 4 }}>⚠️</span>}
+                    {row.po}
+                  </td>
+                  <td style={{ ...tdS, color: '#374151' }}>
+                    {row.emps.length > 0
+                      ? row.emps.map(e => (
+                          <div key={e._id} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 1 }}>
+                            <span>{e.name}</span>
+                            {isExcluded(e) && <span style={{ fontSize: 10, color: '#9ca3af', background: '#f3f4f6', padding: '1px 5px', borderRadius: 10 }}>ended</span>}
+                          </div>
+                        ))
+                      : <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>—</span>}
+                  </td>
+                  <td style={{ ...tdS, textAlign: 'center', color: '#374151' }}>
+                    {row.invoices.length > 0
+                      ? <span style={{ background: '#f3f4f6', padding: '2px 8px', borderRadius: 12, fontWeight: 700 }}>{row.invoices.length}</span>
+                      : <span style={{ color: '#9ca3af' }}>—</span>}
+                  </td>
+                  <td style={{ ...tdS, textAlign: 'right', fontFamily: 'monospace', color: '#374151' }}>
+                    {row.invoices.length ? fmtSAR(row.invoiced) : '—'}
+                  </td>
+                  <td style={{ ...tdS, textAlign: 'right', fontFamily: 'monospace', color: '#059669' }}>
+                    {row.paid ? fmtSAR(row.paid) : '—'}
+                  </td>
+                  <td style={{ ...tdS, textAlign: 'right', fontFamily: 'monospace', color: row.pending > 0 ? '#ea580c' : '#9ca3af' }}>
+                    {row.pending > 0 ? fmtSAR(row.pending) : '—'}
+                  </td>
+                  {/* Budget cell — editable */}
+                  <td style={{ ...tdS, textAlign: 'right' }}>
+                    {isDraft ? (
+                      <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                        <input
+                          autoFocus
+                          value={editing[row.po]}
+                          onChange={e => setEditing(prev => ({ ...prev, [row.po]: e.target.value }))}
+                          onKeyDown={e => { if (e.key === 'Enter') saveBudget(row.po, editing[row.po]); if (e.key === 'Escape') setEditing(prev => { const n={...prev}; delete n[row.po]; return n; }); }}
+                          style={{ width: 100, padding: '3px 6px', border: '1px solid #7c3aed', borderRadius: 4, fontSize: 12, textAlign: 'right', fontFamily: 'monospace' }}
+                        />
+                        <button onClick={() => saveBudget(row.po, editing[row.po])} style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontSize: 11 }}>✓</button>
+                      </div>
+                    ) : (
+                      <span style={{ fontFamily: 'monospace', color: row.budget ? '#374151' : '#9ca3af' }}>
+                        {row.budget ? fmtSAR(row.budget) : '—'}
+                      </span>
+                    )}
+                  </td>
+                  {/* Remaining */}
+                  <td style={{ ...tdS, textAlign: 'right', fontFamily: 'monospace', fontWeight: 700,
+                    color: isOver ? '#dc2626' : row.remaining !== null ? (row.remaining < row.invoiced * 0.2 ? '#f59e0b' : '#059669') : '#9ca3af' }}>
+                    {row.remaining !== null
+                      ? isOver
+                        ? `−${fmtSAR(Math.abs(row.remaining))}`
+                        : Math.abs(row.remaining) < 0.05
+                          ? <span style={{ color: '#059669' }}>✓ Fully Used</span>
+                          : fmtSAR(row.remaining)
+                      : '—'}
+                  </td>
+                  {/* Edit budget btn */}
+                  <td style={{ ...tdS, textAlign: 'center' }}>
+                    <button
+                      onClick={() => setEditing(prev => ({ ...prev, [row.po]: row.budget || '' }))}
+                      style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: 4, padding: '2px 6px', cursor: 'pointer', fontSize: 11, color: '#6b7280' }}
+                      title="Set PO budget"
+                    >✏️</button>
+                  </td>
+                </tr>
+              );
+            })}
+            {poMap.length === 0 && (
+              <tr><td colSpan={9} style={{ ...tdS, textAlign: 'center', color: '#9ca3af', padding: 32 }}>No PO data found</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN EXPORT — FinanceModule
 // ═══════════════════════════════════════════════════════════════════════════════
 export function FinanceModule({ employees = [], setEmployees = () => {}, operationalIssues = [] }) {
@@ -1672,6 +1918,7 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
     { k: "payroll",      l: "Payroll",             emoji: "💰", color: "#7c3aed" },
     { k: "partner_flow", l: "Payroll Flow",         emoji: "💸", color: "#0ea5e9" },
     { k: "invoices",     l: "Invoices",             emoji: "📄", color: "#ea580c" },
+    { k: "po_recon",     l: "PO Reconciliation",    emoji: "🔗", color: "#0369a1" },
     { k: "profit",       l: "Profit per Client",    emoji: "📊", color: "#059669" },
     { k: "settlement",   l: "Settlements",          emoji: "🤝", color: "#16a34a" },
   ];
@@ -1763,6 +2010,7 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
       {activeTab === "payroll"      && <PayrollTab          employees={employees} />}
       {activeTab === "partner_flow" && <PartnerFlowTab       employees={employees} />}
       {activeTab === "invoices"     && <InvoiceManager employees={employees} setEmployees={setEmployees} />}
+      {activeTab === "po_recon"     && <POReconciliationTab  employees={employees} />}
       {activeTab === "profit"       && <ProfitPerClientTab   employees={employees} />}
       {activeTab === "settlement"   && <PartnerSettlementReport employees={employees}/>}
     </div>

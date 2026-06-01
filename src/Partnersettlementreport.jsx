@@ -7,6 +7,9 @@ import {
 import { isExcluded } from "./utils/helpers";
 import OperationalPartners from "./modules/OperationalPartners";
 
+// Normalize PO number: uppercase + strip trailing _N suffix
+const normPO = po => String(po || '').trim().toUpperCase().replace(/_\d+$/, '');
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // BLUE CUBE COMMISSION DATA (hardcoded from Blue Cube - Sela Invoices .xlsx)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -97,6 +100,20 @@ const BC_BATCHES = [
 
 // BC_PO_SET includes POs from the 3 paid batches only.
 // Commission for new batches is calculated dynamically at 0.48% of pre-VAT.
+const BC_PO_SET = new Set(
+  BC_BATCHES.flatMap(b => b.rows.map(r => normPO(r.po)))
+);
+
+// All invoice numbers already commissioned in the 3 paid batches
+const BC_COMMISSIONED_INVS = new Set(
+  BC_BATCHES.flatMap(b => b.rows.flatMap(r => r.invNums.map(n => String(n).trim())))
+);
+
+// Map: invoice number → batch label (e.g. '1st Invoice')
+const BC_INV_TO_BATCH = new Map(
+  BC_BATCHES.flatMap(b => b.rows.flatMap(r => r.invNums.map(n => [String(n).trim(), b.label])))
+);
+
 // Lookup: PO → fisheye fee rate (for commission estimation on new invoices)
 const BC_PO_RATE = new Map();
 BC_BATCHES.forEach(b => b.rows.forEach(r => {
@@ -293,311 +310,6 @@ function exportClientExcel(client, monthLabel) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 🔍 BATCH VERIFIER — Paste Excel data, compare vs our calculations, confirm
-// ═══════════════════════════════════════════════════════════════════════════════
-function BatchVerifier({ allInvoices, employees, onConfirm }) {
-  const [pasteText,   setPasteText]   = useState('');
-  const [batchLabel,  setBatchLabel]  = useState('5th Invoice');
-  const [confirmed,   setConfirmed]   = useState(false);
-  const [showPaste,   setShowPaste]   = useState(true);
-
-  // PO → employee lookup
-  const poToEmp = useMemo(() => {
-    const map = new Map();
-    employees.filter(e => e.profitMode === 'partner').forEach(e => {
-      String(e.poNumbers || '').split(/[,;\n]/).map(p => normPO(p)).filter(Boolean).forEach(po => {
-        map.set(po, e);
-      });
-    });
-    return map;
-  }, [employees]);
-
-  // Invoice number → invoice object lookup
-  const invByNum = useMemo(() => {
-    const map = new Map();
-    allInvoices.forEach(inv => map.set(String(inv.invoiceNumber || '').trim(), inv));
-    return map;
-  }, [allInvoices]);
-
-  // Parse pasted Excel rows — supports:
-  //   4-col: PO | Invoice Numbers | Invoiced Amount | BC Fee
-  //   5-col: PO | Invoice Numbers | Invoiced Amount | Fisheye Fee (6%) | BC Fee
-  // Separators: Tab (Excel paste) or 2+ spaces (system export)
-  const parsedRows = useMemo(() => {
-    if (!pasteText.trim()) return [];
-    return pasteText.trim().split('\n').map((line, i) => {
-      if (!line.trim()) return null;
-      // Split: prefer tabs, fall back to 2+ spaces
-      const cols = line.includes('\t')
-        ? line.split('\t').map(c => c.trim())
-        : line.trim().split(/  +/).map(c => c.trim());
-      if (cols.length < 4) return null;
-      const po      = cols[0].replace(/['"]/g, '').trim();
-      // Invoice numbers: 5-digit+ numeric strings
-      const invNums = cols[1].split(/[,\s]+/).map(n => n.replace(/['"]/g, '').trim()).filter(n => /\d{5,}/.test(n));
-      const invAmt  = parseFloat(String(cols[2]).replace(/[,'"]/g, '')) || 0;
-      // 5-col: cols[3]=Fisheye Fee (6%), cols[4]=BC Fee — 4-col: cols[3]=BC Fee
-      const bcFee = cols.length >= 5
-        ? parseFloat(String(cols[4]).replace(/[,'"]/g, '')) || 0
-        : parseFloat(String(cols[3]).replace(/[,'"]/g, '')) || 0;
-      if (!po || !bcFee) return null;
-      return { rowIdx: i, po, invNums, invoicedAmt: invAmt, bcFee };
-    }).filter(Boolean);
-  }, [pasteText]);
-
-  // Compare each row against our system
-  const verifiedRows = useMemo(() => {
-    return parsedRows.map(row => {
-      const emp         = poToEmp.get(normPO(row.po));
-      const foundInvs   = row.invNums.map(n => invByNum.get(n)).filter(Boolean);
-      const missingNums = row.invNums.filter(n => !invByNum.get(n));
-
-      // Calculate our expected commission
-      // For VAT fix: if our calc is > 1.5x Excel fee, assume invoice stored with full VAT
-      // and re-derive using totalDue * 100/115 (strip VAT)
-      let ourCalc = 0;
-      if (emp) {
-        foundInvs.forEach(inv => {
-          const base = getPreVat(inv);
-          const fee = emp.partnerCostType === 'percent'
-            ? Math.round((emp.partnerCost / 100) * base * 100) / 100
-            : (emp.partnerCost || 0);
-          ourCalc += fee;
-        });
-        // If our calc is suspiciously > 1.4x Excel fee → invoice has VAT included in totalDue
-        // Re-calculate stripping VAT properly
-        if (ourCalc > 0 && row.bcFee > 0 && ourCalc / row.bcFee > 1.4) {
-          ourCalc = 0;
-          foundInvs.forEach(inv => {
-            // Force 100/115 reverse calc regardless of vat field
-            const base = Math.round((inv.totalDue || 0) * (100 / 115) * 100) / 100;
-            const fee = emp.partnerCostType === 'percent'
-              ? Math.round((emp.partnerCost / 100) * base * 100) / 100
-              : (emp.partnerCost || 0);
-            ourCalc += fee;
-          });
-        }
-      }
-
-      const diff        = row.bcFee - ourCalc;
-      const diffPct     = ourCalc > 0 ? (Math.abs(diff) / ourCalc) * 100 : null;
-      const alreadyPaid = foundInvs.some(inv => inv.partnerCommissionPaid);
-      // noEmp: invoices found in system but no employee linked to PO
-      const noEmp = !emp && foundInvs.length > 0;
-      const status =
-        foundInvs.length === 0              ? 'missing'  :
-        alreadyPaid                          ? 'paid'     :
-        noEmp                                ? 'noemp'    :
-        Math.abs(diff) < 0.5                 ? 'match'    :
-        diffPct !== null && diffPct < 2      ? 'close'    : 'mismatch';
-
-      return { ...row, emp, foundInvs, missingNums, ourCalc, diff, diffPct, status, alreadyPaid, noEmp };
-    });
-  }, [parsedRows, poToEmp, invByNum]);
-
-  const totalExcel    = verifiedRows.reduce((s, r) => s + r.bcFee,    0);
-  const totalOurs     = verifiedRows.reduce((s, r) => s + r.ourCalc,  0);
-  const totalDiff     = totalExcel - totalOurs;
-  const totalMatch    = verifiedRows.filter(r => r.status === 'match' || r.status === 'close').length;
-  const totalMismatch = verifiedRows.filter(r => r.status === 'mismatch').length;
-  const totalMissing  = verifiedRows.filter(r => r.status === 'missing').length;
-  const totalNoEmp    = verifiedRows.filter(r => r.status === 'noemp').length;
-  // Ready to confirm if we have rows and no truly missing invoices (mismatches & noemp are ok — Excel fee used)
-  const canConfirm    = verifiedRows.length > 0 && !confirmed;
-  const overallOk     = verifiedRows.length > 0 && totalMismatch === 0 && totalMissing === 0 && totalNoEmp === 0;
-
-  const statusStyle = s => ({
-    match:    { bg:'#f0fdf4', color:'#16a34a', label:'✅ Match'       },
-    close:    { bg:'#fefce8', color:'#a16207', label:'⚠ ~Close'      },
-    mismatch: { bg:'#fef2f2', color:'#dc2626', label:'⚠ Diff — Excel fee used' },
-    noemp:    { bg:'#eff6ff', color:'#1d4ed8', label:'ℹ No PO match — Excel fee used' },
-    missing:  { bg:'#fff7ed', color:'#c2410c', label:'⚠ Invoice not in system' },
-    paid:     { bg:'#f0fdf4', color:'#6b7280', label:'✓ Already Paid' },
-  }[s] || { bg:'#f9fafb', color:'#6b7280', label:'—' });
-
-  const handleConfirm = () => {
-    // Always use Excel bcFee as the authoritative commission amount.
-    // Include: match, close, mismatch (Excel fee used), noemp (Excel fee used).
-    // Exclude: missing (invoice not in system), paid (already done).
-    const items = verifiedRows
-      .filter(r => r.status !== 'missing' && r.status !== 'paid')
-      .flatMap(row => {
-        const feeEach = row.foundInvs.length > 0
-          ? Math.round((row.bcFee / row.foundInvs.length) * 100) / 100
-          : 0;
-        return row.foundInvs.map(inv => ({ inv, commission: feeEach }));
-      });
-    onConfirm(items, batchLabel.trim() || 'New Batch');
-    setConfirmed(true);
-  };
-
-  const tdV = { padding: '9px 12px', fontSize: 11, verticalAlign: 'middle' };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-        <div>
-          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#0891b2' }}>🔍 Batch Commission Verifier</h3>
-          <p style={{ margin: '3px 0 0', fontSize: 11, color: '#6b7280' }}>Paste rows from Excel → compare vs our calculations → confirm as paid batch</p>
-        </div>
-        {verifiedRows.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: '#6b7280' }}>Batch label:</span>
-            <input
-              value={batchLabel}
-              onChange={e => setBatchLabel(e.target.value)}
-              style={{ padding: '5px 10px', borderRadius: 7, border: '1.5px solid #e5e7eb', fontSize: 12, fontWeight: 700, width: 150, outline: 'none' }}
-              placeholder="e.g. 5th Invoice"
-            />
-            <button
-              disabled={!canConfirm}
-              onClick={handleConfirm}
-              style={{
-                padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 800, border: 'none',
-                backgroundColor: confirmed ? '#d1fae5' : canConfirm ? (overallOk ? '#16a34a' : '#d97706') : '#e5e7eb',
-                color: confirmed ? '#065f46' : canConfirm ? 'white' : '#9ca3af',
-                cursor: canConfirm ? 'pointer' : 'default',
-              }}
-              title={!overallOk && !confirmed ? 'Mismatches will use Excel fee as source of truth' : ''}
-            >
-              {confirmed ? '✅ Confirmed!' : overallOk ? '✓ Confirm & Mark Paid' : '⚠ Confirm with Excel fees'}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Summary pills */}
-      {verifiedRows.length > 0 && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {[
-            { label: `${verifiedRows.length} rows parsed`, bg: '#f0f9ff', color: '#0369a1' },
-            { label: `${totalMatch} matched`, bg: '#f0fdf4', color: '#16a34a' },
-            ...(totalMismatch > 0 ? [{ label: `${totalMismatch} diff (Excel fee used)`, bg: '#fef9c3', color: '#a16207' }] : []),
-            ...(totalNoEmp   > 0 ? [{ label: `${totalNoEmp} no PO match (Excel fee used)`, bg: '#eff6ff', color: '#1d4ed8' }] : []),
-            ...(totalMissing > 0 ? [{ label: `${totalMissing} invoices not in system`, bg: '#fff7ed', color: '#c2410c' }] : []),
-            { label: `Excel total: SR ${totalExcel.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`, bg: '#faf5ff', color: '#7c3aed', bold: true },
-            { label: `Our calc: SR ${totalOurs.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`, bg: '#f9fafb', color: '#374151', bold: true },
-            { label: `Diff: SR ${totalDiff > 0 ? '+' : ''}${totalDiff.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`, bg: Math.abs(totalDiff) < 1 ? '#f0fdf4' : '#fef2f2', color: Math.abs(totalDiff) < 1 ? '#16a34a' : '#dc2626', bold: true },
-          ].map((p, i) => (
-            <span key={i} style={{ fontSize: 11, fontWeight: p.bold ? 800 : 600, padding: '3px 10px', borderRadius: 999, backgroundColor: p.bg, color: p.color }}>{p.label}</span>
-          ))}
-        </div>
-      )}
-
-      {/* Paste area (toggle) */}
-      <div style={{ borderRadius: 10, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-        <div
-          onClick={() => setShowPaste(v => !v)}
-          style={{ padding: '10px 14px', backgroundColor: '#f9fafb', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-        >
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>📋 Paste Excel Data</span>
-          <span style={{ fontSize: 10, color: '#9ca3af' }}>{showPaste ? '▲ hide' : '▼ show'} · Format: PO | Invoice Numbers | Invoiced Amt | BC Fee (tab-separated)</span>
-        </div>
-        {showPaste && (
-          <div style={{ padding: 12 }}>
-            <textarea
-              value={pasteText}
-              onChange={e => { setPasteText(e.target.value); setConfirmed(false); }}
-              placeholder={`PO-34866\t2301375,2301307,2301252\t144221.59\t692.22\nPO-34954\t2301377,2301309,2301254\t101919.93\t489.21\n\nCopy rows directly from Excel and paste here.`}
-              style={{
-                width: '100%', minHeight: 110, padding: '10px 12px', borderRadius: 8,
-                border: '1.5px solid #e5e7eb', fontSize: 11, fontFamily: 'monospace',
-                resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: '#374151',
-              }}
-            />
-            <p style={{ margin: '5px 0 0', fontSize: 10, color: '#9ca3af' }}>
-              Columns: <b>PO Number</b> · <b>Invoice Numbers</b> (comma-separated) · <b>Invoiced Amount</b> · <b>BC Fee</b> — separated by Tab (Excel copy/paste works directly)
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Comparison table */}
-      {verifiedRows.length > 0 && (
-        <div style={{ borderRadius: 10, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f0f9ff' }}>
-                  {['PO Number', 'Invoices', 'Employee', 'Excel BC Fee', 'Our Calc', 'Diff', 'Status'].map((h, i) => (
-                    <th key={i} style={{ padding: '8px 12px', textAlign: i >= 3 ? 'right' : 'left', fontSize: 10, fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #bae6fd', whiteSpace: 'nowrap' }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {verifiedRows.map((row, i) => {
-                  const st = statusStyle(row.status);
-                  return (
-                    <tr key={i} style={{ borderBottom: '1px solid #f3f4f6', backgroundColor: i % 2 === 0 ? 'white' : '#fafafa' }}>
-                      <td style={{ ...tdV, fontWeight: 800, fontFamily: 'monospace', color: '#111827' }}>{row.po}</td>
-                      <td style={{ ...tdV, color: '#6b7280', fontFamily: 'monospace', fontSize: 10, maxWidth: 200 }}>
-                        {row.foundInvs.map(inv => inv.invoiceNumber).join(' · ')}
-                        {row.missingNums.length > 0 && (
-                          <span style={{ color: '#c2410c', display: 'block', marginTop: 2 }}>
-                            ⚠ Not found: {row.missingNums.join(', ')}
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ ...tdV, fontSize: 11, color: row.emp ? '#374151' : '#c2410c' }}>
-                        {row.emp ? `${row.emp.name || '—'} (${(row.emp.partnerCost || 0)}${row.emp.partnerCostType === 'percent' ? '%' : ' SAR'})` : '⚠ No employee found for PO'}
-                      </td>
-                      <td style={{ ...tdV, textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#7c3aed' }}>
-                        {row.bcFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ ...tdV, textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#374151' }}>
-                        {row.ourCalc > 0 ? row.ourCalc.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
-                      </td>
-                      <td style={{ ...tdV, textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: Math.abs(row.diff) < 0.5 ? '#16a34a' : '#dc2626' }}>
-                        {row.ourCalc > 0 ? `${row.diff > 0 ? '+' : ''}${row.diff.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
-                      </td>
-                      <td style={{ ...tdV }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, backgroundColor: st.bg, color: st.color, whiteSpace: 'nowrap' }}>
-                          {st.label}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr style={{ backgroundColor: Math.abs(totalDiff) < 1 ? '#f0fdf4' : '#fef2f2', borderTop: '2px solid #e5e7eb' }}>
-                  <td colSpan={3} style={{ ...tdV, fontWeight: 900, color: '#111827' }}>TOTAL ({verifiedRows.length} rows)</td>
-                  <td style={{ ...tdV, textAlign: 'right', fontFamily: 'monospace', fontWeight: 900, color: '#7c3aed' }}>
-                    SR {totalExcel.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td style={{ ...tdV, textAlign: 'right', fontFamily: 'monospace', fontWeight: 900, color: '#374151' }}>
-                    SR {totalOurs.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td style={{ ...tdV, textAlign: 'right', fontFamily: 'monospace', fontWeight: 900, color: Math.abs(totalDiff) < 1 ? '#16a34a' : '#dc2626' }}>
-                    {totalDiff > 0 ? '+' : ''}{totalDiff.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td style={{ ...tdV }}>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: overallOk ? '#16a34a' : '#dc2626' }}>
-                      {overallOk ? '✅ Ready to confirm' : '⚠ Fix issues first'}
-                    </span>
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {verifiedRows.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '40px 0', color: '#9ca3af' }}>
-          <p style={{ fontSize: 13, fontWeight: 600 }}>Paste Excel rows above to start verification</p>
-          <p style={{ fontSize: 11, marginTop: 4 }}>Copy the PO, Invoice Numbers, Invoiced Amount, and BC Fee columns from the Excel sheet and paste directly</p>
-        </div>
-      )}
-
-    </div>
-  );
-}
-
 export default function PartnerSettlementReport({ employees = [] }) {
   const [view, setView]         = useState("partners"); // "partners" | "clients" | "commissions"
   const [openRows, setOpenRows] = useState({});
@@ -970,7 +682,6 @@ export default function PartnerSettlementReport({ employees = [] }) {
           ["partners",    "🤝", "Partners",    M,         null],
           ["clients",     "🏢", "Clients",     "#0369a1", null],
           ["commissions", "💼", "Commissions", "#7c3aed", totalPendingCommission > 0 ? commissionsByPartner.reduce((s,p)=>s+p.pending.length,0) : null],
-          ["verify",      "🔍", "Verify Batch","#0891b2", null],
           ["operations",  "🏗️", "Operations", "#b45309", null],
         ].map(([k, emoji, label, color, badge]) => (
           <button
@@ -1547,15 +1258,6 @@ export default function PartnerSettlementReport({ employees = [] }) {
           })}
 
         </div>
-      )}
-
-      {/* ══════════ VERIFY BATCH VIEW ══════════ */}
-      {view === "verify" && (
-        <BatchVerifier
-          allInvoices={allInvoices}
-          employees={employees}
-          onConfirm={(items, label) => markAllPaid(items, label)}
-        />
       )}
 
       {/* ══════════ OPERATIONS VIEW ══════════ */}
