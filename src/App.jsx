@@ -4689,14 +4689,32 @@ function DashboardView({ employees, isOnline, syncStatus, syncMessage, syncProgr
 
       {/* ── Sync panel ────────────────────────────────────────────────────── */}
       {showSync && isOnline && (
-        <Card style={{ padding: 14, border: '2px solid #bfdbfe', backgroundColor: '#eff6ff' }}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Btn onClick={uploadToCloud}     disabled={syncStatus==='syncing'} style={{ ...s.btnPrimary, backgroundColor: '#3b82f6', ...s.btnSm }}>📤 Upload</Btn>
-            <Btn onClick={downloadFromCloud} disabled={syncStatus==='syncing'} style={{ ...s.btnPrimary, backgroundColor: '#7c3aed', ...s.btnSm }}>📥 Download</Btn>
-            <Btn onClick={backup}            disabled={syncStatus==='syncing'} style={{ ...s.btnPrimary, backgroundColor: '#16a34a', ...s.btnSm }}>💾 Backup</Btn>
-            <Btn onClick={bidirectionalSync} disabled={syncStatus==='syncing'} style={{ ...s.btnPrimary, backgroundColor: '#0891b2', ...s.btnSm }}>⇄ Sync Both</Btn>
+        <Card style={{ padding: 14, border: `2px solid ${syncStatus==='error'?'#fca5a5':syncStatus==='success'?'#bbf7d0':'#bfdbfe'}`, backgroundColor: syncStatus==='error'?'#fff1f2':syncStatus==='success'?'#f0fdf4':'#eff6ff' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Btn onClick={uploadToCloud}     disabled={syncStatus==='syncing'} style={{ ...s.btnPrimary, backgroundColor: '#3b82f6', ...s.btnSm, opacity: syncStatus==='syncing'?0.6:1 }}>📤 Upload</Btn>
+            <Btn onClick={downloadFromCloud} disabled={syncStatus==='syncing'} style={{ ...s.btnPrimary, backgroundColor: '#7c3aed', ...s.btnSm, opacity: syncStatus==='syncing'?0.6:1 }}>📥 Download</Btn>
+            <Btn onClick={backup}            disabled={syncStatus==='syncing'} style={{ ...s.btnPrimary, backgroundColor: '#16a34a', ...s.btnSm, opacity: syncStatus==='syncing'?0.6:1 }}>💾 Backup</Btn>
+            <Btn onClick={bidirectionalSync} disabled={syncStatus==='syncing'} style={{ ...s.btnPrimary, backgroundColor: '#0891b2', ...s.btnSm, opacity: syncStatus==='syncing'?0.6:1 }}>⇄ Sync Both</Btn>
+            {lastSync && syncStatus==='idle' && (
+              <span style={{ fontSize: 10, color: '#6b7280', marginLeft: 'auto' }}>
+                آخر sync: {new Date(lastSync).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}
+              </span>
+            )}
           </div>
-          {syncMessage && <p style={{ margin: '8px 0 0', fontSize: 12, color: '#1e40af' }}>{syncMessage}</p>}
+          {syncStatus === 'syncing' && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#1e40af' }}>{syncMessage || 'جاري المزامنة...'}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#1e40af' }}>{syncProgress}%</span>
+              </div>
+              <div style={{ height: 6, backgroundColor: '#bfdbfe', borderRadius: 999, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${syncProgress}%`, backgroundColor: '#2563eb', borderRadius: 999, transition: 'width 0.3s ease' }} />
+              </div>
+            </div>
+          )}
+          {syncMessage && syncStatus !== 'syncing' && (
+            <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 700, color: syncStatus==='error'?'#dc2626':'#16a34a' }}>{syncMessage}</p>
+          )}
         </Card>
       )}
 
@@ -5042,11 +5060,41 @@ function SettingsView({
         {stabs.map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{padding:"10px 16px",fontSize:12,fontWeight:600,border:"none",borderBottom:`2px solid ${tab===t.k?M:"transparent"}`,backgroundColor:"transparent",cursor:"pointer",color:tab===t.k?M:"#6b7280",marginBottom:-1}}>{t.l}</button>)}
       </div>
       {tab==="general"&&(
-        <Card style={{padding:20}}>
-          <h3 style={{fontWeight:700,fontSize:14,margin:"0 0 12px"}}>Data Management</h3>
-          <p style={{fontSize:13,color:"#6b7280",margin:"0 0 16px"}}>{empCount} contracts loaded.</p>
-          <Btn variant="danger" onClick={onClear}><Trash2 size={13}/> Clear & Re-upload</Btn>
-        </Card>
+        <div style={{display:'flex',flexDirection:'column',gap:16}}>
+          {/* Cloud Sync */}
+          {isOnline && (
+            <Card style={{padding:20,border:`2px solid ${syncStatus==='error'?'#fca5a5':syncStatus==='success'?'#bbf7d0':'#e5e7eb'}`,backgroundColor:syncStatus==='error'?'#fff1f2':syncStatus==='success'?'#f0fdf4':'white'}}>
+              <h3 style={{fontWeight:700,fontSize:14,margin:"0 0 4px"}}>☁️ Cloud Sync</h3>
+              <p style={{fontSize:12,color:'#6b7280',margin:'0 0 14px'}}>مزامنة البيانات مع Supabase{lastSync ? ` · آخر sync: ${new Date(lastSync).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}` : ''}</p>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                <Btn onClick={uploadToCloud}     disabled={syncStatus==='syncing'} style={{...s.btnPrimary,backgroundColor:'#3b82f6',opacity:syncStatus==='syncing'?0.6:1}}>📤 Upload to Cloud</Btn>
+                <Btn onClick={downloadFromCloud} disabled={syncStatus==='syncing'} style={{...s.btnPrimary,backgroundColor:'#7c3aed',opacity:syncStatus==='syncing'?0.6:1}}>📥 Download from Cloud</Btn>
+                <Btn onClick={backup}            disabled={syncStatus==='syncing'} style={{...s.btnPrimary,backgroundColor:'#16a34a',opacity:syncStatus==='syncing'?0.6:1}}>💾 Backup</Btn>
+                <Btn onClick={bidirectionalSync} disabled={syncStatus==='syncing'} style={{...s.btnPrimary,backgroundColor:'#0891b2',opacity:syncStatus==='syncing'?0.6:1}}>⇄ Sync Both</Btn>
+              </div>
+              {syncStatus==='syncing' && (
+                <div style={{marginTop:12}}>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                    <span style={{fontSize:11,fontWeight:700,color:'#1e40af'}}>{syncMessage||'جاري المزامنة...'}</span>
+                    <span style={{fontSize:11,fontWeight:700,color:'#1e40af'}}>{syncProgress}%</span>
+                  </div>
+                  <div style={{height:6,backgroundColor:'#bfdbfe',borderRadius:999,overflow:'hidden'}}>
+                    <div style={{height:'100%',width:`${syncProgress}%`,backgroundColor:'#2563eb',borderRadius:999,transition:'width 0.3s ease'}}/>
+                  </div>
+                </div>
+              )}
+              {syncMessage && syncStatus!=='syncing' && (
+                <p style={{margin:'10px 0 0',fontSize:12,fontWeight:700,color:syncStatus==='error'?'#dc2626':'#16a34a'}}>{syncMessage}</p>
+              )}
+            </Card>
+          )}
+          {/* Data Management */}
+          <Card style={{padding:20}}>
+            <h3 style={{fontWeight:700,fontSize:14,margin:"0 0 12px"}}>Data Management</h3>
+            <p style={{fontSize:13,color:"#6b7280",margin:"0 0 16px"}}>{empCount} contracts loaded.</p>
+            <Btn variant="danger" onClick={onClear}><Trash2 size={13}/> Clear & Re-upload</Btn>
+          </Card>
+        </div>
       )}
       {tab==="notifications"&&(
         <NotificationsSettings employees={employees}/>
