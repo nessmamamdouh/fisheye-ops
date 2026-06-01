@@ -1632,6 +1632,9 @@ function loadPOBudgets() {
   } catch { return { ...PO_PDF_BUDGETS }; }
 }
 
+// Same normalization as invoiceManager.jsx — module-level so it's always defined
+const normPO = po => String(po || '').replace(/\s+/g, '').toUpperCase().replace(/_\d+$/, '');
+
 function POReconciliationTab({ employees }) {
   const [invoices, setInvoices]   = useState([]);
   const [budgets,  setBudgets]    = useState(() => loadPOBudgets());
@@ -1648,9 +1651,6 @@ function POReconciliationTab({ employees }) {
       }
     });
   }, []);
-
-  // Same normalization as invoiceManager.jsx
-  const normPO = po => String(po || '').replace(/\s+/g, '').toUpperCase().replace(/_\d+$/, '');
 
   // Build PO map: normPO → { po, employees[], invoices[], invoiced, paid, pending }
   const poMap = useMemo(() => {
