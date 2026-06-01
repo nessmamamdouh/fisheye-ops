@@ -1,0 +1,108 @@
+name: Fisheye Daily Digest
+
+on:
+  schedule:
+    # 11:00 AM KSA (UTC+3) = 08:00 AM UTC — runs every day
+    - cron: '0 8 * * *'
+  workflow_dispatch: # allow manual trigger from GitHub
+
+jobs:
+  send-digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Daily WhatsApp Digest
+        env:
+          SUPABASE_URL: https://noutbupdtbqdheyhlmdm.supabase.co
+          SUPABASE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5vdXRidXBkdGJxZGhleWhsbWRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MzI2NDQsImV4cCI6MjA5MzIwODY0NH0.yLBTuS_DO322I2e0QjbLBHIUk6_k8tkMGCKBDUlQLLo
+          WA_PHONE: "201200320381"
+          WA_APIKEY: "3635248"
+        run: |
+          python3 << 'PYEOF'
+          import urllib.request, urllib.parse, json, datetime, os
+
+          SUPABASE_URL = os.environ['SUPABASE_URL']
+          SUPABASE_KEY = os.environ['SUPABASE_KEY']
+          WA_PHONE     = os.environ['WA_PHONE']
+          WA_APIKEY    = os.environ['WA_APIKEY']
+          TODAY        = datetime.date.today()
+
+          def supabase_get(path):
+              url = f"{SUPABASE_URL}/rest/v1/{path}"
+              req = urllib.request.Request(url, headers={
+                  "apikey": SUPABASE_KEY,
+                  "Authorization": f"Bearer {SUPABASE_KEY}"
+              })
+              with urllib.request.urlopen(req) as r:
+                  return json.loads(r.read())
+
+          def days_until(date_str):
+              if not date_str: return 9999
+              try:
+                  d = datetime.date.fromisoformat(str(date_str)[:10])
+                  return (d - TODAY).days
+              except: return 9999
+
+          def days_since(date_str):
+              if not date_str: return 0
+              try:
+                  d = datetime.date.fromisoformat(str(date_str)[:10])
+                  return (TODAY - d).days
+              except: return 0
+
+          # Fetch employees
+          emps = supabase_get("employees_master?select=name,client,status,endDate,workflowStatus,wfDate,poNumbers")
+          active = [e for e in emps if e.get('status') not in ('expired','resigned')]
+
+          # Section A: Expiring contracts
+          expiring = [e for e in active if 0 <= days_until(e.get('endDate')) <= 30]
+          expiring.sort(key=lambda e: days_until(e.get('endDate')))
+          urgent   = [e for e in expiring if days_until(e.get('endDate')) <= 7]
+
+          # Section B: Stuck workflows
+          stuck_statuses = {'Docs Requested','Docs Received','Agreement Sent','Pending'}
+          stuck = [e for e in active
+                   if e.get('workflowStatus') in stuck_statuses
+                   and days_since(e.get('wfDate')) > 7]
+          stuck.sort(key=lambda e: days_since(e.get('wfDate')), reverse=True)
+
+          # Build message
+          lines = [f"🔔 Fisheye Daily Digest — {TODAY.strftime('%d %b %Y')}"]
+          lines.append("")
+
+          if urgent:
+              lines.append(f"🚨 URGENT — ينتهوا خلال 7 أيام ({len(urgent)}):")
+              for e in urgent:
+                  lines.append(f"  • {e['name']} ({e.get('client','—')}) — {days_until(e['endDate'])} يوم")
+              lines.append("")
+
+          lines.append(f"⚠️ عقود تنتهي خلال 30 يوم ({len(expiring)}):")
+          if expiring:
+              for e in expiring[:10]:
+                  lines.append(f"  • {e['name']} ({e.get('client','—')}) — {days_until(e['endDate'])} يوم")
+              if len(expiring) > 10:
+                  lines.append(f"  + {len(expiring)-10} آخرين")
+          else:
+              lines.append("  ✅ لا يوجد")
+          lines.append("")
+
+          lines.append(f"📋 Workflows متوقفة +7 أيام ({len(stuck)}):")
+          if stuck:
+              for e in stuck[:10]:
+                  lines.append(f"  • {e['name']} — {e.get('workflowStatus','—')} ({days_since(e.get('wfDate'))} يوم)")
+          else:
+              lines.append("  ✅ كل الـ workflows شغالة")
+
+          msg = "\n".join(lines)
+          print("Message preview:\n", msg)
+
+          # Send WhatsApp
+          encoded = urllib.parse.quote(msg)
+          wa_url  = f"https://api.callmebot.com/whatsapp.php?phone={WA_PHONE}&text={encoded}&apikey={WA_APIKEY}"
+          try:
+              with urllib.request.urlopen(wa_url, timeout=15) as r:
+                  print("WhatsApp response:", r.status)
+          except Exception as ex:
+              print("WhatsApp send note:", ex)
+
+          print("✅ Daily digest done")
+          PYEOF

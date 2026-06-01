@@ -1,0 +1,131 @@
+name: Fisheye Weekly Digest
+
+on:
+  schedule:
+    # 11:00 AM KSA (UTC+3) = 08:00 AM UTC — runs every Sunday
+    - cron: '0 8 * * 0'
+  workflow_dispatch: # allow manual trigger from GitHub
+
+jobs:
+  send-digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Weekly WhatsApp Digest
+        env:
+          SUPABASE_URL: https://noutbupdtbqdheyhlmdm.supabase.co
+          SUPABASE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5vdXRidXBkdGJxZGhleWhsbWRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MzI2NDQsImV4cCI6MjA5MzIwODY0NH0.yLBTuS_DO322I2e0QjbLBHIUk6_k8tkMGCKBDUlQLLo
+          WA_PHONE: "201200320381"
+          WA_APIKEY: "3635248"
+        run: |
+          python3 << 'PYEOF'
+          import urllib.request, urllib.parse, json, datetime, os
+
+          SUPABASE_URL = os.environ['SUPABASE_URL']
+          SUPABASE_KEY = os.environ['SUPABASE_KEY']
+          WA_PHONE     = os.environ['WA_PHONE']
+          WA_APIKEY    = os.environ['WA_APIKEY']
+          TODAY        = datetime.date.today()
+
+          def supabase_get(path):
+              url = f"{SUPABASE_URL}/rest/v1/{path}"
+              req = urllib.request.Request(url, headers={
+                  "apikey": SUPABASE_KEY,
+                  "Authorization": f"Bearer {SUPABASE_KEY}"
+              })
+              with urllib.request.urlopen(req) as r:
+                  return json.loads(r.read())
+
+          def days_until(date_str):
+              if not date_str: return 9999
+              try:
+                  d = datetime.date.fromisoformat(str(date_str)[:10])
+                  return (d - TODAY).days
+              except: return 9999
+
+          # Fetch data
+          emps = supabase_get("employees_master?select=name,client,status,endDate,workflowStatus,totalPackage,poNumbers,partnerAssigned")
+          invoices = supabase_get("fisheye_invoices?select=invoiceNumber,amount,status,dueDate,clientName,employeeName")
+
+          active = [e for e in emps if e.get('status') not in ('expired', 'resigned')]
+          sela_active = [e for e in active if (e.get('client') or '').strip().upper() == 'SELA']
+
+          # ── Section 1: Weekly Summary ────────────────────────────────
+          headcount = len(active)
+
+          # Total monthly payroll (totalPackage assumed monthly)
+          total_payroll = sum(float(e.get('totalPackage') or 0) for e in active)
+
+          # Pending invoices total
+          pending_invs = [i for i in invoices if (i.get('status') or '').lower() in ('pending', 'sent', 'unpaid')]
+          pending_total = sum(float(i.get('amount') or 0) for i in pending_invs)
+
+          # ── Section 2: Overdue Invoices ──────────────────────────────
+          overdue = []
+          for inv in invoices:
+              status = (inv.get('status') or '').lower()
+              if status in ('paid', 'cancelled', 'credit note', 'credit_note'): continue
+              due = inv.get('dueDate') or inv.get('due_date')
+              if due:
+                  try:
+                      due_date = datetime.date.fromisoformat(str(due)[:10])
+                      days_late = (TODAY - due_date).days
+                      if days_late > 0:
+                          overdue.append({**inv, 'days_late': days_late})
+                  except: pass
+          overdue.sort(key=lambda i: i['days_late'], reverse=True)
+
+          # ── Section 3: Sela employees missing PO ────────────────────
+          missing_po = [e for e in sela_active
+                        if not e.get('poNumbers') or str(e.get('poNumbers')).strip() in ('', '[]', 'null')]
+
+          # ── Build message ────────────────────────────────────────────
+          week_str = TODAY.strftime('%d %b %Y')
+          lines = [f"📊 Fisheye Weekly Digest — {week_str}"]
+          lines.append("")
+
+          # Summary
+          lines.append("📋 ملخص الأسبوع:")
+          lines.append(f"  👥 الموظفين النشطين: {headcount}")
+          lines.append(f"  💰 إجمالي الرواتب الشهرية: SAR {total_payroll:,.0f}")
+          lines.append(f"  🧾 فواتير معلقة: {len(pending_invs)} فاتورة — SAR {pending_total:,.0f}")
+          lines.append("")
+
+          # Overdue invoices
+          lines.append(f"⏰ فواتير Overdue ({len(overdue)}):")
+          if overdue:
+              for inv in overdue[:10]:
+                  name = inv.get('employeeName') or inv.get('clientName') or '—'
+                  num  = inv.get('invoiceNumber') or '—'
+                  amt  = float(inv.get('amount') or 0)
+                  late = inv['days_late']
+                  lines.append(f"  • {name} — {num} — SAR {amt:,.0f} — متأخر {late} يوم")
+              if len(overdue) > 10:
+                  lines.append(f"  + {len(overdue)-10} فاتورة أخرى")
+          else:
+              lines.append("  ✅ لا توجد فواتير متأخرة")
+          lines.append("")
+
+          # Missing POs (Sela)
+          lines.append(f"❓ موظفي Sela بدون PO ({len(missing_po)}):")
+          if missing_po:
+              for e in missing_po[:10]:
+                  lines.append(f"  • {e['name']}")
+              if len(missing_po) > 10:
+                  lines.append(f"  + {len(missing_po)-10} آخرين")
+          else:
+              lines.append("  ✅ كل موظفي Sela لديهم PO")
+
+          msg = "\n".join(lines)
+          print("Message preview:\n", msg)
+
+          # Send WhatsApp
+          encoded = urllib.parse.quote(msg)
+          wa_url  = f"https://api.callmebot.com/whatsapp.php?phone={WA_PHONE}&text={encoded}&apikey={WA_APIKEY}"
+          try:
+              with urllib.request.urlopen(wa_url, timeout=15) as r:
+                  print("WhatsApp response:", r.status)
+          except Exception as ex:
+              print("WhatsApp send note:", ex)
+
+          print("✅ Weekly digest done")
+          PYEOF
