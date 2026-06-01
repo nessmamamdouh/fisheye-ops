@@ -1625,10 +1625,10 @@ const PO_PDF_BUDGETS = {"PO-28358":71475.95,"PO-28551":73140.0,"PO-28568":230391
 
 const PO_BUDGET_KEY = 'fisheye_po_budgets_v1';
 function loadPOBudgets() {
-  // Merge PDF-extracted budgets with any manual overrides from localStorage
+  // Start with PDF budgets; Supabase overrides loaded async in component
   try {
     const manual = JSON.parse(localStorage.getItem(PO_BUDGET_KEY) || '{}');
-    return { ...PO_PDF_BUDGETS, ...manual }; // manual overrides PDF values
+    return { ...PO_PDF_BUDGETS, ...manual };
   } catch { return { ...PO_PDF_BUDGETS }; }
 }
 
@@ -1641,8 +1641,9 @@ function POReconciliationTab({ employees }) {
   const [editing,  setEditing]    = useState({}); // po → draft string
   const M = "#800000";
 
-  // Load invoices from Supabase (supabase imported at top of file)
+  // Load invoices + PO budget overrides from Supabase
   useEffect(() => {
+    // Load invoices
     supabase.from('fisheye_invoices').select('*').then(({ data }) => {
       if (data && data.length) setInvoices(data);
       else {
@@ -1650,6 +1651,16 @@ function POReconciliationTab({ employees }) {
         catch { setInvoices([]); }
       }
     });
+    // Load manual PO budget overrides from Supabase
+    supabase.from('fisheye_app_data').select('data').eq('key', PO_BUDGET_KEY).single()
+      .then(({ data }) => {
+        if (data?.data && typeof data.data === 'object') {
+          // Merge: PDF defaults < localStorage < Supabase
+          setBudgets(prev => ({ ...PO_PDF_BUDGETS, ...prev, ...data.data }));
+          // Also cache locally for offline use
+          localStorage.setItem(PO_BUDGET_KEY, JSON.stringify(data.data));
+        }
+      });
   }, []);
 
   // Build PO map: normPO → { po, employees[], invoices[], invoiced, paid, pending }
@@ -1689,10 +1700,14 @@ function POReconciliationTab({ employees }) {
 
   const saveBudget = (po, val) => {
     const num = parseFloat(String(val).replace(/,/g, '')) || 0;
-    // Save only manual overrides to localStorage
+    // Get current manual overrides
     const stored = (() => { try { return JSON.parse(localStorage.getItem(PO_BUDGET_KEY) || '{}'); } catch { return {}; } })();
     const nextStored = { ...stored, [po]: num };
+    // Save to localStorage (offline cache)
     localStorage.setItem(PO_BUDGET_KEY, JSON.stringify(nextStored));
+    // Save to Supabase (sync across devices/Vercel)
+    supabase.from('fisheye_app_data').upsert({ key: PO_BUDGET_KEY, data: nextStored }, { onConflict: 'key' })
+      .then(({ error }) => { if (error) console.warn('PO budget save error:', error.message); });
     setBudgets(prev => ({ ...prev, [po]: num }));
     setEditing(prev => { const n = { ...prev }; delete n[po]; return n; });
   };
