@@ -44,7 +44,7 @@ jobs:
 
           # Fetch data
           emps = supabase_get("employees_master?select=name,client,status,endDate,workflowStatus,totalPackage,poNumbers,partnerAssigned")
-          invoices = supabase_get("fisheye_invoices?select=invoiceNumber,amount,status,dueDate,clientName,employeeName")
+          invoices = supabase_get("fisheye_invoices?select=invoiceNumber,poNumber,totalDue,amountPreVat,status,invoiceDate,candidateNames,partnerName,clientName")
 
           active = [e for e in emps if e.get('status') not in ('expired', 'resigned')]
           sela_active = [e for e in active if (e.get('client') or '').strip().upper() == 'SELA']
@@ -55,23 +55,29 @@ jobs:
           # Total monthly payroll (totalPackage assumed monthly)
           total_payroll = sum(float(e.get('totalPackage') or 0) for e in active)
 
-          # Pending invoices total
-          pending_invs = [i for i in invoices if (i.get('status') or '').lower() in ('pending', 'sent', 'unpaid')]
-          pending_total = sum(float(i.get('amount') or 0) for i in pending_invs)
+          # Pending invoices total (sent = unpaid)
+          pending_invs = [i for i in invoices if (i.get('status') or '').lower() in ('sent', 'pending', 'unpaid')]
+          pending_total = sum(float(i.get('totalDue') or i.get('amountPreVat') or 0) for i in pending_invs)
 
-          # ── Section 2: Overdue Invoices ──────────────────────────────
+          # ── Section 2: Unpaid Invoices (sent status, no dueDate — list by invoice date) ──
+          # invoiceDate format: DD/MM/YYYY or YYYY-MM-DD
+          def parse_inv_date(s):
+              if not s: return None
+              s = str(s).strip()
+              for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y'):
+                  try: return datetime.datetime.strptime(s, fmt).date()
+                  except: pass
+              return None
+
           overdue = []
           for inv in invoices:
               status = (inv.get('status') or '').lower()
               if status in ('paid', 'cancelled', 'credit note', 'credit_note'): continue
-              due = inv.get('dueDate') or inv.get('due_date')
-              if due:
-                  try:
-                      due_date = datetime.date.fromisoformat(str(due)[:10])
-                      days_late = (TODAY - due_date).days
-                      if days_late > 0:
-                          overdue.append({**inv, 'days_late': days_late})
-                  except: pass
+              inv_date = parse_inv_date(inv.get('invoiceDate'))
+              if inv_date:
+                  days_old = (TODAY - inv_date).days
+                  if days_old > 30:  # unpaid for more than 30 days
+                      overdue.append({**inv, 'days_late': days_old})
           overdue.sort(key=lambda i: i['days_late'], reverse=True)
 
           # ── Section 3: Sela employees missing PO ────────────────────
@@ -91,14 +97,14 @@ jobs:
           lines.append("")
 
           # Overdue invoices
-          lines.append(f"⏰ فواتير Overdue ({len(overdue)}):")
+          lines.append(f"⏰ فواتير غير مدفوعة +30 يوم ({len(overdue)}):")
           if overdue:
               for inv in overdue[:10]:
-                  name = inv.get('employeeName') or inv.get('clientName') or '—'
+                  name = inv.get('candidateNames') or inv.get('clientName') or '—'
                   num  = inv.get('invoiceNumber') or '—'
-                  amt  = float(inv.get('amount') or 0)
-                  late = inv['days_late']
-                  lines.append(f"  • {name} — {num} — SAR {amt:,.0f} — متأخر {late} يوم")
+                  amt  = float(inv.get('totalDue') or inv.get('amountPreVat') or 0)
+                  old  = inv['days_late']
+                  lines.append(f"  • {name} — {num} — SAR {amt:,.0f} — منذ {old} يوم")
               if len(overdue) > 10:
                   lines.append(f"  + {len(overdue)-10} فاتورة أخرى")
           else:
