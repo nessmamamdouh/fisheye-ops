@@ -30,17 +30,14 @@ const sendWhatsAppMessage = async (phone, message, clientName) => {
   
   // CallMeBot Integration (Free WhatsApp API)
   // يمكنك الحصول على API key من: https://www.callmebot.com/en/
-  const apiKey = '[3635248]'; // استخدم مفتاحك الفعلي
+  const apiKey = localStorage.getItem('fisheye_wa_apikey') || '3635248';
   const url = `https://api.callmebot.com/whatsapp.php?phone=${cleanPhone}&text=${encodeURIComponent(message)}&apikey=${apiKey}`;
   
-  try {
-    await fetch(url);
-    console.log(`✅ WhatsApp sent to ${clientName}`);
-    return true;
-  } catch (error) {
-    console.error('WhatsApp send failed:', error);
-    return false;
-  }
+  return new Promise(resolve => {
+    const img = new window.Image();
+    img.onload = img.onerror = () => { console.log(`✅ WhatsApp sent to ${clientName}`); resolve(true); };
+    img.src = url;
+  });
 };
  
 const M  = "#800000";
@@ -4895,8 +4892,135 @@ function DashboardView({ employees, isOnline, syncStatus, syncMessage, syncProgr
 
   
 // ─── SETTINGS ───────────────────────────────────────────────────────────
-function SettingsView({ 
-  onClear, 
+function NotificationsSettings({ employees }) {
+  const [phone,    setPhone]    = useState(() => localStorage.getItem('fisheye_ops_phone')    || '');
+  const [apiKey,   setApiKey]   = useState(() => localStorage.getItem('fisheye_wa_apikey')    || '');
+  const [sending,  setSending]  = useState(false);
+  const [result,   setResult]   = useState('');
+  const [notifPerm, setNotifPerm] = useState(() => 'Notification' in window ? Notification.permission : 'unsupported');
+
+  const save = () => {
+    localStorage.setItem('fisheye_ops_phone',  phone);
+    localStorage.setItem('fisheye_wa_apikey',  apiKey);
+    setResult('✅ Saved');
+    setTimeout(() => setResult(''), 2000);
+  };
+
+  const requestNotifPerm = async () => {
+    const p = await Notification.requestPermission();
+    setNotifPerm(p);
+  };
+
+  const buildDigest = () => {
+    const expiring = employees
+      .filter(e => !isExcluded(e))
+      .map(e => ({ ...e, d: daysUntil(e.endDate) }))
+      .filter(e => e.d >= 0 && e.d <= 30)
+      .sort((a, b) => a.d - b.d);
+
+    if (!expiring.length) return null;
+    const urgent = expiring.filter(e => e.d <= 7);
+    const lines  = expiring.map(e => `• ${e.name} (${e.client || '—'}) — ${e.d} day${e.d !== 1 ? 's' : ''}`);
+    return `🔔 Fisheye Daily Digest — ${new Date().toLocaleDateString('en-GB')}\n\n`
+      + (urgent.length ? `🚨 URGENT (≤7 days): ${urgent.length}\n` : '')
+      + `⚠️ Expiring within 30 days: ${expiring.length}\n\n`
+      + lines.join('\n');
+  };
+
+  const sendWhatsApp = async () => {
+    const msg = buildDigest();
+    if (!msg) { setResult('✅ No expiring contracts — nothing to send'); return; }
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone || !apiKey) { setResult('❌ Phone and API key required'); return; }
+    setSending(true); setResult('');
+    const url = `https://api.callmebot.com/whatsapp.php?phone=${cleanPhone}&text=${encodeURIComponent(msg)}&apikey=${apiKey}`;
+    // Use Image trick to bypass CORS (CallMeBot is a GET API)
+    const img = new window.Image();
+    img.onload = img.onerror = () => {
+      setResult('✅ WhatsApp digest sent!');
+      localStorage.setItem('fisheye_last_digest_date', new Date().toISOString().split('T')[0]);
+      setSending(false);
+    };
+    img.src = url;
+  };
+
+  const previewMsg = buildDigest();
+  const expCount   = employees.filter(e => !isExcluded(e) && daysUntil(e.endDate) >= 0 && daysUntil(e.endDate) <= 30).length;
+  const urgCount   = employees.filter(e => !isExcluded(e) && daysUntil(e.endDate) >= 0 && daysUntil(e.endDate) <= 7).length;
+  const lastDigest = localStorage.getItem('fisheye_last_digest_date');
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:16}}>
+      {/* Status cards */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
+        <Card style={{padding:14,background: urgCount ? '#fef2f2' : '#f0fdf4', border: `1px solid ${urgCount ? '#fca5a5':'#bbf7d0'}`}}>
+          <p style={{fontSize:11,color:'#6b7280',margin:'0 0 4px',fontWeight:700}}>URGENT (≤7 days)</p>
+          <p style={{fontSize:24,fontWeight:900,margin:0,color: urgCount ? '#dc2626':'#059669'}}>{urgCount}</p>
+        </Card>
+        <Card style={{padding:14,background:'#fff7ed',border:'1px solid #fed7aa'}}>
+          <p style={{fontSize:11,color:'#6b7280',margin:'0 0 4px',fontWeight:700}}>EXPIRING (≤30 days)</p>
+          <p style={{fontSize:24,fontWeight:900,margin:0,color:'#ea580c'}}>{expCount}</p>
+        </Card>
+        <Card style={{padding:14}}>
+          <p style={{fontSize:11,color:'#6b7280',margin:'0 0 4px',fontWeight:700}}>LAST DIGEST</p>
+          <p style={{fontSize:13,fontWeight:700,margin:0,color:'#374151'}}>{lastDigest || '—'}</p>
+        </Card>
+      </div>
+
+      {/* Browser notifications */}
+      <Card style={{padding:16}}>
+        <h3 style={{fontWeight:700,fontSize:14,margin:'0 0 8px'}}>🔔 Browser Notifications</h3>
+        <p style={{fontSize:12,color:'#6b7280',margin:'0 0 12px'}}>
+          لما تفتحي الـ app كل يوم بيظهرلك notification تلقائي لو في عقود بتنتهي.
+        </p>
+        {notifPerm === 'granted' && <p style={{fontSize:13,color:'#059669',fontWeight:700,margin:0}}>✅ Browser notifications enabled</p>}
+        {notifPerm === 'denied'  && <p style={{fontSize:13,color:'#dc2626',margin:0}}>❌ Blocked — enable from browser settings</p>}
+        {notifPerm === 'default' && <Btn onClick={requestNotifPerm}><Bell size={13}/> Enable Browser Notifications</Btn>}
+      </Card>
+
+      {/* WhatsApp config */}
+      <Card style={{padding:16}}>
+        <h3 style={{fontWeight:700,fontSize:14,margin:'0 0 12px'}}>📱 WhatsApp Digest</h3>
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          <div>
+            <label style={{fontSize:11,fontWeight:700,color:'#6b7280',display:'block',marginBottom:4}}>OPS MANAGER PHONE (with country code)</label>
+            <input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+966XXXXXXXXX"
+              style={{width:'100%',padding:'8px 12px',border:'1px solid #e5e7eb',borderRadius:8,fontSize:13,boxSizing:'border-box'}}/>
+          </div>
+          <div>
+            <label style={{fontSize:11,fontWeight:700,color:'#6b7280',display:'block',marginBottom:4}}>
+              CALLMEBOT API KEY &nbsp;
+              <a href="https://www.callmebot.com/blog/free-api-whatsapp-messages/" target="_blank" rel="noreferrer"
+                style={{color:'#2563eb',fontWeight:400}}>كيف تحصلي على API key؟</a>
+            </label>
+            <input value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="123456"
+              style={{width:'100%',padding:'8px 12px',border:'1px solid #e5e7eb',borderRadius:8,fontSize:13,boxSizing:'border-box'}}/>
+          </div>
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <Btn onClick={save}><Save size={13}/> Save</Btn>
+            <Btn onClick={sendWhatsApp} disabled={sending} style={{backgroundColor:'#25d366',border:'none',color:'#fff'}}>
+              <MessageCircle size={13}/> {sending ? 'Sending…' : 'Send Digest Now'}
+            </Btn>
+            {result && <span style={{fontSize:13,color: result.startsWith('✅') ? '#059669':'#dc2626',fontWeight:600}}>{result}</span>}
+          </div>
+        </div>
+      </Card>
+
+      {/* Preview */}
+      {previewMsg && (
+        <Card style={{padding:16}}>
+          <h3 style={{fontWeight:700,fontSize:14,margin:'0 0 8px'}}>👁 Message Preview</h3>
+          <pre style={{fontSize:12,color:'#374151',background:'#f9fafb',padding:12,borderRadius:8,whiteSpace:'pre-wrap',margin:0,fontFamily:'monospace'}}>
+            {previewMsg}
+          </pre>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function SettingsView({
+  onClear,
   empCount, 
   syncStatus,
   syncMessage,
@@ -4910,7 +5034,7 @@ function SettingsView({
   employees
 }) {
   const [tab,setTab]=useState("general");
-  const stabs=[{k:"general",l:"General"},{k:"integration",l:"Integration Guide"},{k:"mapping",l:"Client Mapping"},{k:"logic",l:"Report Logic"}];
+  const stabs=[{k:"general",l:"General"},{k:"notifications",l:"🔔 Notifications"},{k:"integration",l:"Integration Guide"},{k:"mapping",l:"Client Mapping"},{k:"logic",l:"Report Logic"}];
   return (
     <div style={{maxWidth:720,display:"flex",flexDirection:"column",gap:20}}>
       <h2 style={{margin:0,fontSize:20,fontWeight:700}}>Settings</h2>
@@ -4923,6 +5047,9 @@ function SettingsView({
           <p style={{fontSize:13,color:"#6b7280",margin:"0 0 16px"}}>{empCount} contracts loaded.</p>
           <Btn variant="danger" onClick={onClear}><Trash2 size={13}/> Clear & Re-upload</Btn>
         </Card>
+      )}
+      {tab==="notifications"&&(
+        <NotificationsSettings employees={employees}/>
       )}
       {tab==="integration"&&(
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -5685,6 +5812,43 @@ function FisheyeOpsPro({ employees, setEmployees }) {
   useEffect(() => {
     testConnection().then(r => r.success && console.log('✅ متصل بـ Supabase'));
   }, []);
+
+  // ── Daily Contract Expiry Notification ──────────────────────────────────────
+  useEffect(() => {
+    if (!employees.length) return;
+    const today = new Date().toISOString().split('T')[0];
+    const lastNotified = localStorage.getItem('fisheye_last_notif_date');
+    if (lastNotified === today) return; // already notified today
+
+    const expiring = employees.filter(e => {
+      if (isExcluded(e)) return false;
+      const d = daysUntil(e.endDate);
+      return d >= 0 && d <= 30;
+    }).sort((a, b) => daysUntil(a.endDate) - daysUntil(b.endDate));
+
+    if (!expiring.length) return;
+
+    localStorage.setItem('fisheye_last_notif_date', today);
+
+    // Browser notification
+    const sendBrowserNotif = () => {
+      const urgent = expiring.filter(e => daysUntil(e.endDate) <= 7);
+      const title  = urgent.length
+        ? `🚨 ${urgent.length} عقود تنتهي خلال 7 أيام!`
+        : `⚠️ ${expiring.length} عقود تنتهي خلال 30 يوم`;
+      const body = expiring.slice(0, 3).map(e => `• ${e.name} (${daysUntil(e.endDate)} يوم)`).join('\n')
+        + (expiring.length > 3 ? `\n+ ${expiring.length - 3} آخرين` : '');
+      new Notification(title, { body, icon: '/favicon.ico' });
+    };
+
+    if ('Notification' in window) {
+      if (Notification.permission === 'granted') {
+        sendBrowserNotif();
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then(p => { if (p === 'granted') sendBrowserNotif(); });
+      }
+    }
+  }, [employees]);
 
   // ── جاري التحميل من Supabase ──
   if (isLoading) return (
