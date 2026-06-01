@@ -95,116 +95,8 @@ const BC_BATCHES = [
   },
 ];
 
-// ── 4th Invoice (PENDING — not yet paid to Blue Cube) ────────────────────────
-// Exact bcFee values from "Blue Cube - Sela Invoices .xlsx" → 4th Invoice sheet
-const BC_4TH_ROWS = [
-  { po:'PO-34866', invNums:['2301375','2301307','2301252','2301440','2301441','2301442','2301443','2301444','2301445','2301446','2301447'], invoicedAmt:144221.59, bcFee:692.22 },
-  { po:'PO-34954', invNums:['2301377','2301309','2301254'], invoicedAmt:101919.93, bcFee:489.21 },
-  { po:'PO-32100', invNums:['2301281','2301196','2300970','2300969','2301080'], invoicedAmt:77781.0, bcFee:373.36 },
-  { po:'PO-32679', invNums:['2301282','2301199','2301083'], invoicedAmt:76528.8, bcFee:367.35 },
-  { po:'PO-33426', invNums:['2301284','2301208','2301119'], invoicedAmt:189690.0, bcFee:910.5 },
-  { po:'PO-33273', invNums:['2301285','2301209','2301121'], invoicedAmt:149724.93, bcFee:718.68 },
-  { po:'PO-33669', invNums:['2301286'], invoicedAmt:66780.0, bcFee:320.54 },
-  { po:'PO-33756', invNums:['2301287','2301215','2301146','2301147'], invoicedAmt:42400.0, bcFee:203.52 },
-  { po:'PO-32652', invNums:['2301288','2301216','2301148'], invoicedAmt:48600.0, bcFee:233.28 },
-  { po:'PO-34026', invNums:['2301289','2301217','2301151'], invoicedAmt:95880.0, bcFee:460.23 },
-  { po:'PO-34426', invNums:['2301292','2301222'], invoicedAmt:93792.0, bcFee:450.20 },
-  { po:'PO-34680', invNums:['2301294','2301225'], invoicedAmt:30240.0, bcFee:145.16 },
-  { po:'PO-34611', invNums:['2301295'], invoicedAmt:47700.0, bcFee:228.96 },
-  { po:'PO-34596', invNums:['2301296'], invoicedAmt:24380.0, bcFee:117.02 },
-  { po:'PO-34469', invNums:['2301297','2301228'], invoicedAmt:33920.0, bcFee:162.82 },
-  { po:'PO-34279', invNums:['2301298','2301229'], invoicedAmt:33920.0, bcFee:162.82 },
-  { po:'PO-34663', invNums:['2301299','2301231'], invoicedAmt:124886.66, bcFee:599.46 },
-  { po:'PO-34579', invNums:['2301300'], invoicedAmt:22420.0, bcFee:107.62 },
-  { po:'PO-34319', invNums:['2301302','2301240'], invoicedAmt:43520.0, bcFee:208.90 },
-  { po:'PO-34317', invNums:['2301303','2301241'], invoicedAmt:21200.0, bcFee:101.76 },
-  { po:'PO-34979', invNums:['2301304'], invoicedAmt:31800.0, bcFee:152.64 },
-  { po:'PO-34986', invNums:['2301305','2301250'], invoicedAmt:21200.0, bcFee:101.76 },
-  { po:'PO-34765', invNums:['2301306','2301251'], invoicedAmt:27880.0, bcFee:133.82 },
-  { po:'PO-34931', invNums:['2301308','2301253'], invoicedAmt:21200.0, bcFee:101.76 },
-  { po:'PO-34769', invNums:['2301310','2301255'], invoicedAmt:21200.0, bcFee:101.76 },
-  { po:'PO-34775', invNums:['2301311','2301256'], invoicedAmt:24200.0, bcFee:116.16 },
-  { po:'PO-34781', invNums:['2301312'], invoicedAmt:15280.0, bcFee:73.34 },
-  { po:'PO-34993', invNums:['2301313','2301258'], invoicedAmt:34240.0, bcFee:164.36 },
-  { po:'PO-35140', invNums:['2301331'], invoicedAmt:46219.08, bcFee:221.85 },
-  { po:'PO-35067', invNums:['2301332'], invoicedAmt:12720.0, bcFee:61.06 },
-  { po:'PO-35125', invNums:['2301333'], invoicedAmt:27880.0, bcFee:133.82 },
-  { po:'PO-35123', invNums:['2301334'], invoicedAmt:5460.0, bcFee:26.21 },
-  { po:'PO-35079', invNums:['2301335'], invoicedAmt:29840.0, bcFee:143.23 },
-  { po:'PO-35071', invNums:['2301336','2301342'], invoicedAmt:162180.0, bcFee:778.46 },
-  { po:'PO-35055', invNums:['2301337','2301341'], invoicedAmt:31800.0, bcFee:152.64 },
-  { po:'PO-35056', invNums:['2301338','2301339'], invoicedAmt:102212.0, bcFee:490.62 },
-  { po:'PO-33444', invNums:['2301237'], invoicedAmt:47453.32, bcFee:227.78 },
-  { po:'PO-34243', invNums:['2301236'], invoicedAmt:6520.0, bcFee:31.30 },
-  { po:'PO-34425', invNums:['2301235'], invoicedAmt:10600.0, bcFee:50.88 },
-  { po:'PO-34497', invNums:['2301233'], invoicedAmt:57240.0, bcFee:274.75 },
-  { po:'PO-34508', invNums:['2301224','2301293'], invoicedAmt:31800.0, bcFee:152.64 },
-  { po:'PO-34032', invNums:['2301219'], invoicedAmt:14840.0, bcFee:71.23 },
-  { po:'PO-34149', invNums:['2301218','2301152','2301153'], invoicedAmt:57240.0, bcFee:274.74 },
-  { po:'PO-33448', invNums:['2301206','2301117'], invoicedAmt:191120.0, bcFee:917.38 },
-  { po:'PO-32408', invNums:['2301197','2301013','2301081'], invoicedAmt:79500.0, bcFee:381.60 },
-  { po:'PO-32782', invNums:['2301198','2301082','2301015','2301143'], invoicedAmt:249562.0, bcFee:1197.88 },
-  { po:'PO-32895', invNums:['2301200','2301020','2301086'], invoicedAmt:470794.62, bcFee:2259.81 },
-  { po:'PO-33181', invNums:['2301202','2301054','2301088'], invoicedAmt:247621.32, bcFee:1188.57 },
-  { po:'PO-33179', invNums:['2301203','2301055','2301089'], invoicedAmt:44520.0, bcFee:213.69 },
-  { po:'PO-33371', invNums:['2301204','2301115'], invoicedAmt:539810.0, bcFee:2591.08 },
-  { po:'PO-33812', invNums:['2301205','2301116'], invoicedAmt:40280.0, bcFee:193.34 },
-  { po:'PO-33899', invNums:['2301136'], invoicedAmt:14167.33, bcFee:68.00 },
-  { po:'PO-33857', invNums:['2301132'], invoicedAmt:15900.0, bcFee:76.32 },
-  { po:'PO-34125', invNums:['2301149'], invoicedAmt:9540.0, bcFee:45.79 },
-  { po:'PO-34156', invNums:['2301150'], invoicedAmt:102820.0, bcFee:493.54 },
-  { po:'PO-34034', invNums:['2301154'], invoicedAmt:444387.71, bcFee:2133.06 },
-  { po:'PO-30940', invNums:['2300854','2300931'], invoicedAmt:112219.13, bcFee:538.65 },
-  { po:'PO-31391', invNums:['2300937','2301079'], invoicedAmt:43366.66, bcFee:208.16 },
-  { po:'PO-32287', invNums:['2300974','2301009'], invoicedAmt:115916.49, bcFee:556.40 },
-  { po:'PO-32490', invNums:['2301012'], invoicedAmt:21200.0, bcFee:101.76 },
-  { po:'PO-32807', invNums:['2301017','2301084'], invoicedAmt:85944.0, bcFee:412.54 },
-  { po:'PO-32489', invNums:['2301018','2301085'], invoicedAmt:21200.0, bcFee:101.76 },
-  { po:'PO-32488', invNums:['2301019'], invoicedAmt:9540.0, bcFee:45.79 },
-  { po:'PO-32762', invNums:['2301021'], invoicedAmt:377360.0, bcFee:1811.33 },
-  { po:'PO-31910', invNums:['2301023'], invoicedAmt:19080.0, bcFee:91.58 },
-  { po:'PO-33077', invNums:['2301056','2301090'], invoicedAmt:111229.32, bcFee:533.90 },
-  { po:'PO-29453', invNums:['2300788'], invoicedAmt:56180.0, bcFee:269.66 },
-  { po:'PO-31371', invNums:['2301005'], invoicedAmt:8480.0, bcFee:40.70 },
-  { po:'PO-30954', invNums:['2301004'], invoicedAmt:7420.0, bcFee:35.62 },
-  { po:'PO-33025', invNums:['2301066'], invoicedAmt:16150.0, bcFee:77.52 },
-  { po:'PO-31306', invNums:['2301007'], invoicedAmt:31692.0, bcFee:152.12 },
-  { po:'PO-31665', invNums:['2301006'], invoicedAmt:93982.0, bcFee:451.11 },
-  { po:'PO-33376', invNums:['2301114'], invoicedAmt:15280.0, bcFee:73.34 },
-  { po:'PO-33450', invNums:['2301118'], invoicedAmt:15900.0, bcFee:76.32 },
-  { po:'PO-33382', invNums:['2301120'], invoicedAmt:77380.0, bcFee:371.42 },
-  { po:'PO-29491', invNums:['2300743'], invoicedAmt:8480.0, bcFee:40.70 },
-];
-
-// Lookup: invoice number → exact bcFee (prorated equally per PO)
-// This ensures per-invoice amounts sum to the exact Excel total per PO
-const BC_4TH_INV_FEE = new Map();
-BC_4TH_ROWS.forEach(r => {
-  const feeEach = Math.round((r.bcFee / r.invNums.length) * 100) / 100;
-  const remainder = Math.round((r.bcFee - feeEach * r.invNums.length) * 100) / 100;
-  r.invNums.forEach((inv, i) => {
-    // Add remainder to last invoice so PO total is exact
-    BC_4TH_INV_FEE.set(inv, i === r.invNums.length - 1 ? feeEach + remainder : feeEach);
-  });
-});
-
-// All invoice numbers that have been commissioned to Blue Cube
-const BC_COMMISSIONED_INVS = new Set(
-  BC_BATCHES.flatMap(b => b.rows.flatMap(r => r.invNums))
-);
-// All PO numbers that belong to Blue Cube (normalize to uppercase, strip _2 suffix)
-const BC_PO_SET = new Set([
-  ...BC_BATCHES.flatMap(b => b.rows.map(r => r.po.replace(/_\d+$/, '').toUpperCase())),
-  ...BC_4TH_ROWS.map(r => r.po.replace(/_\d+$/, '').toUpperCase()),
-]);
-const normPO = po => String(po || '').toUpperCase().trim().replace(/_\d+$/, '');
-
-// Lookup: invoice number → which batch it was commissioned in
-const BC_INV_TO_BATCH = new Map();
-BC_BATCHES.forEach(b => b.rows.forEach(r => r.invNums.forEach(n => {
-  if (!BC_INV_TO_BATCH.has(n)) BC_INV_TO_BATCH.set(n, b.label);
-})));
-
+// BC_PO_SET includes POs from the 3 paid batches only.
+// Commission for new batches is calculated dynamically at 0.48% of pre-VAT.
 // Lookup: PO → fisheye fee rate (for commission estimation on new invoices)
 const BC_PO_RATE = new Map();
 BC_BATCHES.forEach(b => b.rows.forEach(r => {
@@ -398,6 +290,312 @@ function exportClientExcel(client, monthLabel) {
     "Mode": "", "البارتنر": "",
   });
   exportExcel(rows, `Billing_${client.name}_${monthLabel}.csv`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🔍 BATCH VERIFIER — Paste Excel data, compare vs our calculations, confirm
+// ═══════════════════════════════════════════════════════════════════════════════
+function BatchVerifier({ allInvoices, employees, onConfirm }) {
+  const [pasteText,   setPasteText]   = useState('');
+  const [batchLabel,  setBatchLabel]  = useState('5th Invoice');
+  const [confirmed,   setConfirmed]   = useState(false);
+  const [showPaste,   setShowPaste]   = useState(true);
+
+  // PO → employee lookup
+  const poToEmp = useMemo(() => {
+    const map = new Map();
+    employees.filter(e => e.profitMode === 'partner').forEach(e => {
+      String(e.poNumbers || '').split(/[,;\n]/).map(p => normPO(p)).filter(Boolean).forEach(po => {
+        map.set(po, e);
+      });
+    });
+    return map;
+  }, [employees]);
+
+  // Invoice number → invoice object lookup
+  const invByNum = useMemo(() => {
+    const map = new Map();
+    allInvoices.forEach(inv => map.set(String(inv.invoiceNumber || '').trim(), inv));
+    return map;
+  }, [allInvoices]);
+
+  // Parse pasted Excel rows — supports:
+  //   4-col: PO | Invoice Numbers | Invoiced Amount | BC Fee
+  //   5-col: PO | Invoice Numbers | Invoiced Amount | Fisheye Fee (6%) | BC Fee
+  // Separators: Tab (Excel paste) or 2+ spaces (system export)
+  const parsedRows = useMemo(() => {
+    if (!pasteText.trim()) return [];
+    return pasteText.trim().split('\n').map((line, i) => {
+      if (!line.trim()) return null;
+      // Split: prefer tabs, fall back to 2+ spaces
+      const cols = line.includes('\t')
+        ? line.split('\t').map(c => c.trim())
+        : line.trim().split(/  +/).map(c => c.trim());
+      if (cols.length < 4) return null;
+      const po      = cols[0].replace(/['"]/g, '').trim();
+      // Invoice numbers: 5-digit+ numeric strings
+      const invNums = cols[1].split(/[,\s]+/).map(n => n.replace(/['"]/g, '').trim()).filter(n => /\d{5,}/.test(n));
+      const invAmt  = parseFloat(String(cols[2]).replace(/[,'"]/g, '')) || 0;
+      // 5-col: cols[3]=Fisheye Fee (6%), cols[4]=BC Fee — 4-col: cols[3]=BC Fee
+      const bcFee = cols.length >= 5
+        ? parseFloat(String(cols[4]).replace(/[,'"]/g, '')) || 0
+        : parseFloat(String(cols[3]).replace(/[,'"]/g, '')) || 0;
+      if (!po || !bcFee) return null;
+      return { rowIdx: i, po, invNums, invoicedAmt: invAmt, bcFee };
+    }).filter(Boolean);
+  }, [pasteText]);
+
+  // Compare each row against our system
+  const verifiedRows = useMemo(() => {
+    return parsedRows.map(row => {
+      const emp         = poToEmp.get(normPO(row.po));
+      const foundInvs   = row.invNums.map(n => invByNum.get(n)).filter(Boolean);
+      const missingNums = row.invNums.filter(n => !invByNum.get(n));
+
+      // Calculate our expected commission
+      // For VAT fix: if our calc is > 1.5x Excel fee, assume invoice stored with full VAT
+      // and re-derive using totalDue * 100/115 (strip VAT)
+      let ourCalc = 0;
+      if (emp) {
+        foundInvs.forEach(inv => {
+          const base = getPreVat(inv);
+          const fee = emp.partnerCostType === 'percent'
+            ? Math.round((emp.partnerCost / 100) * base * 100) / 100
+            : (emp.partnerCost || 0);
+          ourCalc += fee;
+        });
+        // If our calc is suspiciously > 1.4x Excel fee → invoice has VAT included in totalDue
+        // Re-calculate stripping VAT properly
+        if (ourCalc > 0 && row.bcFee > 0 && ourCalc / row.bcFee > 1.4) {
+          ourCalc = 0;
+          foundInvs.forEach(inv => {
+            // Force 100/115 reverse calc regardless of vat field
+            const base = Math.round((inv.totalDue || 0) * (100 / 115) * 100) / 100;
+            const fee = emp.partnerCostType === 'percent'
+              ? Math.round((emp.partnerCost / 100) * base * 100) / 100
+              : (emp.partnerCost || 0);
+            ourCalc += fee;
+          });
+        }
+      }
+
+      const diff        = row.bcFee - ourCalc;
+      const diffPct     = ourCalc > 0 ? (Math.abs(diff) / ourCalc) * 100 : null;
+      const alreadyPaid = foundInvs.some(inv => inv.partnerCommissionPaid);
+      // noEmp: invoices found in system but no employee linked to PO
+      const noEmp = !emp && foundInvs.length > 0;
+      const status =
+        foundInvs.length === 0              ? 'missing'  :
+        alreadyPaid                          ? 'paid'     :
+        noEmp                                ? 'noemp'    :
+        Math.abs(diff) < 0.5                 ? 'match'    :
+        diffPct !== null && diffPct < 2      ? 'close'    : 'mismatch';
+
+      return { ...row, emp, foundInvs, missingNums, ourCalc, diff, diffPct, status, alreadyPaid, noEmp };
+    });
+  }, [parsedRows, poToEmp, invByNum]);
+
+  const totalExcel    = verifiedRows.reduce((s, r) => s + r.bcFee,    0);
+  const totalOurs     = verifiedRows.reduce((s, r) => s + r.ourCalc,  0);
+  const totalDiff     = totalExcel - totalOurs;
+  const totalMatch    = verifiedRows.filter(r => r.status === 'match' || r.status === 'close').length;
+  const totalMismatch = verifiedRows.filter(r => r.status === 'mismatch').length;
+  const totalMissing  = verifiedRows.filter(r => r.status === 'missing').length;
+  const totalNoEmp    = verifiedRows.filter(r => r.status === 'noemp').length;
+  // Ready to confirm if we have rows and no truly missing invoices (mismatches & noemp are ok — Excel fee used)
+  const canConfirm    = verifiedRows.length > 0 && !confirmed;
+  const overallOk     = verifiedRows.length > 0 && totalMismatch === 0 && totalMissing === 0 && totalNoEmp === 0;
+
+  const statusStyle = s => ({
+    match:    { bg:'#f0fdf4', color:'#16a34a', label:'✅ Match'       },
+    close:    { bg:'#fefce8', color:'#a16207', label:'⚠ ~Close'      },
+    mismatch: { bg:'#fef2f2', color:'#dc2626', label:'⚠ Diff — Excel fee used' },
+    noemp:    { bg:'#eff6ff', color:'#1d4ed8', label:'ℹ No PO match — Excel fee used' },
+    missing:  { bg:'#fff7ed', color:'#c2410c', label:'⚠ Invoice not in system' },
+    paid:     { bg:'#f0fdf4', color:'#6b7280', label:'✓ Already Paid' },
+  }[s] || { bg:'#f9fafb', color:'#6b7280', label:'—' });
+
+  const handleConfirm = () => {
+    // Always use Excel bcFee as the authoritative commission amount.
+    // Include: match, close, mismatch (Excel fee used), noemp (Excel fee used).
+    // Exclude: missing (invoice not in system), paid (already done).
+    const items = verifiedRows
+      .filter(r => r.status !== 'missing' && r.status !== 'paid')
+      .flatMap(row => {
+        const feeEach = row.foundInvs.length > 0
+          ? Math.round((row.bcFee / row.foundInvs.length) * 100) / 100
+          : 0;
+        return row.foundInvs.map(inv => ({ inv, commission: feeEach }));
+      });
+    onConfirm(items, batchLabel.trim() || 'New Batch');
+    setConfirmed(true);
+  };
+
+  const tdV = { padding: '9px 12px', fontSize: 11, verticalAlign: 'middle' };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#0891b2' }}>🔍 Batch Commission Verifier</h3>
+          <p style={{ margin: '3px 0 0', fontSize: 11, color: '#6b7280' }}>Paste rows from Excel → compare vs our calculations → confirm as paid batch</p>
+        </div>
+        {verifiedRows.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ fontSize: 11, color: '#6b7280' }}>Batch label:</span>
+            <input
+              value={batchLabel}
+              onChange={e => setBatchLabel(e.target.value)}
+              style={{ padding: '5px 10px', borderRadius: 7, border: '1.5px solid #e5e7eb', fontSize: 12, fontWeight: 700, width: 150, outline: 'none' }}
+              placeholder="e.g. 5th Invoice"
+            />
+            <button
+              disabled={!canConfirm}
+              onClick={handleConfirm}
+              style={{
+                padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 800, border: 'none',
+                backgroundColor: confirmed ? '#d1fae5' : canConfirm ? (overallOk ? '#16a34a' : '#d97706') : '#e5e7eb',
+                color: confirmed ? '#065f46' : canConfirm ? 'white' : '#9ca3af',
+                cursor: canConfirm ? 'pointer' : 'default',
+              }}
+              title={!overallOk && !confirmed ? 'Mismatches will use Excel fee as source of truth' : ''}
+            >
+              {confirmed ? '✅ Confirmed!' : overallOk ? '✓ Confirm & Mark Paid' : '⚠ Confirm with Excel fees'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Summary pills */}
+      {verifiedRows.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {[
+            { label: `${verifiedRows.length} rows parsed`, bg: '#f0f9ff', color: '#0369a1' },
+            { label: `${totalMatch} matched`, bg: '#f0fdf4', color: '#16a34a' },
+            ...(totalMismatch > 0 ? [{ label: `${totalMismatch} diff (Excel fee used)`, bg: '#fef9c3', color: '#a16207' }] : []),
+            ...(totalNoEmp   > 0 ? [{ label: `${totalNoEmp} no PO match (Excel fee used)`, bg: '#eff6ff', color: '#1d4ed8' }] : []),
+            ...(totalMissing > 0 ? [{ label: `${totalMissing} invoices not in system`, bg: '#fff7ed', color: '#c2410c' }] : []),
+            { label: `Excel total: SR ${totalExcel.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`, bg: '#faf5ff', color: '#7c3aed', bold: true },
+            { label: `Our calc: SR ${totalOurs.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`, bg: '#f9fafb', color: '#374151', bold: true },
+            { label: `Diff: SR ${totalDiff > 0 ? '+' : ''}${totalDiff.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`, bg: Math.abs(totalDiff) < 1 ? '#f0fdf4' : '#fef2f2', color: Math.abs(totalDiff) < 1 ? '#16a34a' : '#dc2626', bold: true },
+          ].map((p, i) => (
+            <span key={i} style={{ fontSize: 11, fontWeight: p.bold ? 800 : 600, padding: '3px 10px', borderRadius: 999, backgroundColor: p.bg, color: p.color }}>{p.label}</span>
+          ))}
+        </div>
+      )}
+
+      {/* Paste area (toggle) */}
+      <div style={{ borderRadius: 10, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+        <div
+          onClick={() => setShowPaste(v => !v)}
+          style={{ padding: '10px 14px', backgroundColor: '#f9fafb', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+        >
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>📋 Paste Excel Data</span>
+          <span style={{ fontSize: 10, color: '#9ca3af' }}>{showPaste ? '▲ hide' : '▼ show'} · Format: PO | Invoice Numbers | Invoiced Amt | BC Fee (tab-separated)</span>
+        </div>
+        {showPaste && (
+          <div style={{ padding: 12 }}>
+            <textarea
+              value={pasteText}
+              onChange={e => { setPasteText(e.target.value); setConfirmed(false); }}
+              placeholder={`PO-34866\t2301375,2301307,2301252\t144221.59\t692.22\nPO-34954\t2301377,2301309,2301254\t101919.93\t489.21\n\nCopy rows directly from Excel and paste here.`}
+              style={{
+                width: '100%', minHeight: 110, padding: '10px 12px', borderRadius: 8,
+                border: '1.5px solid #e5e7eb', fontSize: 11, fontFamily: 'monospace',
+                resize: 'vertical', outline: 'none', boxSizing: 'border-box', color: '#374151',
+              }}
+            />
+            <p style={{ margin: '5px 0 0', fontSize: 10, color: '#9ca3af' }}>
+              Columns: <b>PO Number</b> · <b>Invoice Numbers</b> (comma-separated) · <b>Invoiced Amount</b> · <b>BC Fee</b> — separated by Tab (Excel copy/paste works directly)
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Comparison table */}
+      {verifiedRows.length > 0 && (
+        <div style={{ borderRadius: 10, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f0f9ff' }}>
+                  {['PO Number', 'Invoices', 'Employee', 'Excel BC Fee', 'Our Calc', 'Diff', 'Status'].map((h, i) => (
+                    <th key={i} style={{ padding: '8px 12px', textAlign: i >= 3 ? 'right' : 'left', fontSize: 10, fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #bae6fd', whiteSpace: 'nowrap' }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {verifiedRows.map((row, i) => {
+                  const st = statusStyle(row.status);
+                  return (
+                    <tr key={i} style={{ borderBottom: '1px solid #f3f4f6', backgroundColor: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                      <td style={{ ...tdV, fontWeight: 800, fontFamily: 'monospace', color: '#111827' }}>{row.po}</td>
+                      <td style={{ ...tdV, color: '#6b7280', fontFamily: 'monospace', fontSize: 10, maxWidth: 200 }}>
+                        {row.foundInvs.map(inv => inv.invoiceNumber).join(' · ')}
+                        {row.missingNums.length > 0 && (
+                          <span style={{ color: '#c2410c', display: 'block', marginTop: 2 }}>
+                            ⚠ Not found: {row.missingNums.join(', ')}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ ...tdV, fontSize: 11, color: row.emp ? '#374151' : '#c2410c' }}>
+                        {row.emp ? `${row.emp.name || '—'} (${(row.emp.partnerCost || 0)}${row.emp.partnerCostType === 'percent' ? '%' : ' SAR'})` : '⚠ No employee found for PO'}
+                      </td>
+                      <td style={{ ...tdV, textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#7c3aed' }}>
+                        {row.bcFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ ...tdV, textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#374151' }}>
+                        {row.ourCalc > 0 ? row.ourCalc.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                      </td>
+                      <td style={{ ...tdV, textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: Math.abs(row.diff) < 0.5 ? '#16a34a' : '#dc2626' }}>
+                        {row.ourCalc > 0 ? `${row.diff > 0 ? '+' : ''}${row.diff.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                      </td>
+                      <td style={{ ...tdV }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, backgroundColor: st.bg, color: st.color, whiteSpace: 'nowrap' }}>
+                          {st.label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{ backgroundColor: Math.abs(totalDiff) < 1 ? '#f0fdf4' : '#fef2f2', borderTop: '2px solid #e5e7eb' }}>
+                  <td colSpan={3} style={{ ...tdV, fontWeight: 900, color: '#111827' }}>TOTAL ({verifiedRows.length} rows)</td>
+                  <td style={{ ...tdV, textAlign: 'right', fontFamily: 'monospace', fontWeight: 900, color: '#7c3aed' }}>
+                    SR {totalExcel.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td style={{ ...tdV, textAlign: 'right', fontFamily: 'monospace', fontWeight: 900, color: '#374151' }}>
+                    SR {totalOurs.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td style={{ ...tdV, textAlign: 'right', fontFamily: 'monospace', fontWeight: 900, color: Math.abs(totalDiff) < 1 ? '#16a34a' : '#dc2626' }}>
+                    {totalDiff > 0 ? '+' : ''}{totalDiff.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td style={{ ...tdV }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: overallOk ? '#16a34a' : '#dc2626' }}>
+                      {overallOk ? '✅ Ready to confirm' : '⚠ Fix issues first'}
+                    </span>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {verifiedRows.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: '#9ca3af' }}>
+          <p style={{ fontSize: 13, fontWeight: 600 }}>Paste Excel rows above to start verification</p>
+          <p style={{ fontSize: 11, marginTop: 4 }}>Copy the PO, Invoice Numbers, Invoiced Amount, and BC Fee columns from the Excel sheet and paste directly</p>
+        </div>
+      )}
+
+    </div>
+  );
 }
 
 export default function PartnerSettlementReport({ employees = [] }) {
@@ -642,9 +840,7 @@ export default function PartnerSettlementReport({ employees = [] }) {
 
     const calcCommission = (emp, inv) => {
       if (!emp) return 0;
-      // Use exact hardcoded fee from Excel if available (avoids rounding/VAT issues)
-      const invNum = String(inv.invoiceNumber || '').trim();
-      if (BC_4TH_INV_FEE.has(invNum)) return BC_4TH_INV_FEE.get(invNum);
+      // Calculate dynamically: partnerCost% of pre-VAT invoice amount
       const base = getPreVat(inv);
       return emp.partnerCostType === 'percent'
         ? Math.round((emp.partnerCost / 100) * base * 100) / 100
@@ -774,6 +970,7 @@ export default function PartnerSettlementReport({ employees = [] }) {
           ["partners",    "🤝", "Partners",    M,         null],
           ["clients",     "🏢", "Clients",     "#0369a1", null],
           ["commissions", "💼", "Commissions", "#7c3aed", totalPendingCommission > 0 ? commissionsByPartner.reduce((s,p)=>s+p.pending.length,0) : null],
+          ["verify",      "🔍", "Verify Batch","#0891b2", null],
           ["operations",  "🏗️", "Operations", "#b45309", null],
         ].map(([k, emoji, label, color, badge]) => (
           <button
@@ -1350,6 +1547,15 @@ export default function PartnerSettlementReport({ employees = [] }) {
           })}
 
         </div>
+      )}
+
+      {/* ══════════ VERIFY BATCH VIEW ══════════ */}
+      {view === "verify" && (
+        <BatchVerifier
+          allInvoices={allInvoices}
+          employees={employees}
+          onConfirm={(items, label) => markAllPaid(items, label)}
+        />
       )}
 
       {/* ══════════ OPERATIONS VIEW ══════════ */}
