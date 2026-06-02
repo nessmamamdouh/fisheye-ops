@@ -5734,19 +5734,79 @@ function FisheyeOpsPro({ employees, setEmployees }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [globalSearch, setGlobalSearch]   = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  const [pendingOpenEmpId, setPendingOpenEmpId] = useState(null);
+  const [pendingOpenPO,    setPendingOpenPO]    = useState(null);
 
   // ── Global Search Results ────────────────────────────────────────────────
   const searchResults = useMemo(() => {
     const q = globalSearch.trim().toLowerCase();
     if (!q || q.length < 2) return [];
-    return employees
+
+    // Employees
+    const empHits = employees
       .filter(e =>
-        (e.name        || "").toLowerCase().includes(q) ||
-        (e.client      || "").toLowerCase().includes(q) ||
-        (e.position    || "").toLowerCase().includes(q) ||
-        (e.employeeId  || "").toLowerCase().includes(q)
+        (e.name       || "").toLowerCase().includes(q) ||
+        (e.client     || "").toLowerCase().includes(q) ||
+        (e.position   || "").toLowerCase().includes(q) ||
+        (e.employeeId || "").toLowerCase().includes(q) ||
+        (e.poNumbers  || "").toLowerCase().includes(q)
       )
-      .slice(0, 6);
+      .slice(0, 4)
+      .map(e => ({ type:"employee", id:e._id, title:e.name, sub:`${e.client || "—"} · ${e.position || "—"}`, nav:"workforce" }));
+
+    // Clients
+    let clientHits = [];
+    try {
+      const cls = JSON.parse(localStorage.getItem("fisheyeClients_v1") || "[]");
+      clientHits = cls
+        .filter(c => (c.name || "").toLowerCase().includes(q))
+        .slice(0, 2)
+        .map(c => ({ type:"client", id:c.id, title:c.name, sub:"Client", nav:"clients" }));
+    } catch {}
+
+    // Invoices
+    let invHits = [];
+    let invs = [];
+    try {
+      invs = JSON.parse(localStorage.getItem("fisheye_invoices_v1") || "[]");
+      invHits = invs
+        .filter(i =>
+          (i.invoiceNumber || "").toLowerCase().includes(q) ||
+          (i.poNumber      || "").toLowerCase().includes(q) ||
+          (i.candidateNames|| "").toLowerCase().includes(q)
+        )
+        .slice(0, 3)
+        .map(i => ({ type:"invoice", id:i.id, title:i.invoiceNumber || i.poNumber, sub:`${i.poNumber || "—"} · ${i.candidateNames || "—"} · ${i.status || "—"}`, nav:"finance" }));
+    } catch {}
+
+    // PO — aggregate: show PO summary card if query looks like a PO number
+    let poHits = [];
+    const isPOQuery = /po[-\s]?\d{3,}/i.test(q) || /^\d{4,}$/.test(q);
+    if (isPOQuery) {
+      // Find all employees with this PO
+      const poEmps = employees.filter(e => (e.poNumbers || "").toLowerCase().includes(q));
+      // Find all invoices with this PO
+      const poInvs = invs.filter(i => (i.poNumber || "").toLowerCase().includes(q));
+      // Unique PO numbers matching
+      const matchedPOs = [...new Set([
+        ...poEmps.flatMap(e => String(e.poNumbers||"").split(/[,;\n]/).map(p=>p.trim()).filter(p=>p.toLowerCase().includes(q))),
+        ...poInvs.map(i => i.poNumber).filter(Boolean),
+      ])];
+      matchedPOs.slice(0, 2).forEach(po => {
+        const empsForPO = employees.filter(e => (e.poNumbers||"").toLowerCase().includes(po.toLowerCase()));
+        const invsForPO = poInvs.filter(i => (i.poNumber||"").toLowerCase() === po.toLowerCase());
+        const totalInvoiced = invsForPO.reduce((s,i) => s + Number(i.totalDue||0), 0);
+        poHits.push({
+          type:"po",
+          id:`po-${po}`,
+          title:po.toUpperCase(),
+          sub:`${empsForPO.length} موظف · ${invsForPO.length} فاتورة · SAR ${totalInvoiced.toLocaleString("en-SA",{maximumFractionDigits:0})}`,
+          nav:"finance",
+        });
+      });
+    }
+
+    return [...poHits, ...empHits, ...clientHits, ...invHits];
   }, [globalSearch, employees]);
 
   // Notifications
@@ -6002,7 +6062,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
                 onChange={e => setGlobalSearch(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setTimeout(() => setSearchFocused(false), 160)}
-                placeholder="Search employees…"
+                placeholder="Search employees, clients, invoices…"
                 className="fe-sidebar-search"
                 style={{
                   width:"100%", boxSizing:"border-box",
@@ -6018,19 +6078,29 @@ function FisheyeOpsPro({ employees, setEmployees }) {
                 background:"white", borderRadius:11, boxShadow:"0 12px 32px rgba(0,0,0,0.18)",
                 border:"1px solid var(--border,#e4e4e7)", overflow:"hidden",
               }}>
-                {searchResults.map(e => (
-                  <button key={e._id} onMouseDown={() => {
-                    setNav("workforce");
-                    localStorage.setItem("fisheye_nav","workforce");
-                    setGlobalSearch("");
-                  }}
-                  className="fe-search-result"
-                  style={{ display:"block", width:"100%", textAlign:"left", padding:"9px 13px", background:"none", border:"none", borderBottom:"1px solid #f5f5f6", cursor:"pointer" }}
-                  >
-                    <p style={{margin:0,fontSize:12,fontWeight:700,color:"#18181b",letterSpacing:"-0.01em",fontFamily:"var(--font-sans)"}}>{e.name}</p>
-                    <p style={{margin:"2px 0 0",fontSize:11,color:"#71717a",fontFamily:"var(--font-sans)"}}>{e.client} · {e.position}</p>
-                  </button>
-                ))}
+                {searchResults.map(r => {
+                  const typeIcon = r.type === "employee" ? "👤" : r.type === "client" ? "🏢" : r.type === "po" ? "📋" : "🧾";
+                  const typeColor = r.type === "employee" ? "#A02843" : r.type === "client" ? "#00293A" : r.type === "po" ? "#7c3aed" : "#0369a1";
+                  return (
+                    <button key={r.id} onMouseDown={() => {
+                      setNav(r.nav);
+                      localStorage.setItem("fisheye_nav", r.nav);
+                      setGlobalSearch("");
+                      if (r.type === "employee") setPendingOpenEmpId(r.id);
+                      if (r.type === "po") setPendingOpenPO(r.title);
+                    }}
+                    className="fe-search-result"
+                    style={{ display:"flex", alignItems:"center", gap:10, width:"100%", textAlign:"left", padding:"9px 13px", background:"none", border:"none", borderBottom:"1px solid #f5f5f6", cursor:"pointer" }}
+                    >
+                      <span style={{fontSize:14, flexShrink:0}}>{typeIcon}</span>
+                      <div style={{minWidth:0}}>
+                        <p style={{margin:0,fontSize:12,fontWeight:700,color:"#18181b",letterSpacing:"-0.01em",fontFamily:"var(--font-sans)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</p>
+                        <p style={{margin:"1px 0 0",fontSize:11,color:"#71717a",fontFamily:"var(--font-sans)"}}>{r.sub}</p>
+                      </div>
+                      <span style={{marginLeft:"auto",fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,backgroundColor:`${typeColor}12`,color:typeColor,flexShrink:0,textTransform:"uppercase"}}>{r.type}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
             {searchFocused && globalSearch.length >= 2 && searchResults.length === 0 && (
@@ -6146,7 +6216,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
           />}
 
           {/* ── ENTITY VIEWS ── */}
-          {nav==="workforce"  && <WorkforceView employees={employees} setEmployees={setEmployees} partners={partners} clients={clients} exportCSV={exportCSV}/>}
+          {nav==="workforce"  && <WorkforceView employees={employees} setEmployees={setEmployees} partners={partners} clients={clients} exportCSV={exportCSV} pendingOpenEmpId={pendingOpenEmpId} onPendingOpenHandled={() => setPendingOpenEmpId(null)}/>}
           {nav==="clients"    && <ClientHub employees={employees} clients={clients} saveClients={saveClients}/>}
           {nav==="clientcmd"  && <ClientCommandCenter employees={employees}/>}
           {nav==="partners"   && <PartnerHub employees={employees} partners={partners} savePartners={savePartners}/>}
