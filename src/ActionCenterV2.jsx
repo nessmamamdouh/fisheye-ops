@@ -123,7 +123,7 @@ function exportToExcel(issues, label) {
   const headers = [
     "Employee", "Client", "Project", "Position",
     "Issue", "Severity", "Days Left", "Contract End",
-    "Workflow Status", "Owner", "Recommended Action", "Phone"
+    "Workflow Status", "Requester", "Owner", "Recommended Action", "Phone"
   ];
   const rows = issues.map(i => {
     const e = i.employee || {};
@@ -137,6 +137,7 @@ function exportToExcel(issues, label) {
       i.daysLeft != null ? i.daysLeft : "—",
       e.endDate || "—",
       e.workflowStatus || "—",
+      e.requesterName || "—",
       resolveOwner(e.client),
       i.recommendedAction || i.nextAction || "—",
       e.phone || "—",
