@@ -1960,6 +1960,89 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
   const overdueCount    = operationalIssues.filter(i => i.type === "invoice_overdue").length;
   const payrollGapCount = operationalIssues.filter(i => i.type === "payroll_gap").length;
 
+  // ── Needs Attention items ──────────────────────────────────────────────────
+  const attentionItems = useMemo(() => {
+    const items = [];
+    let allFlows = {};
+    try { allFlows = JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1') || '{}'); } catch {}
+
+    // 1. Salary paid but no invoice sent — last 3 months
+    for (let m = 0; m < 3; m++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+      const mk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const monthName = d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+      const missing = active.filter(e => {
+        const f = allFlows[`${mk}_${e._id}`] || {};
+        const hasPO = e.poNumbers && String(e.poNumbers).trim() !== '';
+        return f.salary && !f.invoice && hasPO;  // only flag if PO exists — no PO = can't invoice
+      });
+      if (missing.length > 0) {
+        items.push({
+          type: 'sal_no_inv',
+          tab: 'partner_flow',
+          color: '#7c3aed',
+          bg: '#faf5ff',
+          border: '#ddd6fe',
+          icon: '💰→📄',
+          label: `راتب بدون فاتورة — ${monthName}`,
+          employees: missing,
+          count: missing.length,
+        });
+      }
+    }
+
+    // 2. Missing salary in payroll window (day 25 → day 5)
+    const day = now.getDate();
+    if (day >= 25 || day <= 5) {
+      const salaryMonthDate = day <= 5
+        ? new Date(now.getFullYear(), now.getMonth() - 1, 1)
+        : now;
+      const mk = `${salaryMonthDate.getFullYear()}-${String(salaryMonthDate.getMonth()+1).padStart(2,'0')}`;
+      const monthName = salaryMonthDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+      const missingSal = active.filter(e => !(allFlows[`${mk}_${e._id}`] || {}).salary);
+      if (missingSal.length > 0) {
+        items.push({
+          type: 'missing_salary',
+          tab: 'partner_flow',
+          color: '#dc2626',
+          bg: '#fef2f2',
+          border: '#fecaca',
+          icon: '💸',
+          label: `راتب ناقص — ${monthName}`,
+          employees: missingSal,
+          count: missingSal.length,
+        });
+      }
+    }
+
+    // 3. Overdue invoices >30 days
+    let invoices = [];
+    try { invoices = JSON.parse(localStorage.getItem('fisheye_invoices_v1') || '[]'); } catch {}
+    const overdue = invoices.filter(inv => {
+      const st = (inv.status || '').toLowerCase();
+      if (['paid','cancelled','credit note','credit_note'].includes(st)) return false;
+      const d = new Date(inv.invoiceDate);
+      return !isNaN(d) && (now - d) / 86400000 > 30;
+    });
+    if (overdue.length > 0) {
+      items.push({
+        type: 'overdue_inv',
+        tab: 'invoices',
+        color: '#d97706',
+        bg: '#fffbeb',
+        border: '#fde68a',
+        icon: '⏰',
+        label: `فواتير unpaid +30 يوم`,
+        invoices: overdue,
+        count: overdue.length,
+      });
+    }
+
+    return items;
+  }, [active, now]);
+
+  const [attOpen, setAttOpen] = useState(true);
+
   const TABS = [
     { k: "payroll",      l: "Payroll",             emoji: "💰", color: "#7c3aed" },
     { k: "partner_flow", l: "Payroll Flow",         emoji: "💸", color: "#0ea5e9" },
@@ -2015,19 +2098,51 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
         ))}
       </div>
 
-      {/* ── Alert Banner ── */}
-      {(overdueCount > 0 || payrollGapCount > 0) && (
-        <div style={{
-          marginBottom: 16, padding: "10px 16px", borderRadius: 10,
-          backgroundColor: "#fff7ed", border: "1px solid #fed7aa",
-          borderLeft: "4px solid #f97316",
-          display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap",
-        }}>
-          <AlertTriangle size={14} style={{ color: "#c2410c", flexShrink: 0 }} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#c2410c" }}>Operational Issues</span>
-          {overdueCount > 0 && <span style={{ fontSize: 11, color: "#9a3412", padding: "2px 8px", borderRadius: 999, backgroundColor: "#ffedd5", fontWeight: 700 }}>{overdueCount} overdue invoice{overdueCount > 1 ? "s" : ""}</span>}
-          {payrollGapCount > 0 && <span style={{ fontSize: 11, color: "#9a3412", padding: "2px 8px", borderRadius: 999, backgroundColor: "#ffedd5", fontWeight: 700 }}>{payrollGapCount} payroll gap{payrollGapCount > 1 ? "s" : ""}</span>}
-          <span style={{ fontSize: 11, color: "#b45309", marginLeft: "auto" }}>→ See Action Center</span>
+      {/* ── Needs Attention Strip ── */}
+      {attentionItems.length > 0 && (
+        <div style={{ marginBottom: 16, borderRadius: 12, border: "1px solid #e5e7eb", overflow: "hidden" }}>
+          {/* Header */}
+          <button
+            onClick={() => setAttOpen(p => !p)}
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#fafafa", border: "none", borderBottom: attOpen ? "1px solid #e5e7eb" : "none", cursor: "pointer" }}
+          >
+            <AlertTriangle size={13} style={{ color: "#d97706", flexShrink: 0 }} />
+            <span style={{ fontWeight: 800, fontSize: 12, color: "#1f2937", flex: 1, textAlign: "left" }}>
+              يحتاج اهتمام — {attentionItems.reduce((s, i) => s + i.count, 0)} بند
+            </span>
+            <span style={{ fontSize: 11, color: "#9ca3af" }}>{attOpen ? "▲ إخفاء" : "▼ إظهار"}</span>
+          </button>
+
+          {attOpen && attentionItems.map((item, idx) => (
+            <div key={idx} style={{ borderBottom: idx < attentionItems.length - 1 ? "1px solid #f3f4f6" : "none" }}>
+              {/* Row header */}
+              <div
+                onClick={() => { setActiveTab(item.tab); localStorage.setItem("fisheye_finance_tab", item.tab); }}
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 14px", cursor: "pointer", backgroundColor: item.bg, borderLeft: `4px solid ${item.color}` }}
+              >
+                <span style={{ fontSize: 13 }}>{item.icon}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: item.color, flex: 1 }}>{item.label}</span>
+                <span style={{ fontSize: 11, fontWeight: 900, padding: "2px 8px", borderRadius: 999, backgroundColor: item.color, color: "white" }}>{item.count}</span>
+                <span style={{ fontSize: 11, color: item.color, fontWeight: 600 }}>اذهب للـ tab ←</span>
+              </div>
+              {/* Employee/invoice names */}
+              <div style={{ padding: "6px 14px 8px 26px", display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {item.employees?.slice(0, 8).map(e => (
+                  <span key={e._id} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, backgroundColor: `${item.color}12`, color: item.color, fontWeight: 600 }}>
+                    {e.name}
+                  </span>
+                ))}
+                {item.invoices?.slice(0, 8).map(inv => (
+                  <span key={inv.invoiceNumber} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, backgroundColor: `${item.color}12`, color: item.color, fontWeight: 600 }}>
+                    {inv.invoiceNumber || inv.clientName} — SAR {Number(inv.totalDue || inv.amountPreVat || 0).toLocaleString()}
+                  </span>
+                ))}
+                {(item.employees?.length > 8 || item.invoices?.length > 8) && (
+                  <span style={{ fontSize: 11, color: "#9ca3af" }}>+{(item.employees?.length || item.invoices?.length) - 8} أكثر</span>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
