@@ -19,8 +19,7 @@ import {
   Edit3, Save, Hash, Zap, ClipboardList, Briefcase, Archive, Globe, Link, Inbox, UserPlus, Database,
   Target, CalendarDays, Receipt, AlertTriangle, RefreshCw, GitBranch
 } from "lucide-react";
-import { ActionCenter } from './ActionCenterV2';
-import { OperationsCalendar, ClientCommandCenter } from './Actioncenter'; // الباقي من القديم
+import { ActionCenter, OperationsCalendar, ClientCommandCenter } from './ActionCenterV2';
 
 // ملاحظة: إضافة الموظفين تتم من خلال handleAddSingle داخل WorkforceView
 // WhatsApp Helper for Client Communications

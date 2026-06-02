@@ -17,9 +17,10 @@ import {
   Send, ArrowUpCircle, ExternalLink, CheckSquare, GitBranch,
   ChevronDown, ChevronRight, X, Zap, Search, Filter, Users, User,
   Bell, TrendingUp, BarChart2, FileText, Building2,
-  Copy, Check, Mail, MessageCircle, Layers,
+  Copy, Check, Mail, MessageCircle, Layers, CalendarDays,
 } from "lucide-react";
 import { useOperationalIssues } from "./useOperationalIssues";
+import { isExcluded } from "./utils/helpers";
 
 // ─── Brand colors (ساعتك matches App.jsx) ─────────────────────────────────
 const M  = "#A02843";
@@ -332,6 +333,19 @@ function SeverityBadge({ severity }) {
     </span>
   );
 }
+
+// ─── Calendar helpers ─────────────────────────────────────────────────────────
+const TODAY_CAL = new Date();
+TODAY_CAL.setHours(0, 0, 0, 0);
+const daysUntil = d => d ? Math.ceil((new Date(d) - TODAY_CAL) / 86400000) : 9999;
+const CLIENTS_LIST = ["Sela","SPL","Channelplay","Riva Engineering 2","Combuzz HR"];
+const PRIORITY_OPS = { CRITICAL:0, HIGH:1, MEDIUM:2, LOW:3 };
+const PRIORITY_META_OPS = {
+  0:{label:"CRITICAL",color:"#dc2626",bg:"#fee2e2",border:"#fca5a5",dot:"#dc2626"},
+  1:{label:"HIGH",    color:"#d97706",bg:"#fef9c3",border:"#fde047",dot:"#f59e0b"},
+  2:{label:"MEDIUM",  color:"#2563eb",bg:"#dbeafe",border:"#93c5fd",dot:"#3b82f6"},
+  3:{label:"LOW",     color:"#16a34a",bg:"#dcfce7",border:"#86efac",dot:"#22c55e"},
+};
 
 // ─── Client Badge ─────────────────────────────────────────────────────────────
 const CLIENT_META = {
@@ -1458,3 +1472,390 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, clients
 
 // Re-export for convenience
 export { useOperationalIssues };
+// ─── Local helpers for OperationsCalendar & ClientCommandCenter ──────────────
+function ACCard({ children, style={}, border, onClick }) {
+  return (
+    <div className="fe-card" style={{ border: border || undefined, ...style }} onClick={onClick}>
+      {children}
+    </div>
+  );
+}
+function SectionHeaderCal({ icon: Icon, title, count, color=M, action }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:10, padding:"14px 18px", borderBottom:"1px solid #f3f4f6" }}>
+      <div style={{ padding:7, borderRadius:10, backgroundColor:`${color}12`, flexShrink:0 }}>
+        <Icon size={15} style={{ color }} />
+      </div>
+      <span style={{ fontWeight:800, fontSize:13, color:"#111827", flex:1, fontFamily:"var(--font-sans)", letterSpacing:"-0.01em" }}>{title}</span>
+      {count !== undefined && (
+        <span style={{ fontSize:11, fontWeight:900, padding:"2px 9px", borderRadius:999, backgroundColor:color, color:"white" }}>{count}</span>
+      )}
+      {action}
+    </div>
+  );
+}
+
+export function OperationsCalendar({ employees }) {
+  const [viewMonth, setViewMonth] = useState(new Date());
+
+  const events = useMemo(() => {
+    const pool = employees.filter(e => !isExcluded(e));
+    const evts = [];
+
+    pool.forEach(e => {
+      // Contract expiry
+      if (e.endDate) {
+        const d = daysUntil(e.endDate);
+        if (d >= -7 && d <= 60) {
+          evts.push({
+            date: e.endDate,
+            type: "expiry",
+            label: `${e.name} contract expires`,
+            client: e.client,
+            priority: d <= 7 ? "critical" : d <= 30 ? "high" : "medium",
+            color: d <= 7 ? "#dc2626" : d <= 30 ? "#d97706" : "#2563eb",
+          });
+        }
+      }
+      // Onboarding
+      if (e.workflowStatus === "Onboarding" && e.startDate) {
+        evts.push({
+          date: e.startDate,
+          type: "onboarding",
+          label: `${e.name} onboarding`,
+          client: e.client,
+          priority: "medium",
+          color: "#7c3aed",
+        });
+      }
+    });
+
+    return evts;
+  }, [employees]);
+
+  const year = viewMonth.getFullYear();
+  const month = viewMonth.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const getEventsForDay = (day) => {
+    const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+    return events.filter(e => e.date && e.date.startsWith(dateStr));
+  };
+
+  const monthStr = viewMonth.toLocaleDateString("en-GB",{month:"long",year:"numeric"});
+  const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+  return (
+    <div className="fe-page" style={{display:"flex",flexDirection:"column",gap:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,justifyContent:"space-between",flexWrap:"wrap"}}>
+        <div>
+          <h2 style={{margin:0,fontSize:20,fontWeight:700,color:"#111827",fontFamily:"var(--font-sans)",letterSpacing:"-0.02em"}}>Operations Calendar</h2>
+          <p style={{margin:"2px 0 0",fontSize:13,color:"#6b7280",fontFamily:"var(--font-sans)"}}>Renewals, onboarding, payroll, SLA deadlines</p>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <button onClick={()=>setViewMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))} className="fe-btn fe-btn-ghost">‹</button>
+          <span style={{fontWeight:800,fontSize:14,color:"#111827",minWidth:160,textAlign:"center"}}>{monthStr}</span>
+          <button onClick={()=>setViewMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))} className="fe-btn fe-btn-ghost">›</button>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+        {[
+          {color:"#dc2626",label:"Critical expiry (≤7d)"},
+          {color:"#d97706",label:"Expiring soon (≤30d)"},
+          {color:"#2563eb",label:"Future expiry"},
+          {color:"#7c3aed",label:"Onboarding"},
+        ].map(({color,label}) => (
+          <div key={label} style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:"#6b7280"}}>
+            <span style={{width:10,height:10,borderRadius:3,backgroundColor:color,flexShrink:0}}/>
+            {label}
+          </div>
+        ))}
+      </div>
+
+      <ACCard style={{overflow:"hidden"}}>
+        {/* Day headers */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"1px solid #f3f4f6"}}>
+          {days.map(d => (
+            <div key={d} style={{padding:"10px 4px",textAlign:"center",fontSize:11,fontWeight:800,color:"#9ca3af",textTransform:"uppercase",letterSpacing:"0.05em"}}>{d}</div>
+          ))}
+        </div>
+
+        {/* Calendar grid */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+          {/* Empty cells before month start */}
+          {Array.from({length:firstDay}).map((_,i) => (
+            <div key={`e${i}`} style={{minHeight:80,borderRight:"1px solid #f9fafb",borderBottom:"1px solid #f9fafb",backgroundColor:"#fafafa"}}/>
+          ))}
+          {/* Day cells */}
+          {Array.from({length:daysInMonth},(_,i)=>i+1).map(day => {
+            const dayEvents = getEventsForDay(day);
+            const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+            const isToday = dateStr === TODAY_CAL.toISOString().split("T")[0];
+            return (
+              <div key={day} style={{
+                minHeight:80,padding:"6px 6px 4px",
+                borderRight:"1px solid #f9fafb",borderBottom:"1px solid #f9fafb",
+                backgroundColor: isToday ? `${M}06` : "white",
+              }}>
+                <div style={{
+                  fontSize:11,fontWeight:isToday?900:600,
+                  color:isToday?M:"#374151",
+                  marginBottom:4,
+                  ...(isToday ? {
+                    width:20,height:20,borderRadius:"50%",
+                    backgroundColor:M,color:"white",
+                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,
+                  } : {}),
+                }}>
+                  {day}
+                </div>
+                {dayEvents.slice(0,2).map((evt,i) => (
+                  <div key={i} style={{
+                    fontSize:9,fontWeight:700,padding:"2px 4px",borderRadius:4,
+                    backgroundColor:evt.color,color:"white",
+                    marginBottom:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
+                    lineHeight:1.4,
+                  }} title={evt.label}>
+                    {evt.label}
+                  </div>
+                ))}
+                {dayEvents.length > 2 && (
+                  <div style={{fontSize:9,color:"#9ca3af",fontWeight:600}}>+{dayEvents.length-2} more</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </ACCard>
+
+      {/* Upcoming events list */}
+      <ACCard style={{overflow:"hidden"}}>
+        <SectionHeaderCal icon={CalendarDays} title="Upcoming Events (30 days)" count={events.filter(e=>daysUntil(e.date)>=0&&daysUntil(e.date)<=30).length} color={M}/>
+        <div style={{maxHeight:320,overflowY:"auto"}}>
+          {events
+            .filter(e => daysUntil(e.date) >= 0 && daysUntil(e.date) <= 30)
+            .sort((a,b) => new Date(a.date)-new Date(b.date))
+            .map((evt,i) => (
+              <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",borderBottom:"1px solid #f9fafb"}}>
+                <div style={{width:8,height:8,borderRadius:"50%",backgroundColor:evt.color,flexShrink:0}}/>
+                <div style={{flex:1}}>
+                  <p style={{margin:0,fontSize:12,fontWeight:600,color:"#1f2937"}}>{evt.label}</p>
+                  <p style={{margin:"1px 0 0",fontSize:11,color:"#6b7280"}}>{fmt(evt.date)} · <ClientBadge client={evt.client}/></p>
+                </div>
+                <span style={{
+                  fontSize:11,fontWeight:800,flexShrink:0,
+                  color:evt.color,
+                }}>
+                  {daysUntil(evt.date) === 0 ? "TODAY_CAL" : `${daysUntil(evt.date)}d`}
+                </span>
+              </div>
+            ))}
+          {events.filter(e=>daysUntil(e.date)>=0&&daysUntil(e.date)<=30).length===0 && (
+            <div style={{padding:"32px",textAlign:"center",color:"#9ca3af",fontSize:12}}>No upcoming events in the next 30 days.</div>
+          )}
+        </div>
+      </ACCard>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🏢 CLIENT COMMAND CENTER (with Health Score)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function calcClientHealth(clientName, employees, issues) {
+  const clientEmps = employees.filter(e => e.client === clientName && !isExcluded(e));
+  const clientIssues = issues.filter(i => i.client === clientName);
+
+  // Scoring factors (higher = healthier)
+  let score = 100;
+
+  // Penalize per critical issue
+  const critIssues = clientIssues.filter(i => i.priority === PRIORITY_OPS.CRITICAL).length;
+  const highIssues = clientIssues.filter(i => i.priority === PRIORITY_OPS.HIGH).length;
+  const stuckIssues = clientIssues.filter(i => i.type === "stuck_workflow").length;
+  const missingPO = clientIssues.filter(i => i.type === "missing_po").length;
+  const expiringContracts = clientIssues.filter(i => i.type === "contract_expiry").length;
+
+  score -= critIssues * 20;
+  score -= highIssues * 10;
+  score -= stuckIssues * 8;
+  score -= missingPO * 5;
+  score -= expiringContracts * 12;
+
+  // Bonus for having workforce
+  const hasWorkforce = clientEmps.length > 0;
+  if (!hasWorkforce) score -= 10;
+
+  const finalScore = Math.max(0, Math.min(100, score));
+  const label = finalScore >= 80 ? "Healthy" : finalScore >= 60 ? "Attention" : finalScore >= 40 ? "At Risk" : "Critical";
+  const color = finalScore >= 80 ? "#16a34a" : finalScore >= 60 ? "#d97706" : finalScore >= 40 ? "#ea580c" : "#dc2626";
+
+  return { score: finalScore, label, color, issues: clientIssues, employees: clientEmps };
+}
+
+export function ClientCommandCenter({ employees }) {
+  const [selectedClient, setSelectedClient] = useState(null);
+  const { issues } = useOperationalIssues(employees);
+
+  const clientData = useMemo(() => {
+    return CLIENTS_LIST.map(name => ({
+      name,
+      ...calcClientHealth(name, employees, issues),
+      meta: CLIENT_META[name],
+    }));
+  }, [employees, issues]);
+
+  const selected = selectedClient ? clientData.find(c => c.name === selectedClient) : null;
+
+  return (
+    <div className="fe-page" style={{display:"flex",flexDirection:"column",gap:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:36,height:36,borderRadius:12,background:`linear-gradient(135deg,${MD},${M})`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Building2 size={18} style={{color:"white"}}/>
+        </div>
+        <div>
+          <h2 style={{margin:0,fontSize:20,fontWeight:700,color:"#111827",fontFamily:"var(--font-sans)",letterSpacing:"-0.02em"}}>Client Command Center</h2>
+          <p style={{margin:"2px 0 0",fontSize:13,color:"#6b7280",fontFamily:"var(--font-sans)"}}>Operational health, issues, and headcount per client</p>
+        </div>
+      </div>
+
+      {/* Health Score Cards */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
+        {clientData.map(cd => {
+          const m = cd.meta || {};
+          const isSelected = selectedClient === cd.name;
+          return (
+            <ACCard
+              key={cd.name}
+              border={isSelected ? `2px solid ${M}` : undefined}
+              style={{cursor:"pointer",overflow:"hidden",transition:"box-shadow 0.15s",
+                boxShadow: isSelected ? `0 0 0 2px ${M}20` : undefined,
+              }}
+              onClick={() => setSelectedClient(p => p === cd.name ? null : cd.name)}
+            >
+              {/* Header */}
+              <div style={{padding:"14px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",alignItems:"center",gap:12}}>
+                <div style={{
+                  width:40,height:40,borderRadius:12,
+                  backgroundColor: m.badge || "#e5e7eb",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontWeight:900,fontSize:14,color:m.text||"#374151",flexShrink:0,
+                }}>
+                  {cd.name.split(" ").map(w=>w[0]).join("").slice(0,2)}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{margin:0,fontWeight:800,fontSize:14,color:"#111827"}}>{cd.name}</p>
+                  <p style={{margin:"1px 0 0",fontSize:11,color:"#6b7280"}}>{cd.employees.length} employees · {cd.issues.length} issue{cd.issues.length!==1?"s":""}</p>
+                </div>
+                <ChevronRight size={14} style={{color:"#9ca3af",flexShrink:0,transform:isSelected?"rotate(90deg)":"none",transition:"transform 0.2s"}}/>
+              </div>
+
+              {/* Health Score */}
+              <div style={{padding:"12px 16px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <span style={{fontSize:11,fontWeight:700,color:"#6b7280",textTransform:"uppercase",letterSpacing:"0.05em"}}>Health Score</span>
+                  <span style={{fontSize:12,fontWeight:800,color:cd.color}}>{cd.label} · {cd.score}/100</span>
+                </div>
+                <div style={{height:7,borderRadius:999,backgroundColor:"#f3f4f6",overflow:"hidden"}}>
+                  <div style={{
+                    height:"100%",borderRadius:999,
+                    width:`${cd.score}%`,backgroundColor:cd.color,transition:"width 0.5s",
+                  }}/>
+                </div>
+                {cd.issues.length > 0 && (
+                  <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
+                    {cd.issues.slice(0,3).map(iss => (
+                      <span key={iss.id} style={{
+                        fontSize:10,padding:"2px 7px",borderRadius:999,fontWeight:700,
+                        backgroundColor: PRIORITY_META_OPS[iss.priority].bg,
+                        color: PRIORITY_META_OPS[iss.priority].color,
+                      }}>
+                        {iss.title.length > 30 ? iss.title.slice(0,30)+"…" : iss.title}
+                      </span>
+                    ))}
+                    {cd.issues.length > 3 && (
+                      <span style={{fontSize:10,color:"#9ca3af"}}>+{cd.issues.length-3} more</span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Expanded: employees list */}
+              {isSelected && cd.employees.length > 0 && (
+                <div style={{borderTop:"1px solid #f3f4f6",maxHeight:280,overflowY:"auto"}}>
+                  {cd.employees.map(e => {
+                    const days = daysUntil(e.endDate);
+                    return (
+                      <div key={e._id} style={{
+                        display:"flex",alignItems:"center",gap:10,
+                        padding:"9px 16px",borderBottom:"1px solid #f9fafb",
+                      }}>
+                        <div style={{
+                          width:28,height:28,borderRadius:8,
+                          backgroundColor:`${M}12`,display:"flex",alignItems:"center",justifyContent:"center",
+                          fontSize:10,fontWeight:900,color:M,flexShrink:0,
+                        }}>
+                          {(e.name||"?")[0]}
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <p style={{margin:0,fontSize:12,fontWeight:700,color:"#111827"}}>{e.name}</p>
+                          <p style={{margin:"1px 0 0",fontSize:10,color:"#6b7280",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                            {e.position} · {e.workflowStatus||"—"}
+                          </p>
+                        </div>
+                        {e.endDate && (
+                          <span style={{
+                            fontSize:10,fontWeight:800,flexShrink:0,
+                            color: days<=7?"#dc2626":days<=30?"#d97706":"#9ca3af",
+                          }}>
+                            {days<0?"EXPIRED":days===0?"TODAY_CAL":`${days}d`}
+                          </span>
+                        )}
+                        {e.phone && <WAButton phone={e.phone}/>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </ACCard>
+          );
+        })}
+      </div>
+
+      {/* Detailed issue view for selected client */}
+      {selected && selected.issues.length > 0 && (
+        <ACCard style={{overflow:"hidden"}}>
+          <SectionHeaderCal
+            icon={AlertCircle}
+            title={`${selected.name} — Open Issues`}
+            count={selected.issues.length}
+            color={selected.color}
+          />
+          <div style={{maxHeight:360,overflowY:"auto"}}>
+            {selected.issues.map(issue => (
+              <div key={issue.id} style={{
+                display:"flex",alignItems:"flex-start",gap:12,padding:"10px 16px",
+                borderBottom:"1px solid #f9fafb",
+              }}>
+                <div style={{width:3,alignSelf:"stretch",borderRadius:999,backgroundColor:PRIORITY_META_OPS[issue.priority].color,flexShrink:0,marginTop:2}}/>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                    <PriorityDot priority={issue.priority}/>
+                    <span style={{fontSize:12,fontWeight:700,color:"#111827"}}>{issue.title}</span>
+                  </div>
+                  <p style={{margin:"3px 0 0",fontSize:11,color:"#6b7280"}}>{issue.reason}</p>
+                  <p style={{margin:"3px 0 0",fontSize:11,fontWeight:600,color:M}}>→ {issue.recommendedAction}</p>
+                </div>
+                {issue.employee?.phone && <WAButton phone={issue.employee.phone}/>}
+              </div>
+            ))}
+          </div>
+        </ACCard>
+      )}
+    </div>
+  );
+}
