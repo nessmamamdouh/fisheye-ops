@@ -11,18 +11,21 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useMemo } from "react";
+import { isExcluded } from "./utils/helpers"; // single source of truth: excludes expired + resigned
 
-// ─── helpers (نفس اللي في App.jsx) ────────────────────────────────────────────
+// ─── helpers ──────────────────────────────────────────────────────────────────
 const TODAY = new Date();
 TODAY.setHours(0, 0, 0, 0);
 
 export const daysUntil = (d) =>
   d ? Math.ceil((new Date(d) - TODAY) / 86400000) : 9999;
 
-export const isExcluded = (e) =>
-  ["resigned"].includes((e.status || "").toLowerCase()); // expired موش محذوف — محتاج يظهر في payroll
+// re-export so any file that already imports daysUntil from here still works
+export { isExcluded };
 
-// موظفين مستبعدون نهائياً من كل الـ tabs (مستقيلين فقط)
+// Resigned = permanently gone. Expired = contract ended — still needs PO/payroll attention.
+// active pool: excludes BOTH expired + resigned (via isExcluded from helpers)
+// allNonResigned: excludes resigned only — used for the expired-with-missing-PO alert
 const isResigned = (e) =>
   ["resigned", "مستقيل"].includes((e.status || "").toLowerCase());
 
@@ -47,8 +50,11 @@ const scorePriority = (issue) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 export function useOperationalIssues(employees = []) {
   return useMemo(() => {
-    const active  = employees.filter((e) => !isResigned(e) && (e.status || "").toLowerCase() !== "expired");
-    const allNonResigned = employees.filter((e) => !isResigned(e)); // includes expired
+    // active: excludes expired + resigned — used for all normal issue checks
+    const active  = employees.filter((e) => !isExcluded(e));
+    // allNonResigned: excludes resigned only, KEEPS expired — used only for the
+    // "expired + missing PO" payroll alert (expired employees still need PO resolution)
+    const allNonResigned = employees.filter((e) => !isResigned(e));
 
     // ── 1. URGENT (≤7 days expiry + critical workflow blocks) ─────────────────
     const urgent = [];
@@ -56,7 +62,8 @@ export function useOperationalIssues(employees = []) {
     active.forEach((e) => {
       const d = daysUntil(e.endDate);
 
-      // Contract expiring ≤7 days
+      // Contract expiring ≤7 days — show as urgent "take action" warning
+      // Employee is still active (not yet expired) but renewal must happen NOW
       if (d >= 0 && d <= 7) {
         urgent.push({
           id: `urg-exp-${e._id}`,
@@ -64,7 +71,9 @@ export function useOperationalIssues(employees = []) {
           subtype: "expiring_critical",
           employee: e,
           daysLeft: d,
-          label: d === 0 ? "Expires TODAY 🔴" : `Expires in ${d}d`,
+          label: d === 0
+            ? "Expires TODAY — take action immediately 🔴"
+            : `Expires in ${d}d — renew or extend now ⚠️`,
           severity: d <= 3 ? "critical" : "high",
           actions: ["send_reminder", "escalate", "open_employee", "mark_resolved", "move_workflow"],
         });
@@ -141,9 +150,10 @@ export function useOperationalIssues(employees = []) {
     // ── 3. PAYROLL RISK ────────────────────────────────────────────────────────
     const payroll = [];
 
-    // Missing PO (Sela only) — يشمل الـ expired كمان
+    // Missing PO (Sela only) — Sela is the only client that uses PO numbers
+    // Includes expired Sela employees: expired + no PO = salary paid but can't invoice
     allNonResigned
-      .filter((e) => e.client === "Sela" && !e.poNumbers)
+      .filter((e) => e.client === "Sela" && (!e.poNumbers || String(e.poNumbers).trim() === ""))
       .forEach((e) => {
         const isExp = (e.status || "").toLowerCase() === "expired";
         payroll.push({
@@ -153,7 +163,7 @@ export function useOperationalIssues(employees = []) {
           employee: e,
           daysLeft: null,
           label: isExp
-            ? "Missing PO (Sela) — expired contract + no invoice 🔴"
+            ? "Missing PO (Sela) — expired contract, invoice pending 🔴"
             : "Missing PO Number (Sela) — invoice risk",
           severity: isExp ? "critical" : "high",
           actions: ["send_reminder", "open_employee", "mark_resolved"],

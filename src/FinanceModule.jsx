@@ -1237,6 +1237,148 @@ function ProfitPerClientTab({ employees }) {
           </table>
         </div>
       </div>
+
+      {/* ── Monthly P&L Trend (last 6 months) ────────────────────────────── */}
+      <MonthlyPLTrend employees={active} clientRows={clientRows} />
+    </div>
+  );
+}
+
+function MonthlyPLTrend({ employees, clientRows }) {
+  const f = n => Number(n || 0).toLocaleString("en-SA", { maximumFractionDigits: 0 });
+  const [view, setView] = useState("net");
+
+  const CLIENT_COLORS = {
+    "Sela": "#A02843", "SPL": "#7c3aed", "Channelplay": "#2563eb",
+    "Riva Engineering 2": "#c2410c", "Combuzz HR": "#d97706",
+  };
+
+  const months = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+      return {
+        key: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`,
+        label: d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }),
+        year: d.getFullYear(), month: d.getMonth() + 1,
+      };
+    });
+  }, []);
+
+  const data = useMemo(() => {
+    return clientRows.map(({ client }) => {
+      const color = CLIENT_COLORS[client] || "#6b7280";
+      const monthly = months.map(({ year, month, key, label }) => {
+        const firstDay = new Date(year, month - 1, 1);
+        const lastDay  = new Date(year, month, 0);
+        const emps = employees.filter(e => {
+          if ((e.client || '') !== client) return false;
+          const start = e.startDate ? new Date(e.startDate) : null;
+          const end   = e.endDate   ? new Date(e.endDate)   : null;
+          if (start && start > lastDay)  return false;
+          if (end   && end   < firstDay) return false;
+          return true;
+        });
+        const billable = client === 'Sela'
+          ? emps.filter(e => e.poNumbers && String(e.poNumbers).trim() !== '')
+          : emps;
+        let billed = 0, margin = 0, partnerPayout = 0;
+        billable.forEach(e => {
+          const ln = calcLine(e);
+          billed += ln.total; margin += ln.margin;
+          partnerPayout += calcPartnerPayout(e);
+        });
+        return { key, label, billed, margin, net: margin - partnerPayout, headcount: emps.length };
+      });
+      return { client, color, monthly };
+    });
+  }, [clientRows, months, employees]);
+
+  const maxVal = useMemo(() => {
+    let m = 0;
+    data.forEach(d => d.monthly.forEach(mo => {
+      const v = view === 'net' ? mo.net : view === 'billed' ? mo.billed : mo.margin;
+      if (v > m) m = v;
+    }));
+    return m || 1;
+  }, [data, view]);
+
+  return (
+    <div style={{ backgroundColor: "white", borderRadius: 12, border: "1px solid #e5e7eb", overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "1px solid #f3f4f6" }}>
+        <div style={{ flex: 1 }}>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 13, color: "#111827" }}>Monthly P&L Trend</p>
+          <p style={{ margin: "2px 0 0", fontSize: 11, color: "#9ca3af" }}>آخر 6 شهور — per client</p>
+        </div>
+        <div style={{ display: "flex", gap: 4 }}>
+          {[["net","Net Profit"],["billed","Billed"],["margin","Gross Margin"]].map(([k,l]) => (
+            <button key={k} onClick={() => setView(k)} style={{
+              fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 6, border: "none", cursor: "pointer",
+              backgroundColor: view === k ? "#111827" : "#f3f4f6",
+              color: view === k ? "white" : "#6b7280",
+            }}>{l}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
+          <thead>
+            <tr style={{ backgroundColor: "#fafafa" }}>
+              <th style={{ padding: "8px 14px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textAlign: "left", borderBottom: "1px solid #f3f4f6", width: 160 }}>Client</th>
+              {months.map(m => (
+                <th key={m.key} style={{ padding: "8px 10px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textAlign: "right", borderBottom: "1px solid #f3f4f6" }}>{m.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.map(({ client, color, monthly }) => (
+              <tr key={client} style={{ borderBottom: "1px solid #f9fafb" }}>
+                <td style={{ padding: "10px 14px", borderLeft: `3px solid ${color}`, fontWeight: 700, fontSize: 12, color: "#374151" }}>{client}</td>
+                {monthly.map(mo => {
+                  const val = view === 'net' ? mo.net : view === 'billed' ? mo.billed : mo.margin;
+                  const pct = Math.round((val / maxVal) * 80);
+                  return (
+                    <td key={mo.key} style={{ padding: "8px 10px", textAlign: "right" }}>
+                      {mo.headcount === 0 ? (
+                        <span style={{ fontSize: 10, color: "#d1d5db" }}>—</span>
+                      ) : (
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 3 }}>
+                            <div style={{ height: 4, borderRadius: 99, backgroundColor: `${color}20`, width: 60, overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${pct}%`, backgroundColor: color, borderRadius: 99 }} />
+                            </div>
+                          </div>
+                          <span style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 700, color: val >= 0 ? "#374151" : "#dc2626" }}>
+                            {val < 0 ? "-" : ""}{f(Math.abs(val))}
+                          </span>
+                          <div style={{ fontSize: 9, color: "#9ca3af" }}>{mo.headcount} HC</div>
+                        </div>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{ backgroundColor: "#fdf8f8", borderTop: "2px solid #e5e7eb" }}>
+              <td style={{ padding: "10px 14px", fontWeight: 800, fontSize: 12, color: "#111827", borderLeft: "3px solid #A02843" }}>TOTAL</td>
+              {months.map(m => {
+                const total = data.reduce((s, d) => {
+                  const mo = d.monthly.find(x => x.key === m.key);
+                  const v = view === 'net' ? mo?.net : view === 'billed' ? mo?.billed : mo?.margin;
+                  return s + (v || 0);
+                }, 0);
+                return (
+                  <td key={m.key} style={{ padding: "10px", textAlign: "right", fontFamily: "monospace", fontWeight: 900, fontSize: 12, color: "#059669" }}>
+                    {f(total)}
+                  </td>
+                );
+              })}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </div>
   );
 }
@@ -1269,45 +1411,49 @@ function PayrollFlowTracker({ employees }) {
   const [filterDone, setFilterDone] = useState(false);
   const [syncingFlow, setSyncingFlow] = useState(false);
 
-  // ── Load flows: Supabase أولاً، localStorage كـ fallback ────────────────
+  // ── Load flows from localStorage ────────────────────────────────────────
   const [flows, setFlows] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1')) || {}; } catch { return {}; }
+    try {
+      const raw = localStorage.getItem('fisheye_payroll_flow_v1');
+      const parsed = JSON.parse(raw) || {};
+      console.log('[PayrollFlow] mounted, localStorage keys:', Object.keys(parsed).length);
+      return parsed;
+    } catch { return {}; }
   });
 
-  // Load from Supabase on mount
-  React.useEffect(() => {
-    (async () => {
-      try {
-        const { data, error } = await supabase.from('payroll_flows').select('*');
-        if (error || !data) return;
-        const merged = {};
-        data.forEach(row => { merged[row.flow_key] = row.flow_data; });
-        setFlows(prev => ({ ...prev, ...merged }));
-        localStorage.setItem('fisheye_payroll_flow_v1', JSON.stringify({ ...flows, ...merged }));
-      } catch {}
-    })();
-  }, []);
+  // localStorage is the single source of truth for payroll flows.
+  // Supabase is a backup only — loaded on explicit sync, not on every mount.
+  // Removed auto-load on mount: it caused a race condition where Supabase
+  // old data could override fresh localStorage data after "All Done" + refresh.
 
-  const saveFlows = async f => {
+  const saveFlows = f => {
     setFlows(f);
-    try { localStorage.setItem('fisheye_payroll_flow_v1', JSON.stringify(f)); } catch {}
+    try {
+      const str = JSON.stringify(f);
+      localStorage.setItem('fisheye_payroll_flow_v1', str);
+      const verify = localStorage.getItem('fisheye_payroll_flow_v1');
+      console.log('[PayrollFlow] saved keys:', Object.keys(f).length, '| verified:', verify === str ? '✓' : '✗ MISMATCH');
+    } catch(err) { console.error('[PayrollFlow] localStorage FAILED:', err); }
   };
 
-  // Persist a single flow key to Supabase
+  // Persist a single flow key to Supabase (fisheye_payroll_flows: month=key, data=flowData)
   const persistFlow = async (key, data) => {
     try {
-      await supabase.from('payroll_flows').upsert(
-        { flow_key: key, flow_data: data, updated_at: new Date().toISOString() },
-        { onConflict: 'flow_key' }
+      await supabase.from('fisheye_payroll_flows').upsert(
+        { month: key, data },
+        { onConflict: 'month' }
       );
     } catch {}
   };
 
-  const getFlow  = empId => flows[`${selectedMonth}_${empId}`] || {};
-  const allDone  = e => PAYROLL_STEPS.every(s => getFlow(e._id)[s.k]);
+  // Stable key: employee name (not row index) so data survives spreadsheet row changes
+  const empStableKey = (e) => (e.name || '').trim().toLowerCase().replace(/\s+/g, '_') || String(e._id);
 
-  const toggle = async (empId, step) => {
-    const key = `${selectedMonth}_${empId}`;
+  const getFlow  = (e) => flows[`${selectedMonth}_${empStableKey(e)}`] || {};
+  const allDone  = e => PAYROLL_STEPS.every(s => getFlow(e)[s.k]);
+
+  const toggle = async (e, step) => {
+    const key = `${selectedMonth}_${empStableKey(e)}`;
     const cur = flows[key] || {};
     const updated = { ...flows, [key]: { ...cur, [step]: !cur[step] } };
     await saveFlows(updated);
@@ -1319,7 +1465,7 @@ function PayrollFlowTracker({ employees }) {
     const updated = { ...flows };
     const persists = [];
     emps.forEach(e => {
-      const key = `${selectedMonth}_${e._id}`;
+      const key = `${selectedMonth}_${empStableKey(e)}`;
       updated[key] = { ...(updated[key] || {}), [step]: value };
       persists.push(persistFlow(key, updated[key]));
     });
@@ -1332,7 +1478,7 @@ function PayrollFlowTracker({ employees }) {
     const updated = { ...flows };
     const persists = [];
     emps.forEach(e => {
-      const key = `${selectedMonth}_${e._id}`;
+      const key = `${selectedMonth}_${empStableKey(e)}`;
       const cur = updated[key] || {};
       PAYROLL_STEPS.forEach(s => { cur[s.k] = value; });
       updated[key] = cur;
@@ -1404,7 +1550,7 @@ function PayrollFlowTracker({ employees }) {
   // Step completion % for filtered client
   const stepCounts = PAYROLL_STEPS.map(st => ({
     ...st,
-    done: filteredByClient.filter(e => getFlow(e._id)[st.k]).length,
+    done: filteredByClient.filter(e => getFlow(e)[st.k]).length,
     total: filteredByClient.length,
   }));
 
@@ -1504,7 +1650,7 @@ function PayrollFlowTracker({ employees }) {
           Bulk — {displayedEmps.length} employees:
         </span>
         {PAYROLL_STEPS.map(st => {
-          const allStepDone = displayedEmps.length > 0 && displayedEmps.every(e => getFlow(e._id)[st.k]);
+          const allStepDone = displayedEmps.length > 0 && displayedEmps.every(e => getFlow(e)[st.k]);
           return (
             <button key={st.k} onClick={() => bulkMarkStep(displayedEmps, st.k, !allStepDone)}
               title={allStepDone ? `Unmark ${st.l} for all` : `Mark ${st.l} for all`}
@@ -1556,7 +1702,7 @@ function PayrollFlowTracker({ employees }) {
               <tbody>
                 {displayedEmps.map((e, rowIdx) => {
                   const done      = allDone(e);
-                  const doneCount = PAYROLL_STEPS.filter(st => getFlow(e._id)[st.k]).length;
+                  const doneCount = PAYROLL_STEPS.filter(st => getFlow(e)[st.k]).length;
                   const rowBg     = done ? '#f0fdf4' : rowIdx % 2 === 0 ? 'white' : '#fafafa';
                   return (
                     <tr key={e._id} style={{ borderBottom: '1px solid #f3f4f6', backgroundColor: rowBg }}>
@@ -1576,15 +1722,15 @@ function PayrollFlowTracker({ employees }) {
                       </td>
                       {PAYROLL_STEPS.map(st => (
                         <td key={st.k} style={{ ...td, textAlign: 'center' }}>
-                          <button title={st.desc} onClick={() => toggle(e._id, st.k)}
+                          <button title={st.desc} onClick={() => toggle(e, st.k)}
                             style={{
                               width: 28, height: 28, borderRadius: '50%',
-                              border: `2px solid ${getFlow(e._id)[st.k] ? st.color : '#e5e7eb'}`,
-                              backgroundColor: getFlow(e._id)[st.k] ? st.color : 'white',
+                              border: `2px solid ${getFlow(e)[st.k] ? st.color : '#e5e7eb'}`,
+                              backgroundColor: getFlow(e)[st.k] ? st.color : 'white',
                               cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                               margin: '0 auto', transition: 'all 0.15s',
                             }}>
-                            {getFlow(e._id)[st.k]
+                            {getFlow(e)[st.k]
                               ? <Check size={11} style={{ color: 'white' }} />
                               : <span style={{ fontSize: 9, color: '#d1d5db' }}>○</span>}
                           </button>
@@ -1965,6 +2111,8 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
     const items = [];
     let allFlows = {};
     try { allFlows = JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1') || '{}'); } catch {}
+    // Stable key: name-based (same as PayrollFlowTracker)
+    const stableKey = (e) => (e.name || '').trim().toLowerCase().replace(/\s+/g, '_') || String(e._id);
 
     // 1. Salary paid but no invoice sent — last 3 months
     for (let m = 0; m < 3; m++) {
@@ -1972,9 +2120,9 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
       const mk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
       const monthName = d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
       const missing = active.filter(e => {
-        const f = allFlows[`${mk}_${e._id}`] || {};
+        const f = allFlows[`${mk}_${stableKey(e)}`] || {};
         const hasPO = e.poNumbers && String(e.poNumbers).trim() !== '';
-        return f.salary && !f.invoice && hasPO;  // only flag if PO exists — no PO = can't invoice
+        return f.timesheet && f.salary && !f.invoice && hasPO;  // timesheet must be confirmed before salary counts as "paid"
       });
       if (missing.length > 0) {
         items.push({
@@ -1998,8 +2146,32 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
         ? new Date(now.getFullYear(), now.getMonth() - 1, 1)
         : now;
       const mk = `${salaryMonthDate.getFullYear()}-${String(salaryMonthDate.getMonth()+1).padStart(2,'0')}`;
+      const { year: fYear, month: fMonth } = { year: salaryMonthDate.getFullYear(), month: salaryMonthDate.getMonth() + 1 };
+      const mStart = new Date(fYear, fMonth - 1, 1);
+      const mEnd   = new Date(fYear, fMonth - 1, 30);
       const monthName = salaryMonthDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-      const missingSal = active.filter(e => !(allFlows[`${mk}_${e._id}`] || {}).salary);
+      // Only employees who were actually eligible for salary in this specific month
+      const eligibleForMonth = active.filter(e => {
+        const st = (e.status || '').toLowerCase();
+        if (['resigned', 'مستقيل'].includes(st)) return false;
+        // Expired: include only if contract ended within this month (leaver)
+        if (['expired', 'منتهي'].includes(st)) {
+          const end = parseDate(e.endDate);
+          if (!end || end < mStart) return false;
+        }
+        // Sela without PO → not eligible
+        const isSela = (e.client || '').toLowerCase() === 'sela';
+        const hasPO  = e.poNumbers && String(e.poNumbers).trim() !== '';
+        if (isSela && !hasPO) return false;
+        // Hasn't started yet
+        const start = parseDate(e.startDate);
+        if (start && start > mEnd) return false;
+        // Contract ended before this month
+        const end2 = parseDate(e.endDate);
+        if (end2 && end2 < mStart) return false;
+        return true;
+      });
+      const missingSal = eligibleForMonth.filter(e => !(allFlows[`${mk}_${stableKey(e)}`] || {}).salary);
       if (missingSal.length > 0) {
         items.push({
           type: 'missing_salary',
@@ -2041,7 +2213,7 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
     return items;
   }, [active, now]);
 
-  const [attOpen, setAttOpen] = useState(true);
+  const [attOpen, setAttOpen] = useState(false);
 
   const TABS = [
     { k: "payroll",      l: "Payroll",             emoji: "💰", color: "#7c3aed" },
@@ -2100,47 +2272,51 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
 
       {/* ── Needs Attention Strip ── */}
       {attentionItems.length > 0 && (
-        <div style={{ marginBottom: 16, borderRadius: 12, border: "1px solid #e5e7eb", overflow: "hidden" }}>
-          {/* Header */}
+        <div style={{ marginBottom: 12, borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden" }}>
+          {/* Header — collapsed by default */}
           <button
             onClick={() => setAttOpen(p => !p)}
-            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#fafafa", border: "none", borderBottom: attOpen ? "1px solid #e5e7eb" : "none", cursor: "pointer" }}
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", background: "#fafafa", border: "none", borderBottom: attOpen ? "1px solid #e5e7eb" : "none", cursor: "pointer" }}
           >
-            <AlertTriangle size={13} style={{ color: "#d97706", flexShrink: 0 }} />
-            <span style={{ fontWeight: 800, fontSize: 12, color: "#1f2937", flex: 1, textAlign: "left" }}>
+            <AlertTriangle size={12} style={{ color: "#d97706", flexShrink: 0 }} />
+            <span style={{ fontWeight: 700, fontSize: 11, color: "#1f2937", flex: 1, textAlign: "left" }}>
               يحتاج اهتمام — {attentionItems.reduce((s, i) => s + i.count, 0)} بند
             </span>
-            <span style={{ fontSize: 11, color: "#9ca3af" }}>{attOpen ? "▲ إخفاء" : "▼ إظهار"}</span>
+            {/* Mini summary badges when collapsed */}
+            {!attOpen && attentionItems.map((item, idx) => (
+              <span key={idx} style={{ fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 999, backgroundColor: item.color, color: "white" }}>
+                {item.icon} {item.count}
+              </span>
+            ))}
+            <span style={{ fontSize: 10, color: "#9ca3af", marginLeft: 4 }}>{attOpen ? "▲" : "▼"}</span>
           </button>
 
+          {/* Expanded: one compact line per item */}
           {attOpen && attentionItems.map((item, idx) => (
-            <div key={idx} style={{ borderBottom: idx < attentionItems.length - 1 ? "1px solid #f3f4f6" : "none" }}>
-              {/* Row header */}
-              <div
-                onClick={() => { setActiveTab(item.tab); localStorage.setItem("fisheye_finance_tab", item.tab); }}
-                style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 14px", cursor: "pointer", backgroundColor: item.bg, borderLeft: `4px solid ${item.color}` }}
-              >
-                <span style={{ fontSize: 13 }}>{item.icon}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: item.color, flex: 1 }}>{item.label}</span>
-                <span style={{ fontSize: 11, fontWeight: 900, padding: "2px 8px", borderRadius: 999, backgroundColor: item.color, color: "white" }}>{item.count}</span>
-                <span style={{ fontSize: 11, color: item.color, fontWeight: 600 }}>اذهب للـ tab ←</span>
-              </div>
-              {/* Employee/invoice names */}
-              <div style={{ padding: "6px 14px 8px 26px", display: "flex", flexWrap: "wrap", gap: 5 }}>
-                {item.employees?.slice(0, 8).map(e => (
-                  <span key={e._id} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, backgroundColor: `${item.color}12`, color: item.color, fontWeight: 600 }}>
+            <div
+              key={idx}
+              onClick={() => { setActiveTab(item.tab); localStorage.setItem("fisheye_finance_tab", item.tab); }}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", cursor: "pointer", backgroundColor: item.bg, borderLeft: `3px solid ${item.color}`, borderBottom: idx < attentionItems.length - 1 ? "1px solid #f3f4f6" : "none", flexWrap: "wrap" }}
+            >
+              <span style={{ fontSize: 12 }}>{item.icon}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: item.color, whiteSpace: "nowrap" }}>{item.label}</span>
+              <span style={{ fontSize: 10, fontWeight: 900, padding: "1px 7px", borderRadius: 999, backgroundColor: item.color, color: "white", whiteSpace: "nowrap" }}>{item.count}</span>
+              <span style={{ display: "flex", flexWrap: "wrap", gap: 4, flex: 1 }}>
+                {(item.employees || []).slice(0, 5).map(e => (
+                  <span key={e._id} style={{ fontSize: 10, padding: "1px 6px", borderRadius: 999, backgroundColor: `${item.color}15`, color: item.color, fontWeight: 600 }}>
                     {e.name}
                   </span>
                 ))}
-                {item.invoices?.slice(0, 8).map(inv => (
-                  <span key={inv.invoiceNumber} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, backgroundColor: `${item.color}12`, color: item.color, fontWeight: 600 }}>
-                    {inv.invoiceNumber || inv.clientName} — SAR {Number(inv.totalDue || inv.amountPreVat || 0).toLocaleString()}
+                {(item.invoices || []).slice(0, 5).map(inv => (
+                  <span key={inv.invoiceNumber} style={{ fontSize: 10, padding: "1px 6px", borderRadius: 999, backgroundColor: `${item.color}15`, color: item.color, fontWeight: 600 }}>
+                    {inv.invoiceNumber} — SAR {Number(inv.totalDue || inv.amountPreVat || 0).toLocaleString()}
                   </span>
                 ))}
-                {(item.employees?.length > 8 || item.invoices?.length > 8) && (
-                  <span style={{ fontSize: 11, color: "#9ca3af" }}>+{(item.employees?.length || item.invoices?.length) - 8} أكثر</span>
+                {((item.employees?.length || 0) + (item.invoices?.length || 0)) > 5 && (
+                  <span style={{ fontSize: 10, color: "#9ca3af" }}>+{((item.employees?.length || 0) + (item.invoices?.length || 0)) - 5} أكثر</span>
                 )}
-              </div>
+              </span>
+              <span style={{ fontSize: 10, color: item.color, fontWeight: 600, whiteSpace: "nowrap" }}>← tab</span>
             </div>
           ))}
         </div>

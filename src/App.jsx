@@ -3108,13 +3108,25 @@ function PayrollFlowTracker({ employees }) {
     try { localStorage.setItem('fisheye_payroll_flow_v1', JSON.stringify(f)); } catch {}
   };
 
+  // Persist a single flow key to Supabase (fisheye_payroll_flows: month=key, data=flowData)
+  const persistFlowToSupabase = async (key, data) => {
+    try {
+      await supabase.from('fisheye_payroll_flows').upsert(
+        { month: key, data },
+        { onConflict: 'month' }
+      );
+    } catch {}
+  };
+
   const getFlow  = empId => flows[`${selectedMonth}_${empId}`] || {};
   const allDone  = e => PAYROLL_STEPS.every(s => getFlow(e._id)[s.k]);
 
   const toggle = (empId, step) => {
     const key = `${selectedMonth}_${empId}`;
     const cur = flows[key] || {};
-    saveFlows({ ...flows, [key]: { ...cur, [step]: !cur[step] } });
+    const updated = { ...cur, [step]: !cur[step] };
+    saveFlows({ ...flows, [key]: updated });
+    persistFlowToSupabase(key, updated); // sync to Supabase so refresh doesn't lose data
   };
 
   // ── Bulk: mark a STEP as done for ALL visible employees ─────────────────
@@ -3125,6 +3137,11 @@ function PayrollFlowTracker({ employees }) {
       updated[key] = { ...(updated[key] || {}), [step]: value };
     });
     saveFlows(updated);
+    // sync each changed key to Supabase
+    emps.forEach(e => {
+      const key = `${selectedMonth}_${e._id}`;
+      persistFlowToSupabase(key, updated[key]);
+    });
   };
 
   // ── Bulk: mark ALL steps done/undone for ALL visible employees ───────────
@@ -3132,11 +3149,16 @@ function PayrollFlowTracker({ employees }) {
     const updated = { ...flows };
     emps.forEach(e => {
       const key = `${selectedMonth}_${e._id}`;
-      const cur = updated[key] || {};
+      const cur = { ...(updated[key] || {}) };
       PAYROLL_STEPS.forEach(s => { cur[s.k] = value; });
       updated[key] = cur;
     });
     saveFlows(updated);
+    // sync every changed key to Supabase so refresh doesn't lose the bulk action
+    emps.forEach(e => {
+      const key = `${selectedMonth}_${e._id}`;
+      persistFlowToSupabase(key, updated[key]);
+    });
   };
 
   const activeEmps = employees.filter(e => !isExcluded(e));
@@ -4549,12 +4571,13 @@ function DashboardView({ employees, isOnline, syncStatus, syncMessage, syncProgr
     const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
     let flowData = {};
     try { flowData = JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1')) || {}; } catch {}
+    const sk = (e) => (e.name || '').trim().toLowerCase().replace(/\s+/g, '_') || String(e._id);
     const activeEmps = employees.filter(e => !isExcluded(e));
     const clientsWithPendingInvoice = CLIENTS_LIST.filter(client => {
       const clientEmps = activeEmps.filter(e => e.client === client);
       if (clientEmps.length === 0) return false;
       // لو أي موظف في الكلاينت ده invoice step مش done
-      return clientEmps.some(e => !flowData[`${currentMonthKey}_${e._id}`]?.invoice);
+      return clientEmps.some(e => !flowData[`${currentMonthKey}_${sk(e)}`]?.invoice);
     });
     return clientsWithPendingInvoice.length > 0 ? clientsWithPendingInvoice : null;
   }, [employees]);
@@ -5858,7 +5881,11 @@ function FisheyeOpsPro({ employees, setEmployees }) {
         // 1. Load general app data (invoices, clients, partners, reminders, etc.)
         const { data: appData } = await supabase.from('fisheye_app_data').select('*');
         if (appData && appData.length > 0) {
+          // Skip payroll flow — managed separately via fisheye_payroll_flows table
+          // and persistFlow(). Overwriting here would erase unsaved local toggles.
+          const SKIP_KEYS = new Set(['fisheye_payroll_flow_v1']);
           appData.forEach(({ key, data }) => {
+            if (SKIP_KEYS.has(key)) return;
             try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
           });
           console.log(`✅ Loaded ${appData.length} data keys from Supabase`);
@@ -5963,6 +5990,73 @@ function FisheyeOpsPro({ employees, setEmployees }) {
       }
     }
   }, [employees]);
+
+  // ── Sidebar badges (must be before any early return) ─────────────────────
+  const workforceBadge = useMemo(() =>
+    employees.filter(e => { const d = daysUntil(e.endDate); return d >= 0 && d <= 30 && !isExcluded(e); }).length
+  , [employees]);
+
+  const financeBadge = useMemo(() => {
+    let count = 0;
+    const now = new Date();
+    const day = now.getDate();
+    // Missing salary: window day 25 → day 5 only
+    // Only flag employees who had salary marked last month (actively tracked in the flow)
+    // — avoids counting employees who were never entered into the payroll flow at all
+    if (day >= 25 || day <= 5) {
+      const salaryMonthDate = day <= 5
+        ? new Date(now.getFullYear(), now.getMonth() - 1, 1)
+        : now;
+      const salaryMonthKey = `${salaryMonthDate.getFullYear()}-${String(salaryMonthDate.getMonth()+1).padStart(2,'0')}`;
+      // previous month = one month before the salary month being checked
+      const prevMonthDate = new Date(salaryMonthDate.getFullYear(), salaryMonthDate.getMonth() - 1, 1);
+      const prevMonthKey = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth()+1).padStart(2,'0')}`;
+      let flows = {};
+      try { flows = JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1') || '{}'); } catch {}
+      const sk2 = (e) => (e.name || '').trim().toLowerCase().replace(/\s+/g, '_') || String(e._id);
+      // Only flag if there's already a flow entry this month (you've started processing)
+      // but salary is not checked yet — catches "forgot one mid-cycle", not "haven't started yet"
+      count += employees.filter(e => {
+        if (isExcluded(e)) return false;
+        const thisFlow = flows[`${salaryMonthKey}_${sk2(e)}`];
+        return thisFlow !== undefined && !thisFlow.salary;
+      }).length;
+    }
+    // Salary paid but invoice NOT sent — count UNIQUE employees across last 3 months
+    // (one employee with 3 un-invoiced months = 1, not 3)
+    let flows2 = {};
+    try { flows2 = JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1') || '{}'); } catch {}
+    const activeEmps = employees.filter(e => !isExcluded(e));
+    const sk3 = (e) => (e.name || '').trim().toLowerCase().replace(/\s+/g, '_') || String(e._id);
+    const uninvoicedNames = new Set();
+    for (let m = 0; m < 3; m++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+      const mk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      activeEmps.forEach(e => {
+        const f = flows2[`${mk}_${sk3(e)}`] || {};
+        if (f.salary && !f.invoice) uninvoicedNames.add(sk3(e));
+      });
+    }
+    count += uninvoicedNames.size;
+    // Unpaid invoices: overdue (>30 days) but recent enough to be actionable (<90 days)
+    // Invoices older than 90 days are considered stale/handled — don't inflate the badge
+    let invoices = [];
+    try { invoices = JSON.parse(localStorage.getItem('fisheye_invoices_v1') || '[]'); } catch {}
+    count += invoices.filter(inv => {
+      const st = (inv.status || '').toLowerCase();
+      if (['paid','cancelled','credit note','credit_note'].includes(st)) return false;
+      const d = new Date(inv.invoiceDate);
+      if (isNaN(d)) return false;
+      const ageDays = (now - d) / 86400000;
+      return ageDays > 30 && ageDays <= 90;
+    }).length;
+    return count;
+  }, [employees]);
+
+  // Onboarding badge = employees actively in "Onboarding" workflow (same filter as the tab)
+  const onboardingBadge = useMemo(() =>
+    employees.filter(e => !isExcluded(e) && e.workflowStatus === "Onboarding").length
+  , [employees]);
 
   // ── جاري التحميل من Supabase ──
   if (isLoading) return (
@@ -6124,7 +6218,12 @@ function FisheyeOpsPro({ employees, setEmployees }) {
         <nav style={s.sidebarNav}>
           {navItems.map(({k, l, i:Icon, section}) => {
             const isA   = nav === k;
-            const badge = k==="action" ? totalAlerts : k==="report" ? report.pendingCount : 0;
+            const badge = k==="action"     ? totalAlerts
+                        : k==="workforce"  ? workforceBadge
+                        : k==="finance"    ? financeBadge
+                        : k==="onboarding" ? onboardingBadge
+                        : k==="report"     ? report.pendingCount
+                        : 0;
             return (
               <React.Fragment key={k}>
                 {section && open && (
