@@ -1635,11 +1635,15 @@ function loadPOBudgets() {
 // Same normalization as invoiceManager.jsx — module-level so it's always defined
 const normPO = po => String(po || '').replace(/\s+/g, '').toUpperCase().replace(/_\d+$/, '');
 
-function POReconciliationTab({ employees }) {
+function POReconciliationTab({ employees, initialFilter = "" }) {
   const [invoices, setInvoices]   = useState([]);
   const [budgets,  setBudgets]    = useState(() => loadPOBudgets());
   const [editing,  setEditing]    = useState({}); // po → draft string
+  const [poFilter, setPOFilter]   = useState(initialFilter);
   const M = "#A02843";
+
+  // Update filter when initialFilter changes (from global search)
+  useEffect(() => { if (initialFilter) setPOFilter(initialFilter); }, [initialFilter]);
 
   // Load invoices + PO budget overrides from Supabase
   useEffect(() => {
@@ -1780,8 +1784,19 @@ function POReconciliationTab({ employees }) {
         </button>
       </div>
 
+      {/* Search */}
+      <div style={{ marginBottom: 10, position: 'relative' }}>
+        <input
+          value={poFilter}
+          onChange={e => setPOFilter(e.target.value)}
+          placeholder="🔍  ابحث عن PO رقم أو موظف..."
+          style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 12px', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
+        />
+        {poFilter && <button onClick={() => setPOFilter("")} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14 }}>✕</button>}
+      </div>
+
       {/* Table */}
-      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden', maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
+      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden', maxHeight: 'calc(100vh - 320px)', overflowY: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
@@ -1791,7 +1806,13 @@ function POReconciliationTab({ employees }) {
             </tr>
           </thead>
           <tbody>
-            {poMap.map(row => {
+            {poMap.filter(row => {
+              if (!poFilter) return true;
+              const q = poFilter.toLowerCase();
+              return row.po.toLowerCase().includes(q) ||
+                row.emps.some(e => (e.name || "").toLowerCase().includes(q)) ||
+                row.invoices.some(i => (i.invoiceNumber || "").toLowerCase().includes(q));
+            }).map(row => {
               const isOver = row.overBudget;
               const rowBg = isOver ? '#fff5f5' : '#fff';
               const isDraft = editing[row.po] !== undefined;
@@ -1879,11 +1900,21 @@ function POReconciliationTab({ employees }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN EXPORT — FinanceModule
 // ═══════════════════════════════════════════════════════════════════════════════
-export function FinanceModule({ employees = [], setEmployees = () => {}, operationalIssues = [] }) {
+export function FinanceModule({ employees = [], setEmployees = () => {}, operationalIssues = [], pendingOpenPO, onPendingPOHandled, onNav }) {
   const [activeTab, setActiveTab] = useState(
     () => localStorage.getItem("fisheye_finance_tab") || "payroll"
   );
   const [flows, setFlows] = useState([]);
+  const [poSearchFilter, setPOSearchFilter] = useState("");
+
+  // Jump to PO Reconciliation tab from global search
+  useEffect(() => {
+    if (!pendingOpenPO) return;
+    setActiveTab("po_recon");
+    localStorage.setItem("fisheye_finance_tab", "po_recon");
+    setPOSearchFilter(pendingOpenPO);
+    onPendingPOHandled?.();
+  }, [pendingOpenPO]);
 
   const active = employees.filter(e => !isExcluded(e));
   const now = new Date();
@@ -2025,7 +2056,7 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
       {activeTab === "payroll"      && <PayrollTab          employees={employees} />}
       {activeTab === "partner_flow" && <PartnerFlowTab       employees={employees} />}
       {activeTab === "invoices"     && <InvoiceManager employees={employees} setEmployees={setEmployees} />}
-      {activeTab === "po_recon"     && <POReconciliationTab  employees={employees} />}
+      {activeTab === "po_recon"     && <POReconciliationTab  employees={employees} initialFilter={poSearchFilter} />}
       {activeTab === "profit"       && <ProfitPerClientTab   employees={employees} />}
       {activeTab === "settlement"   && <PartnerSettlementReport employees={employees}/>}
     </div>

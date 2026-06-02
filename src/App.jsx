@@ -1535,7 +1535,7 @@ function ExpiryCalendar({ employees, calOffset, setCalOffset, onSelect, clients=
 }
 
 // ─── WORKFORCE VIEW ────────────────────────────────────────────────────
-function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV}) {
+function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV, pendingOpenEmpId, onPendingOpenHandled}) {
   const [client, setClient] = useState("All");
   const [search, setSearch] = useState("");
   const [fStatus, setFStatus] = useState("");
@@ -1559,6 +1559,13 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
   const [selected, setSelected] = useState([]);
   const [profile, setProfile] = useState(null);
   const [showBulk, setShowBulk] = useState(false);
+
+  // Open employee directly from global search
+  useEffect(() => {
+    if (!pendingOpenEmpId) return;
+    const emp = employees.find(e => e._id === pendingOpenEmpId);
+    if (emp) { setProfile(emp); onPendingOpenHandled?.(); }
+  }, [pendingOpenEmpId, employees]);
   const [showWAPanel, setShowWAPanel] = useState(false);
   const [waCopied, setWACopied] = useState({});
   const [showProfitMode, setShowProfitMode] = useState({
@@ -6222,7 +6229,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
           {nav==="partners"   && <PartnerHub employees={employees} partners={partners} savePartners={savePartners}/>}
 
           {/* ── FINANCE (consolidated: Payroll · Billing · Settlements) ── */}
-          {nav==="finance" && <FinanceModule employees={employees} setEmployees={setEmployees} onNav={k => { setNav(k); localStorage.setItem("fisheye_nav", k); }}/>}
+          {nav==="finance" && <FinanceModule employees={employees} setEmployees={setEmployees} onNav={k => { setNav(k); localStorage.setItem("fisheye_nav", k); }} pendingOpenPO={pendingOpenPO} onPendingPOHandled={() => setPendingOpenPO(null)}/>}
 
           {/* ── ONBOARDING ── */}
           {nav==="onboarding" && <OnboardingModule employees={employees} setEmployees={setEmployees} partners={partners}/>}
