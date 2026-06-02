@@ -6158,7 +6158,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
         {/* Topbar */}
         <div style={s.topbar} className="fe-topbar">
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            {nav !== "action" && (
+            {!["action","finance","billing","analytics","weeklyreport","report","tickets"].includes(nav) && (
               <h1 style={{margin:0,fontSize:15,fontWeight:700,color:"#18181b",letterSpacing:"-0.02em",fontFamily:"var(--font-sans)"}}>{labels[nav] || nav}</h1>
             )}
           </div>
