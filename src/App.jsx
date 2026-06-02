@@ -6158,9 +6158,8 @@ function FisheyeOpsPro({ employees, setEmployees }) {
         {/* Topbar */}
         <div style={s.topbar} className="fe-topbar">
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <h1 style={{margin:0,fontSize:15,fontWeight:700,color:"#18181b",letterSpacing:"-0.02em",fontFamily:"var(--font-sans)"}}>{labels[nav] || nav}</h1>
-            {nav==="action" && totalAlerts > 0 && (
-              <span style={{fontSize:10,fontWeight:700,padding:"2px 9px",borderRadius:999,backgroundColor:"#dc2626",color:"white",fontFamily:"var(--font-mono)",letterSpacing:"0"}}>{totalAlerts} issues</span>
+            {nav !== "action" && (
+              <h1 style={{margin:0,fontSize:15,fontWeight:700,color:"#18181b",letterSpacing:"-0.02em",fontFamily:"var(--font-sans)"}}>{labels[nav] || nav}</h1>
             )}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:16}}>
