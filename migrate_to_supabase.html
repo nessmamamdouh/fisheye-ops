@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>Fisheye — رفع البيانات لـ Supabase</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: system-ui; background: #0f172a; color: #e2e8f0; padding: 2rem; max-width: 700px; margin: 0 auto; }
+    h1 { color: #38bdf8; }
+    .card { background: #1e293b; border-radius: 12px; padding: 1.5rem; margin: 1rem 0; }
+    .row { display: flex; justify-content: space-between; align-items: center; padding: .4rem 0; border-bottom: 1px solid #334155; }
+    .label { color: #94a3b8; font-size: .9rem; }
+    .value { font-weight: bold; color: #38bdf8; }
+    button { background: #0ea5e9; color: white; border: none; padding: .8rem 2rem; border-radius: 8px; font-size: 1rem; cursor: pointer; margin-top: 1rem; width: 100%; }
+    button:hover { background: #0284c7; }
+    button:disabled { background: #334155; cursor: not-allowed; }
+    #log { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 1rem; font-family: monospace; font-size: .85rem; height: 250px; overflow-y: auto; margin-top: 1rem; }
+    .ok   { color: #4ade80; }
+    .warn { color: #fbbf24; }
+    .err  { color: #f87171; }
+    .progress-bar { background: #334155; border-radius: 8px; height: 10px; margin: .5rem 0; }
+    .progress-fill { background: #0ea5e9; height: 100%; border-radius: 8px; transition: width .3s; }
+  </style>
+</head>
+<body>
+
+<h1>🚀 رفع بياناتك لـ Supabase</h1>
+<p style="color:#94a3b8">هذه الأداة ترفع كل بياناتك الموجودة على هذا الجهاز إلى السحابة.</p>
+
+<div class="card" id="summary">
+  <div class="row"><span class="label">👥 Employees</span> <span class="value" id="cnt-emp">جاري القراءة...</span></div>
+  <div class="row"><span class="label">🏢 Clients</span>   <span class="value" id="cnt-cli">جاري القراءة...</span></div>
+  <div class="row"><span class="label">🤝 Partners</span>  <span class="value" id="cnt-par">جاري القراءة...</span></div>
+  <div class="row"><span class="label">💳 Payroll Flows</span> <span class="value" id="cnt-pay">جاري القراءة...</span></div>
+</div>
+
+<div class="progress-bar"><div class="progress-fill" id="progress" style="width:0%"></div></div>
+
+<button id="btn" onclick="startMigration()">⬆️ ارفع كل البيانات لـ Supabase</button>
+
+<div id="log"></div>
+
+<script>
+  // ── Supabase config ───────────────────────────────────────────────────────
+  const SUPABASE_URL = 'https://noutbupdtbqdheyhlmdm.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5vdXRidXBkdGJxZGhleWhsbWRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MzI2NDQsImV4cCI6MjA5MzIwODY0NH0.yLBTuS_DO322I2e0QjbLBHIUk6_k8tkMGCKBDUlQLLo';
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const log = (msg, cls='') => {
+    const div = document.getElementById('log');
+    div.innerHTML += `<div class="${cls}">${new Date().toLocaleTimeString('ar')} — ${msg}</div>`;
+    div.scrollTop = div.scrollHeight;
+  };
+
+  const setProgress = (pct) => {
+    document.getElementById('progress').style.width = pct + '%';
+  };
+
+  // ── Read localStorage data ───────────────────────────────────────────────
+  function readData() {
+    const emp = (() => { try { return JSON.parse(localStorage.getItem('fisheyeData_v3')) || []; } catch { return []; } })();
+    const cli = (() => { try { return JSON.parse(localStorage.getItem('fisheyeClients_v1')) || []; } catch { return []; } })();
+    const par = (() => { try { return JSON.parse(localStorage.getItem('fisheyePartners_v1')) || []; } catch { return []; } })();
+    const pay = (() => { try { return JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1')) || {}; } catch { return {}; } })();
+    return { emp, cli, par, pay };
+  }
+
+  // ── Upsert in chunks ─────────────────────────────────────────────────────
+  async function upsertChunks(table, rows, conflictCol) {
+    if (!rows || rows.length === 0) { log(`⏭️ ${table}: فاضي — تخطي`, 'warn'); return true; }
+    const CHUNK = 50;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const chunk = rows.slice(i, i + CHUNK);
+      const { error } = await sb.from(table).upsert(chunk, { onConflict: conflictCol });
+      if (error) { log(`❌ ${table} (chunk ${i}): ${error.message}`, 'err'); return false; }
+    }
+    log(`✅ ${table}: ${rows.length} سجل تم رفعه`, 'ok');
+    return true;
+  }
+
+  // ── Main migration ───────────────────────────────────────────────────────
+  async function startMigration() {
+    const btn = document.getElementById('btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ جاري الرفع...';
+    document.getElementById('log').innerHTML = '';
+    setProgress(0);
+
+    const { emp, cli, par, pay } = readData();
+    log(`📦 بيانات جاهزة: ${emp.length} موظف، ${cli.length} كلاينت، ${par.length} بارتنر، ${Object.keys(pay).length} شهر payroll`);
+
+    // Test connection
+    const { error: testErr } = await sb.from('employees_master').select('_id').limit(1);
+    if (testErr) {
+      log(`❌ لا يوجد اتصال بـ Supabase: ${testErr.message}`, 'err');
+      log(`💡 تأكد إنك شغّلت supabase_setup.sql الأول`, 'warn');
+      btn.disabled = false; btn.textContent = '⬆️ ارفع كل البيانات لـ Supabase';
+      return;
+    }
+    log('🔗 متصل بـ Supabase ✅', 'ok');
+    setProgress(10);
+
+    // 1. Employees
+    log('👥 جاري رفع الموظفين...');
+    await upsertChunks('employees_master', emp, '_id');
+    setProgress(35);
+
+    // 2. Clients
+    log('🏢 جاري رفع الكلاينتس...');
+    await upsertChunks('fisheye_clients', cli, 'id');
+    setProgress(55);
+
+    // 3. Partners
+    log('🤝 جاري رفع البارتنرز...');
+    await upsertChunks('fisheye_partners', par, 'id');
+    setProgress(75);
+
+    // 4. Payroll flows
+    log('💳 جاري رفع بيانات الـ Payroll...');
+    const payRows = Object.entries(pay).map(([month, data]) => ({ month, data }));
+    await upsertChunks('fisheye_payroll_flows', payRows, 'month');
+    setProgress(100);
+
+    log('🎉 تم رفع كل البيانات بنجاح! دلوقتي كل الأجهزة هتشوف نفس البيانات.', 'ok');
+    btn.textContent = '✅ تم الرفع بنجاح';
+    btn.style.background = '#16a34a';
+  }
+
+  // ── Show counts on load ──────────────────────────────────────────────────
+  window.onload = () => {
+    const { emp, cli, par, pay } = readData();
+    document.getElementById('cnt-emp').textContent = emp.length + ' سجل';
+    document.getElementById('cnt-cli').textContent = cli.length + ' كلاينت';
+    document.getElementById('cnt-par').textContent = par.length + ' بارتنر';
+    document.getElementById('cnt-pay').textContent = Object.keys(pay).length + ' شهر';
+    if (emp.length === 0) {
+      log('⚠️ لا توجد بيانات في هذا المتصفح. افتح هذا الملف من نفس المتصفح اللي بتشغّل فيه الـ app.', 'warn');
+    }
+  };
+</script>
+</body>
+</html>

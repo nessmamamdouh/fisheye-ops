@@ -40,9 +40,9 @@ const sendWhatsAppMessage = async (phone, message, clientName) => {
   });
 };
  
-const M  = "#800000";
-const MD = "#5c0000";
-const ML = "#a83232";
+const M  = "#A02843";  // Fisheye Crimson — Pantone 194C
+const MD = "#00293A";  // Fisheye Navy    — Pantone 303C
+const ML = "#c04060";  // Crimson light tint
 const TODAY = new Date();
 TODAY.setHours(0, 0, 0, 0);
 const CLIENTS_LIST = ["Sela","SPL","Channelplay","Riva Engineering 2","Combuzz HR"];
@@ -203,17 +203,17 @@ function exportQiwaCSV(employees) {
 const s = {
   // Layout
   appShell: { display:"flex", height:"100vh", overflow:"hidden", fontFamily:"var(--font-sans,'Plus Jakarta Sans',-apple-system,sans-serif)", backgroundColor:"var(--surface-sub,#f8f8f9)" },
-  sidebar: (open) => ({ width: open ? 204 : 58, flexShrink:0, display:"flex", flexDirection:"column", background:`linear-gradient(160deg,#3a0000 0%,${MD} 28%,${M} 62%,#8a1818 100%)`, transition:"width 280ms cubic-bezier(0.4,0,0.2,1)", overflow:"hidden" }),
-  sidebarHeader: { padding:"17px 13px", display:"flex", alignItems:"center", gap:12, borderBottom:"1px solid rgba(255,255,255,0.08)", flexShrink:0 },
-  sidebarLogo: { width:36, height:36, backgroundColor:"white", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, boxShadow:"0 2px 10px rgba(0,0,0,0.28)", flexShrink:0 },
-  sidebarBadge: { padding:"8px 11px", borderBottom:"1px solid rgba(255,255,255,0.08)", flexShrink:0 },
-  sidebarBadgeInner: { display:"flex", alignItems:"center", gap:8, backgroundColor:"rgba(255,255,255,0.09)", borderRadius:8, padding:"7px 10px" },
-  sidebarDot: { width:7, height:7, borderRadius:"50%", backgroundColor:"#4ade80", flexShrink:0 },
-  sidebarNav: { flex:1, overflowY:"auto", padding:"10px 7px" },
-  navBtn: (active) => ({ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"9px 10px", borderRadius:10, border:"none", cursor:"pointer", fontSize:12, fontWeight:600, marginBottom:2, backgroundColor: active ? "white" : "transparent", color: active ? M : "rgba(255,210,210,0.82)", whiteSpace:"nowrap", letterSpacing:"-0.01em", fontFamily:"var(--font-sans)" }),
-  navBadge: { fontSize:9, fontWeight:800, padding:"2px 7px", borderRadius:999, backgroundColor:"#fde047", color:"#713f12", marginLeft:"auto", letterSpacing:"0", fontFamily:"var(--font-mono)" },
-  sidebarToggle: { padding:"7px 7px", borderTop:"1px solid rgba(255,255,255,0.08)", flexShrink:0 },
-  toggleBtn: { width:"100%", padding:8, display:"flex", alignItems:"center", justifyContent:"center", backgroundColor:"transparent", border:"none", cursor:"pointer", color:"rgba(255,200,200,0.55)", borderRadius:8, fontFamily:"inherit" },
+  sidebar: (open) => ({ width: open ? 220 : 60, flexShrink:0, display:"flex", flexDirection:"column", background:"#00293A", borderRight:"1px solid rgba(255,255,255,0.06)", transition:"width 280ms cubic-bezier(0.4,0,0.2,1)", overflow:"hidden" }),
+  sidebarHeader: { padding:"16px 14px 14px", display:"flex", alignItems:"center", gap:11, borderBottom:"1px solid rgba(255,255,255,0.07)", flexShrink:0 },
+  sidebarLogo: { width:34, height:34, background:"#A02843", borderRadius:7, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, boxShadow:`0 0 0 1px rgba(255,255,255,0.15), 0 4px 12px rgba(0,0,0,0.35)` },
+  sidebarBadge: { padding:"7px 10px", borderBottom:"1px solid rgba(255,255,255,0.07)", flexShrink:0 },
+  sidebarBadgeInner: { display:"flex", alignItems:"center", gap:8, backgroundColor:"rgba(255,255,255,0.06)", borderRadius:7, padding:"6px 10px", border:"1px solid rgba(255,255,255,0.08)" },
+  sidebarDot: { width:6, height:6, borderRadius:"50%", backgroundColor:"#4ade80", flexShrink:0, boxShadow:"0 0 5px #4ade80" },
+  sidebarNav: { flex:1, overflowY:"auto", padding:"8px 8px" },
+  navBtn: (active) => ({ width:"100%", display:"flex", alignItems:"center", gap:9, padding:"8px 10px", borderRadius:8, border:"none", cursor:"pointer", fontSize:12, fontWeight: active ? 700 : 500, marginBottom:1, backgroundColor: active ? "rgba(160,40,67,0.18)" : "transparent", color: active ? "#f9a8b8" : "rgba(180,210,220,0.55)", whiteSpace:"nowrap", letterSpacing:"-0.01em", fontFamily:"var(--font-sans)", borderLeft: active ? "3px solid #A02843" : "3px solid transparent", transition:"all 0.15s" }),
+  navBadge: { fontSize:9, fontWeight:800, padding:"2px 6px", borderRadius:999, backgroundColor:"#fde047", color:"#713f12", marginLeft:"auto", letterSpacing:"0", fontFamily:"var(--font-mono)" },
+  sidebarToggle: { padding:"6px 8px", borderTop:"1px solid rgba(255,255,255,0.07)", flexShrink:0 },
+  toggleBtn: { width:"100%", padding:7, display:"flex", alignItems:"center", justifyContent:"center", backgroundColor:"transparent", border:"none", cursor:"pointer", color:"rgba(255,200,200,0.35)", borderRadius:7, fontFamily:"inherit", transition:"color 0.15s" },
   main: { flex:1, display:"flex", flexDirection:"column", minWidth:0, overflow:"hidden" },
   topbar: { backgroundColor:"rgba(255,255,255,0.88)", borderBottom:"1px solid rgba(228,228,231,0.7)", padding:"11px 24px", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, backdropFilter:"blur(14px)", WebkitBackdropFilter:"blur(14px)" },
   content: { flex:1, overflowY:"auto", padding:"20px 24px", background:"var(--surface-sub,#f8f8f9)" },
@@ -5919,21 +5919,15 @@ function FisheyeOpsPro({ employees, setEmployees }) {
   const totalAlerts = employees.filter(e => { const d = daysUntil(e.endDate); return d >= 0 && d <= 30 && !isExcluded(e); }).length + report.pendingCount;
 
   const navItems = [
-    // ── PRIMARY ────────────────────────────────────────────────────────────
-    { k:"action",     l:"⚡ Action Center",  i:Target     },
-    // ── ENTITY VIEWS ───────────────────────────────────────────────────────
-    { k:"workforce",  l:"Employees",         i:Users      },
-    { k:"clients",    l:"Clients",           i:Building2  },
-    { k:"partners",   l:"Partners",          i:Briefcase  },
-    // ── OPS ────────────────────────────────────────────────────────────────
-    { k:"onboarding", l:"Onboarding",        i:UserPlus   },
-    // ── FINANCE (consolidated: Payroll · Billing · Settlements) ────────────
-    { k:"finance",    l:"Finance",           i:DollarSign },
-    // ── INSIGHTS ───────────────────────────────────────────────────────────
-    { k:"analytics",  l:"Analytics",         i:BarChart2  },
-    { k:"weeklyreport", l:"Reports",         i:FileText   },
-    // ── SYSTEM ─────────────────────────────────────────────────────────────
-    { k:"settings",   l:"Settings",          i:Settings   },
+    { k:"action",       l:"Action Center",  i:Target,      section:null      },
+    { k:"workforce",    l:"Employees",      i:Users,       section:"PEOPLE"  },
+    { k:"clients",      l:"Clients",        i:Building2,   section:null      },
+    { k:"partners",     l:"Partners",       i:Briefcase,   section:null      },
+    { k:"onboarding",   l:"Onboarding",     i:UserPlus,    section:"OPS"     },
+    { k:"finance",      l:"Finance",        i:DollarSign,  section:null      },
+    { k:"analytics",    l:"Analytics",      i:BarChart2,   section:"INSIGHTS"},
+    { k:"weeklyreport", l:"Reports",        i:FileText,    section:null      },
+    { k:"settings",     l:"Settings",       i:Settings,    section:"SYSTEM"  },
   ];
 
   const labels = {
@@ -5974,10 +5968,18 @@ function FisheyeOpsPro({ employees, setEmployees }) {
       {/* ── Sidebar ── */}
       <div style={s.sidebar(open)}>
         <div style={s.sidebarHeader}>
-          <div style={s.sidebarLogo}><Eye size={18} style={{color:M}}/></div>
+          {/* Fisheye brandmark symbol — bracket mark in crimson */}
+          <div style={s.sidebarLogo}>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <rect x="2" y="2" width="8" height="2" fill="white"/>
+              <rect x="2" y="2" width="2" height="8" fill="white"/>
+              <rect x="10" y="10" width="8" height="2" fill="white"/>
+              <rect x="16" y="10" width="2" height="8" fill="white"/>
+            </svg>
+          </div>
           {open && <div style={{minWidth:0}}>
-            <p style={{color:"white",fontWeight:900,fontSize:13,margin:0,lineHeight:1.2}}>Fisheye Ops</p>
-            <p style={{color:"rgba(255,180,180,0.8)",fontSize:11,margin:0}}>Pro · KSA ERP</p>
+            <p style={{color:"white",fontWeight:800,fontSize:13,margin:0,lineHeight:1.2,letterSpacing:"-0.01em",fontFamily:"Georgia,serif"}}>Fisheye</p>
+            <p style={{color:"rgba(160,210,230,0.5)",fontSize:9,margin:"2px 0 0",fontWeight:500,letterSpacing:"0.1em",textTransform:"uppercase"}}>Executive Search · ERP</p>
           </div>}
         </div>
         {open && (
@@ -6044,22 +6046,27 @@ function FisheyeOpsPro({ employees, setEmployees }) {
         )}
 
         <nav style={s.sidebarNav}>
-          {navItems.map(({k, l, i:Icon}) => {
+          {navItems.map(({k, l, i:Icon, section}) => {
             const isA   = nav === k;
-            const badge = k==="action" ? totalAlerts : k==="dashboard" ? totalAlerts : k==="report" ? report.pendingCount : 0;
-            const dividerBefore = open && (k==="workforce"||k==="onboarding"||k==="analytics"||k==="dashboard");
+            const badge = k==="action" ? totalAlerts : k==="report" ? report.pendingCount : 0;
             return (
               <React.Fragment key={k}>
-                {dividerBefore && <div className="fe-divider" style={{height:1,margin:"6px 4px"}}/>}
+                {section && open && (
+                  <p style={{fontSize:9,fontWeight:700,color:"rgba(160,210,230,0.35)",letterSpacing:"0.1em",textTransform:"uppercase",margin:"14px 0 4px",paddingLeft:12,fontFamily:"var(--font-sans)"}}>{section}</p>
+                )}
+                {section && !open && (
+                  <div style={{height:1,margin:"8px 4px",backgroundColor:"rgba(255,255,255,0.07)"}}/>
+                )}
                 <button
                   onClick={() => { setNav(k); localStorage.setItem("fisheye_nav", k); }}
                   className={`fe-nav-btn${isA?" fe-nav-active":""}`}
                   style={s.navBtn(isA)}
                   title={!open ? l : undefined}
                 >
-                  <Icon size={16} style={{flexShrink:0}}/>
+                  <Icon size={15} style={{flexShrink:0, color: isA ? "#f9a8b8" : "rgba(160,210,230,0.45)"}}/>
                   {open && <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis"}}>{l}</span>}
                   {open && badge > 0 && <span className="fe-notif-badge" style={s.navBadge}>{badge}</span>}
+                  {!open && badge > 0 && <span style={{...s.navBadge,position:"absolute",top:4,right:4,fontSize:8,padding:"1px 4px"}}>{badge}</span>}
                 </button>
               </React.Fragment>
             );

@@ -32,8 +32,8 @@ import {
 import { isExcluded, isWFDone } from "./utils/helpers";
 
 // ─── Constants (mirrors App.jsx) ─────────────────────────────────────────────
-const M   = "#800000";
-const MD  = "#5c0000";
+const M   = "#A02843";
+const MD  = "#00293A";
 
 const CLIENT_META  = {
   "Sela":               { badge:"#bbf7d0", text:"#14532d", dot:"#16a34a" },

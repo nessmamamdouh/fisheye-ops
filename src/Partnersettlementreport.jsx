@@ -124,7 +124,7 @@ BC_BATCHES.forEach(b => b.rows.forEach(r => {
   }
 }));
 
-const M = "#800000";
+const M = "#A02843";
 const fmt = d => d ? new Date(d).toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" }) : "—";
 const fmtSAR = n => n ? `SR ${Number(n).toLocaleString()}` : "SR 0";
 

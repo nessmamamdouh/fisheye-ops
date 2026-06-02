@@ -170,7 +170,7 @@ function matchClientPartner(poNumber, employees) {
   return { clientName: hits[0].client || '', partnerName: hits[0].partnerName || '' };
 }
 
-const M = '#800000';
+const M = '#A02843';
 const STORAGE_KEY = 'fisheye_invoices_v1';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -2916,7 +2916,7 @@ function Overlay({ children, onClose }) {
 
 function ModalHeader({ title, sub, onClose }) {
   return (
-    <div style={{ padding: '16px 20px', background: `linear-gradient(135deg, #5c0000, ${M})`, borderRadius: '14px 14px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+    <div style={{ padding: '16px 20px', background: `linear-gradient(135deg, #00293A, ${M})`, borderRadius: '14px 14px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
       <div>
         <h3 style={{ margin: 0, color: 'white', fontSize: 15, fontWeight: 700 }}>{title}</h3>
         {sub && <p style={{ margin: '3px 0 0', fontSize: 11, color: 'rgba(255,200,200,0.85)', maxWidth: 420 }}>{sub}</p>}

@@ -4,7 +4,7 @@ import { isExcluded } from './utils/helpers';
 const WORKFLOW_OPTS = ["Agreement Signed","Pending","Complete","Rejected","Qiwa Submitted","Qiwa Approved","Onboarding"];
 const ONBOARDING_STEPS = ["Docs Requested", "Docs Received", "Docs Received +"];
 
-function StatCard({ title, value, icon, color = "#800000" }) {
+function StatCard({ title, value, icon, color = "#A02843" }) {
   return (
     <div style={{ backgroundColor: '#fff', borderRadius: 20, padding: 20, display: 'flex', alignItems: 'center', gap: 15, boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #f0f2f5' }}>
       <div style={{ width: 48, height: 48, backgroundColor: `${color}15`, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
@@ -79,7 +79,7 @@ export default function ClientPortal({ employees, clientName: propClientName }) 
       {/* Navbar */}
       <nav style={{ backgroundColor: '#fff', padding: '14px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E9EDF7', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 32, height: 32, backgroundColor: '#800000', borderRadius: 8 }} />
+          <div style={{ width: 32, height: 32, backgroundColor: '#A02843', borderRadius: 8 }} />
           <span style={{ fontWeight: 800, fontSize: 17, color: '#1B2559' }}>
             Client Portal <span style={{ color: '#A3AED0', fontWeight: 400 }}>| {clientName}</span>
           </span>
@@ -91,7 +91,7 @@ export default function ClientPortal({ employees, clientName: propClientName }) 
 
         {/* Main Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
-          <StatCard title="Active Workforce" value={stats.active} icon="👥" color="#800000" />
+          <StatCard title="Active Workforce" value={stats.active} icon="👥" color="#A02843" />
           <StatCard title="Onboarding" value={stats.onboarding} icon="⏳" color="#d97706" />
           <StatCard title="Qiwa Submitted" value={stats.qiwaSubmitted} icon="📩" color="#2563eb" />
           <StatCard title="Qiwa Approved" value={stats.qiwaApproved} icon="✅" color="#16a34a" />
@@ -103,7 +103,7 @@ export default function ClientPortal({ employees, clientName: propClientName }) 
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>Total Payroll This Month</div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: '#800000', marginTop: 4 }}>SR {totalPayroll.toLocaleString()}</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: '#A02843', marginTop: 4 }}>SR {totalPayroll.toLocaleString()}</div>
             </div>
             <div style={{ borderLeft: '1px solid #e5e7eb', paddingLeft: 20 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>Headcount</div>

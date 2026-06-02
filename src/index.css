@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════
    FISHEYE OPS — DESIGN SYSTEM v2
-   Brand: Maroon #800000 · Precision Operations Interface
+   Brand: Maroon #A02843 · Precision Operations Interface
 ═══════════════════════════════════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
@@ -8,10 +8,10 @@
 /* ─── CSS Variables ─────────────────────────────────────────────────── */
 :root {
   /* Brand */
-  --brand:        #800000;
-  --brand-dark:   #5c0000;
+  --brand:        #A02843;
+  --brand-dark:   #00293A;
   --brand-mid:    #6d0000;
-  --brand-light:  #a83232;
+  --brand-light:  #c04060;
   --brand-pale:   #fdf5f5;
   --brand-subtle: #fff0f0;
 

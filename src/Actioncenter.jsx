@@ -208,9 +208,9 @@ function IssueShareBar({ issue }) {
 }
 
 // ─── Constants (mirrors App.jsx) ─────────────────────────────────────────────
-const M  = "#800000";
-const MD = "#5c0000";
-const ML = "#a83232";
+const M  = "#A02843";
+const MD = "#00293A";
+const ML = "#c04060";
 const TODAY = new Date();
 TODAY.setHours(0, 0, 0, 0);
 

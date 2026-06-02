@@ -4,7 +4,7 @@ import { useOperationalIssues, daysUntil } from "./useOperationalIssues";
 import { isExcluded } from "./utils/helpers";
 
 // ─── BRAND ───────────────────────────────────────────────────────────────────
-const M  = "#800000";
+const M  = "#A02843";
 
 // ─── BILLING HELPERS (mirrors FinanceModule — no circular import) ─────────────
 const calcLine = emp => {
@@ -43,9 +43,9 @@ const fK = n => {
 const pct = (n, d) => d > 0 ? ((n / d) * 100).toFixed(1) + "%" : "—";
 
 // ─── COLOR PALETTES ───────────────────────────────────────────────────────────
-const CLIENT_COLORS  = ["#800000","#2563eb","#059669","#d97706","#7c3aed","#db2777","#0891b2","#65a30d","#dc2626","#9333ea"];
-const PARTNER_COLORS = ["#7c3aed","#2563eb","#059669","#d97706","#800000","#db2777","#0891b2","#65a30d"];
-const NAT_COLORS     = ["#800000","#2563eb","#059669","#d97706","#7c3aed","#db2777","#0891b2","#65a30d","#6b7280"];
+const CLIENT_COLORS  = ["#A02843","#2563eb","#059669","#d97706","#7c3aed","#db2777","#0891b2","#65a30d","#dc2626","#9333ea"];
+const PARTNER_COLORS = ["#7c3aed","#2563eb","#059669","#d97706","#A02843","#db2777","#0891b2","#65a30d"];
+const NAT_COLORS     = ["#A02843","#2563eb","#059669","#d97706","#7c3aed","#db2777","#0891b2","#65a30d","#6b7280"];
 
 // ─── SVG: HORIZONTAL BAR CHART ────────────────────────────────────────────────
 function HBarChart({ data, barH = 28, gap = 10 }) {

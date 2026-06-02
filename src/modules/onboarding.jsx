@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { FileText, UserPlus, CheckCircle, Clock, AlertCircle, CalendarDays, RotateCcw } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 
-const M = "#800000";
+const M = "#A02843";
 
 // ─── Workflow buckets ──────────────────────────────────────────────────────────
 const WF_ONBOARDING = new Set(['onboarding']);
@@ -383,7 +383,7 @@ function saveChecklist(state) {
   localStorage.setItem(getChecklistKey(), JSON.stringify(state));
 }
 
-const MG = "linear-gradient(135deg,#800000,#5c0000)";
+const MG = "linear-gradient(135deg,#A02843,#00293A)";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ONBOARDING MODULE — top-level view

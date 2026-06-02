@@ -22,9 +22,9 @@ import {
 import { useOperationalIssues } from "./useOperationalIssues";
 
 // ─── Brand colors (ساعتك matches App.jsx) ─────────────────────────────────
-const M  = "#800000";
-const MD = "#5c0000";
-const ML = "#a83232";
+const M  = "#A02843";
+const MD = "#00293A";
+const ML = "#c04060";
 
 const waHref = (phone) => {
   const c = (phone || "").replace(/[^0-9+]/g, "").replace(/^\+/, "");

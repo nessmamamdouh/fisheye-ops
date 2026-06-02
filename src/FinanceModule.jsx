@@ -9,8 +9,8 @@ import { isExcluded } from "./utils/helpers";
 import { supabase } from "./utils/supabase";
 
 // ─── CONSTANTS & HELPERS ─────────────────────────────────────────────────────
-const M   = "#800000";
-const MD  = "#5c0000";
+const M   = "#A02843";
+const MD  = "#00293A";
 
 const fmtSAR = n =>
   `SAR ${Number(n || 0).toLocaleString("en-SA", { minimumFractionDigits: 2 })}`;
@@ -1014,7 +1014,7 @@ function ProfitPerClientTab({ employees }) {
   const active = useMemo(() => employees.filter(e => !isExcluded(e)), [employees]);
 
   const CLIENT_COLORS = {
-    "Sela":               { accent: "#800000", light: "#fff5f5" },
+    "Sela":               { accent: "#A02843", light: "#fff5f5" },
     "SPL":                { accent: "#7c3aed", light: "#f5f3ff" },
     "Channelplay":        { accent: "#2563eb", light: "#eff6ff" },
     "Riva Engineering 2": { accent: "#c2410c", light: "#fff7ed" },
@@ -1639,7 +1639,7 @@ function POReconciliationTab({ employees }) {
   const [invoices, setInvoices]   = useState([]);
   const [budgets,  setBudgets]    = useState(() => loadPOBudgets());
   const [editing,  setEditing]    = useState({}); // po → draft string
-  const M = "#800000";
+  const M = "#A02843";
 
   // Load invoices + PO budget overrides from Supabase
   useEffect(() => {

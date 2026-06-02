@@ -3,7 +3,7 @@ import { FileText } from 'lucide-react';
 import { useOperationalIssues } from './useOperationalIssues';
 import { isExcluded, isWFDone } from './utils/helpers';
 
-const M = "#800000";
+const M = "#A02843";
 
 const daysUntil = d => d ? Math.ceil((new Date(d) - new Date()) / 86400000) : 9999;
 
@@ -79,7 +79,7 @@ ${monthStart.toLocaleDateString('en-GB')} to ${now.toLocaleDateString('en-GB')}
       {/* Page Header */}
       <div style={{ marginBottom: 20 }}>
         <h2 style={{ fontSize:20, fontWeight:700, color:"#111827", margin:0, display:"flex", alignItems:"center", gap:8, fontFamily:"var(--font-sans)", letterSpacing:"-0.02em" }}>
-          <FileText size={20} style={{ color:"#800000" }}/> Reports
+          <FileText size={20} style={{ color:"#A02843" }}/> Reports
         </h2>
         <p style={{ color:"#6b7280", fontSize:13, margin:"2px 0 0", fontFamily:"var(--font-sans)" }}>Weekly &amp; Monthly summaries</p>
       </div>

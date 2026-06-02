@@ -6,7 +6,7 @@ import {
 
 // ─────────────────────────────────────────────────────────────────────────────
 const OP_KEY = 'fisheye_op_invoices_v1';
-const M = '#800000';
+const M = '#A02843';
 const tdBase = { padding: '10px 14px', fontSize: 12 };
 
 const PARTNERS = {

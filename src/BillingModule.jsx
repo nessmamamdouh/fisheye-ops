@@ -3,8 +3,8 @@ import { DollarSign, Search, Users, Receipt, Layers, AlertTriangle, Download, Tr
 
 // ─── CONSTANTS & HELPERS ─────────────────────────────────────────────────────
 const VAT_RATE = 0.15;
-const M = "#800000";
-const MD = "#5c0000";
+const M = "#A02843";
+const MD = "#00293A";
 
 const fmtSAR = n => `SAR ${Number(n || 0).toLocaleString("en-SA", { minimumFractionDigits: 2 })}`;
 const fmtNum = n => Number(n || 0).toLocaleString("en-SA", { minimumFractionDigits: 2 });
