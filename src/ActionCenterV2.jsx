@@ -1234,30 +1234,15 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, clients
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
 
-      {/* ── Page Header ─────────────────────────────────────────────────────── */}
-      <div style={{ marginBottom: 16, display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: M, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Zap size={15} style={{ color: "white" }} />
-            </div>
-            <h1 style={{ fontSize: 18, fontWeight: 800, color: "#111827", margin: 0, letterSpacing: "-0.02em" }}>
-              Action Center
-            </h1>
-            {adjustedCounts.critical > 0 && (
-              <span style={{ fontSize: 11, fontWeight: 900, padding: "2px 9px", borderRadius: 999, backgroundColor: "#dc2626", color: "white" }}>
-                {adjustedCounts.critical} critical
-              </span>
-            )}
-          </div>
-          <p style={{ color: "#9ca3af", fontSize: 12, margin: 0 }}>
-            {adjustedCounts.total} open issues · {resolvedCount} resolved this session
-          </p>
-        </div>
+      {/* ── Topbar sub-row: subtitle + Stats toggle ──────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+        <p style={{ color: "#9ca3af", fontSize: 12, margin: 0 }}>
+          {adjustedCounts.total} open issues · {resolvedCount} resolved this session
+        </p>
         <button
           onClick={() => setShowStats((s) => !s)}
           style={{
-            padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+            padding: "6px 13px", borderRadius: 8, fontSize: 12, fontWeight: 600,
             border: `1px solid ${showStats ? M : "#e5e7eb"}`,
             backgroundColor: showStats ? `${M}10` : "white",
             color: showStats ? M : "#6b7280", cursor: "pointer",
