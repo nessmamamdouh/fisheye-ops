@@ -1392,7 +1392,7 @@ const PAYROLL_STEPS = [
   { k: 'payment',   l: 'Payment Received',   short: '✅ PAY', color: '#16a34a', desc: 'Payment   ' },
 ];
 
-function PayrollFlowTracker({ employees }) {
+function PayrollFlowTracker({ employees, sharedFlows, onSaveFlows }) {
   const now = new Date();
   const months = Array.from({ length: 4 }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -1411,52 +1411,10 @@ function PayrollFlowTracker({ employees }) {
   const [filterDone, setFilterDone] = useState(false);
   const [syncingFlow, setSyncingFlow] = useState(false);
 
-  // ── Load flows: localStorage first, then merge from Supabase (local wins) ──
-  const [flows, setFlows] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1')) || {}; }
-    catch { return {}; }
-  });
-
-  // On mount: pull all payroll flow rows from Supabase and merge into local state.
-  // Strategy: local always wins — if a key exists locally it keeps its value.
-  // This lets Vercel (empty localStorage) pull the full state from Supabase,
-  // while the local browser's own checkboxes are never overwritten.
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('fisheye_payroll_flows')
-          .select('month, data');
-        if (error || !data?.length) return;
-        const local = (() => {
-          try { return JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1')) || {}; }
-          catch { return {}; }
-        })();
-        // Supabase base, local overwrites — local always wins
-        const supaFlat = {};
-        data.forEach(row => {
-          if (row.data && typeof row.data === 'object') {
-            Object.assign(supaFlat, row.data);
-          }
-        });
-        const merged = { ...supaFlat, ...local };
-        setFlows(merged);
-        try { localStorage.setItem('fisheye_payroll_flow_v1', JSON.stringify(merged)); } catch {}
-      } catch {}
-    })();
-  }, []); // runs once on mount
-
-  const saveFlows = f => {
-    setFlows(f);
-    try { localStorage.setItem('fisheye_payroll_flow_v1', JSON.stringify(f)); } catch {}
-    // Sync to Supabase via fisheye_app_data (same table used for all app state)
-    supabase.from('fisheye_app_data')
-      .upsert({ key: 'fisheye_payroll_flow_v1', data: f }, { onConflict: 'key' })
-      .catch(() => {});
-  };
-
-  // No-op: sync now happens in saveFlows directly
-  const persistFlow = async (_key, _data) => {};
+  // Use shared flows from parent FinanceModule (single source of truth)
+  const flows = sharedFlows || {};
+  const saveFlows = onSaveFlows || (() => {});
+  const persistFlow = async (_key, _data) => {}; // no-op: parent handles Supabase sync
 
   // Stable key: employee name (not row index) so data survives spreadsheet row changes
   const empStableKey = (e) => (e.name || '').trim().toLowerCase().replace(/\s+/g, '_') || String(e._id);
@@ -1770,7 +1728,7 @@ function PayrollFlowTracker({ employees }) {
 }
 // ─── PartnerFlowTab — wrapper so the render call matches ─────────────────────
 function PartnerFlowTab({ employees }) {
-  return <PayrollFlowTracker employees={employees} />;
+  return <PayrollFlowTracker employees={employees} sharedFlows={flows} onSaveFlows={saveFlows} />;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2062,7 +2020,41 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
   const [activeTab, setActiveTab] = useState(
     () => localStorage.getItem("fisheye_finance_tab") || "payroll"
   );
-  const [flows, setFlows] = useState([]);
+  // ── Shared flows state — single source of truth for attentionItems + PayrollFlowTracker ──
+  const [flows, setFlows] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1')) || {}; }
+    catch { return {}; }
+  });
+
+  // Load from Supabase on mount (merge: local wins), then update state so attentionItems re-renders
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('fisheye_app_data')
+          .select('key, data')
+          .eq('key', 'fisheye_payroll_flow_v1')
+          .single();
+        if (error || !data?.data) return;
+        const local = (() => {
+          try { return JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1')) || {}; }
+          catch { return {}; }
+        })();
+        const merged = { ...data.data, ...local }; // local wins
+        localStorage.setItem('fisheye_payroll_flow_v1', JSON.stringify(merged));
+        setFlows(merged);
+      } catch {}
+    })();
+  }, []);
+
+  const saveFlows = f => {
+    setFlows(f);
+    try { localStorage.setItem('fisheye_payroll_flow_v1', JSON.stringify(f)); } catch {}
+    supabase.from('fisheye_app_data')
+      .upsert({ key: 'fisheye_payroll_flow_v1', data: f }, { onConflict: 'key' })
+      .catch(() => {});
+  };
+
   const [poSearchFilter, setPOSearchFilter] = useState("");
 
   // Jump to PO Reconciliation tab from global search
@@ -2121,8 +2113,7 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
   // ── Needs Attention items ──────────────────────────────────────────────────
   const attentionItems = useMemo(() => {
     const items = [];
-    let allFlows = {};
-    try { allFlows = JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1') || '{}'); } catch {}
+    const allFlows = flows; // use state (not localStorage) so it re-renders after Supabase load
     // Stable key: name-based (same as PayrollFlowTracker)
     const stableKey = (e) => (e.name || '').trim().toLowerCase().replace(/\s+/g, '_') || String(e._id);
 
@@ -2223,7 +2214,7 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
     }
 
     return items;
-  }, [active, now]);
+  }, [active, flows, now]);
 
   const [attOpen, setAttOpen] = useState(false);
 
