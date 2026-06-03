@@ -6073,7 +6073,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
 
   // Onboarding badge = employees actively in "Onboarding" workflow (same filter as the tab)
   const onboardingBadge = useMemo(() =>
-    employees.filter(e => !isExcluded(e) && e.workflowStatus === "Onboarding").length
+    employees.filter(e => !isExcluded(e) && ["onboarding", "اونبوردينج", "تأهيل"].includes((e.workflowStatus || "").toLowerCase().trim())).length
   , [employees]);
 
   // ── جاري التحميل من Supabase ──
