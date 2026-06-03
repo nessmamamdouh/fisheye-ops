@@ -2035,12 +2035,15 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
           .select('key, data')
           .eq('key', 'fisheye_payroll_flow_v1')
           .single();
-        if (error || !data?.data) return;
+        if (error) { console.warn('[PayrollFlow] Supabase read error:', error.message); return; }
+        if (!data?.data) { console.warn('[PayrollFlow] No data in Supabase for fisheye_payroll_flow_v1'); return; }
+        console.log('[PayrollFlow] Supabase loaded keys:', Object.keys(data.data).length);
         const local = (() => {
           try { return JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1')) || {}; }
           catch { return {}; }
         })();
         const merged = { ...data.data, ...local }; // local wins
+        console.log('[PayrollFlow] merged keys:', Object.keys(merged).length);
         localStorage.setItem('fisheye_payroll_flow_v1', JSON.stringify(merged));
         setFlows(merged);
       } catch {}
@@ -2052,7 +2055,10 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
     try { localStorage.setItem('fisheye_payroll_flow_v1', JSON.stringify(f)); } catch {}
     supabase.from('fisheye_app_data')
       .upsert({ key: 'fisheye_payroll_flow_v1', data: f }, { onConflict: 'key' })
-      .catch(() => {});
+      .then(({ error }) => {
+        if (error) console.error('[PayrollFlow] Supabase write FAILED:', error.message);
+        else console.log('[PayrollFlow] Supabase write OK, keys:', Object.keys(f).length);
+      });
   };
 
   const [poSearchFilter, setPOSearchFilter] = useState("");
