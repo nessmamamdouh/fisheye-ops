@@ -1411,36 +1411,56 @@ function PayrollFlowTracker({ employees }) {
   const [filterDone, setFilterDone] = useState(false);
   const [syncingFlow, setSyncingFlow] = useState(false);
 
-  // ── Load flows from localStorage ────────────────────────────────────────
+  // ── Load flows: localStorage first, then merge from Supabase (local wins) ──
   const [flows, setFlows] = useState(() => {
-    try {
-      const raw = localStorage.getItem('fisheye_payroll_flow_v1');
-      const parsed = JSON.parse(raw) || {};
-      console.log('[PayrollFlow] mounted, localStorage keys:', Object.keys(parsed).length);
-      return parsed;
-    } catch { return {}; }
+    try { return JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1')) || {}; }
+    catch { return {}; }
   });
 
-  // localStorage is the single source of truth for payroll flows.
-  // Supabase is a backup only — loaded on explicit sync, not on every mount.
-  // Removed auto-load on mount: it caused a race condition where Supabase
-  // old data could override fresh localStorage data after "All Done" + refresh.
+  // On mount: pull all payroll flow rows from Supabase and merge into local state.
+  // Strategy: local always wins — if a key exists locally it keeps its value.
+  // This lets Vercel (empty localStorage) pull the full state from Supabase,
+  // while the local browser's own checkboxes are never overwritten.
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('fisheye_payroll_flows')
+          .select('month, data');
+        if (error || !data?.length) return;
+        const local = (() => {
+          try { return JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1')) || {}; }
+          catch { return {}; }
+        })();
+        // Supabase base, local overwrites — local always wins
+        const supaFlat = {};
+        data.forEach(row => {
+          if (row.data && typeof row.data === 'object') {
+            Object.assign(supaFlat, row.data);
+          }
+        });
+        const merged = { ...supaFlat, ...local };
+        setFlows(merged);
+        try { localStorage.setItem('fisheye_payroll_flow_v1', JSON.stringify(merged)); } catch {}
+      } catch {}
+    })();
+  }, []); // runs once on mount
 
   const saveFlows = f => {
     setFlows(f);
-    try {
-      const str = JSON.stringify(f);
-      localStorage.setItem('fisheye_payroll_flow_v1', str);
-      const verify = localStorage.getItem('fisheye_payroll_flow_v1');
-      console.log('[PayrollFlow] saved keys:', Object.keys(f).length, '| verified:', verify === str ? '✓' : '✗ MISMATCH');
-    } catch(err) { console.error('[PayrollFlow] localStorage FAILED:', err); }
+    try { localStorage.setItem('fisheye_payroll_flow_v1', JSON.stringify(f)); } catch {}
   };
 
-  // Persist a single flow key to Supabase (fisheye_payroll_flows: month=key, data=flowData)
+  // Persist ALL current flows to Supabase as a single row (keyed by a fixed month="all")
   const persistFlow = async (key, data) => {
     try {
+      // Save the full flows object under a single "all" row so cross-device sync is simple
+      const latest = (() => {
+        try { return JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1')) || {}; }
+        catch { return {}; }
+      })();
       await supabase.from('fisheye_payroll_flows').upsert(
-        { month: key, data },
+        { month: 'all', data: latest },
         { onConflict: 'month' }
       );
     } catch {}
