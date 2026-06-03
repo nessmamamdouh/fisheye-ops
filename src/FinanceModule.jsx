@@ -1449,22 +1449,14 @@ function PayrollFlowTracker({ employees }) {
   const saveFlows = f => {
     setFlows(f);
     try { localStorage.setItem('fisheye_payroll_flow_v1', JSON.stringify(f)); } catch {}
+    // Sync to Supabase via fisheye_app_data (same table used for all app state)
+    supabase.from('fisheye_app_data')
+      .upsert({ key: 'fisheye_payroll_flow_v1', data: f }, { onConflict: 'key' })
+      .catch(() => {});
   };
 
-  // Persist ALL current flows to Supabase as a single row (keyed by a fixed month="all")
-  const persistFlow = async (key, data) => {
-    try {
-      // Save the full flows object under a single "all" row so cross-device sync is simple
-      const latest = (() => {
-        try { return JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1')) || {}; }
-        catch { return {}; }
-      })();
-      await supabase.from('fisheye_payroll_flows').upsert(
-        { month: 'all', data: latest },
-        { onConflict: 'month' }
-      );
-    } catch {}
-  };
+  // No-op: sync now happens in saveFlows directly
+  const persistFlow = async (_key, _data) => {};
 
   // Stable key: employee name (not row index) so data survives spreadsheet row changes
   const empStableKey = (e) => (e.name || '').trim().toLowerCase().replace(/\s+/g, '_') || String(e._id);

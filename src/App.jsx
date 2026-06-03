@@ -5881,11 +5881,18 @@ function FisheyeOpsPro({ employees, setEmployees }) {
         // 1. Load general app data (invoices, clients, partners, reminders, etc.)
         const { data: appData } = await supabase.from('fisheye_app_data').select('*');
         if (appData && appData.length > 0) {
-          // Skip payroll flow — managed separately via fisheye_payroll_flows table
-          // and persistFlow(). Overwriting here would erase unsaved local toggles.
-          const SKIP_KEYS = new Set(['fisheye_payroll_flow_v1']);
           appData.forEach(({ key, data }) => {
-            if (SKIP_KEYS.has(key)) return;
+            if (key === 'fisheye_payroll_flow_v1') {
+              // Merge payroll flow: Supabase is the base, local always wins
+              // This lets Vercel (empty localStorage) get full data from Supabase
+              // while local browser's own toggles are never overwritten
+              const existing = (() => {
+                try { return JSON.parse(localStorage.getItem(key)) || {}; } catch { return {}; }
+              })();
+              const merged = { ...data, ...existing }; // local wins
+              try { localStorage.setItem(key, JSON.stringify(merged)); } catch {}
+              return;
+            }
             try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
           });
           console.log(`✅ Loaded ${appData.length} data keys from Supabase`);
