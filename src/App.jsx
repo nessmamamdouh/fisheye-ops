@@ -6045,6 +6045,17 @@ function FisheyeOpsPro({ employees, setEmployees }) {
       });
     }
     count += uninvoicedNames.size;
+    // Negative net profit: partner payout exceeds gross margin
+    count += activeEmps.filter(e => {
+      if (e.profitMode !== 'partner') return false;
+      const totalPkg = Number(e.totalPackage || 0);
+      const pValue = Number(e.clientPrice || 0);
+      const margin = e.clientPriceType === 'percent' ? (pValue / 100) * totalPkg : pValue;
+      const payout = e.partnerCostType === 'percent'
+        ? Math.round((Number(e.partnerCost || 0) / 100) * totalPkg)
+        : Number(e.partnerCost || 0);
+      return margin - payout < 0;
+    }).length;
     // Unpaid invoices: overdue (>30 days) but recent enough to be actionable (<90 days)
     // Invoices older than 90 days are considered stale/handled — don't inflate the badge
     let invoices = [];

@@ -1147,7 +1147,7 @@ function ProfitPerClientTab({ employees }) {
                   <>
                     <tr key={r.client}
                       onClick={() => setExpandedClient(isExp ? null : r.client)}
-                      style={{ borderBottom: isExp ? "none" : "1px solid #f3f4f6", cursor: "pointer", backgroundColor: isExp ? col.light : i % 2 === 0 ? "white" : "#fafafa", transition: "background 0.15s" }}>
+                      style={{ borderBottom: isExp ? "none" : "1px solid #f3f4f6", cursor: "pointer", backgroundColor: r.netProfit < 0 ? "#fff1f2" : isExp ? col.light : i % 2 === 0 ? "white" : "#fafafa", transition: "background 0.15s" }}>
                       <td style={{ ...td, borderLeft: `3px solid ${col.accent}`, fontWeight: 700, paddingLeft: 10 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <span style={{ fontSize: 10, color: col.accent, transition: "transform 0.2s", display: "inline-block", transform: isExp ? "rotate(90deg)" : "none" }}>▶</span>
@@ -1165,7 +1165,9 @@ function ProfitPerClientTab({ employees }) {
                       <td style={{ ...td, textAlign: "right", fontFamily: "monospace", fontSize: 12, color: r.totalPartnerPayout > 0 ? "#7c3aed" : "#9ca3af" }}>
                         {r.totalPartnerPayout > 0 ? `(${f(r.totalPartnerPayout)})` : "—"}
                       </td>
-                      <td style={{ ...td, textAlign: "right", fontFamily: "monospace", fontSize: 12, fontWeight: 800, color: marginColor(r.netPct) }}>{f(r.netProfit)}</td>
+                      <td style={{ ...td, textAlign: "right", fontFamily: "monospace", fontSize: 12, fontWeight: 800, color: r.netProfit < 0 ? "#dc2626" : marginColor(r.netPct) }}>
+                        {r.netProfit < 0 ? `🔴 (${f(Math.abs(r.netProfit))})` : f(r.netProfit)}
+                      </td>
                       <td style={{ ...td, textAlign: "right", fontWeight: 900, fontSize: 12, color: marginColor(r.netPct) }}>{r.netPct.toFixed(1)}%</td>
                       <td style={{ ...td, textAlign: "right", fontFamily: "monospace", fontSize: 12, color: "#9ca3af" }}>{f(r.totalVAT)}</td>
                     </tr>
@@ -1197,7 +1199,9 @@ function ProfitPerClientTab({ employees }) {
                                       <td style={{ fontSize: 11, fontFamily: "monospace", textAlign: "right", padding: "5px 8px", color: payout > 0 ? "#7c3aed" : "#d1d5db" }}>
                                         {payout > 0 ? `(${f(payout)})` : "—"}
                                       </td>
-                                      <td style={{ fontSize: 11, fontFamily: "monospace", textAlign: "right", padding: "5px 8px", color: "#059669", fontWeight: 700 }}>{f(net)}</td>
+                                      <td style={{ fontSize: 11, fontFamily: "monospace", textAlign: "right", padding: "5px 8px", color: net < 0 ? "#dc2626" : "#059669", fontWeight: 700, backgroundColor: net < 0 ? "#fff1f2" : "transparent" }}>
+                                        {net < 0 ? `🔴 (${f(Math.abs(net))})` : f(net)}
+                                      </td>
                                       <td style={{ fontSize: 10, padding: "5px 8px" }}>
                                         {hasPO
                                           ? <span style={{ backgroundColor: "#f0fdf4", color: "#059669", padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>{String(e.poNumbers).trim()}</span>
@@ -2216,6 +2220,22 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
         label: `فواتير unpaid +30 يوم`,
         invoices: overdue,
         count: overdue.length,
+      });
+    }
+
+    // 4. Negative net profit employees (partner payout > gross margin)
+    const negProfit = active.filter(e => calcNetProfit(e) < 0);
+    if (negProfit.length > 0) {
+      items.push({
+        type: 'neg_profit',
+        tab: 'profit',
+        color: '#dc2626',
+        bg: '#fff1f2',
+        border: '#fecdd3',
+        icon: '🔴',
+        label: `ربح سالب — ${negProfit.length} موظف (partner cost > margin)`,
+        employees: negProfit,
+        count: negProfit.length,
       });
     }
 
