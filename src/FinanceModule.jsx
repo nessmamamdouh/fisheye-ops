@@ -1727,8 +1727,8 @@ function PayrollFlowTracker({ employees, sharedFlows, onSaveFlows }) {
   );
 }
 // ─── PartnerFlowTab — wrapper so the render call matches ─────────────────────
-function PartnerFlowTab({ employees }) {
-  return <PayrollFlowTracker employees={employees} sharedFlows={flows} onSaveFlows={saveFlows} />;
+function PartnerFlowTab({ employees, sharedFlows, onSaveFlows }) {
+  return <PayrollFlowTracker employees={employees} sharedFlows={sharedFlows} onSaveFlows={onSaveFlows} />;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2348,7 +2348,7 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
 
       {/* ── Tab Content ── */}
       {activeTab === "payroll"      && <PayrollTab          employees={employees} />}
-      {activeTab === "partner_flow" && <PartnerFlowTab       employees={employees} />}
+      {activeTab === "partner_flow" && <PartnerFlowTab       employees={employees} sharedFlows={flows} onSaveFlows={saveFlows} />}
       {activeTab === "invoices"     && <InvoiceManager employees={employees} setEmployees={setEmployees} />}
       {activeTab === "po_recon"     && <POReconciliationTab  employees={employees} initialFilter={poSearchFilter} />}
       {activeTab === "profit"       && <ProfitPerClientTab   employees={employees} />}
