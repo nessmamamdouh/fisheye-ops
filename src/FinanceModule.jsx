@@ -314,7 +314,14 @@ function PayrollTab({ employees }) {
       // Resigned → never show
       if (["resigned","resigned_ar","مستقيل"].includes(status)) return false;
       if (status === "expired") {
-        if (isSela && !hasPO) return true; // Sela expired بدون PO → للـ No-PO view
+        if (isSela && !hasPO) {
+          // Exclude if poAddedDate is this month — data entry in progress, will appear in expiredNewPO once poNumbers is filled
+          if (e.poAddedDate) {
+            const d = new Date(e.poAddedDate);
+            if (d.getFullYear() === year && d.getMonth() + 1 === month) return false;
+          }
+          return true; // Sela expired بدون PO → للـ No-PO view
+        }
         // Expired وعنده PO وصل الشهر ده → accumulated salary مستحقة
         if (isSela && hasPO && e.poAddedDate) {
           const d = new Date(e.poAddedDate);
@@ -365,8 +372,10 @@ function PayrollTab({ employees }) {
     return eligibleForPayroll
       .filter(e => {
         if (activeIds.has(e._id)) return false;
-        // Must have PO added this month — these are the only valid "fallen-through" cases
+        // Must have PO added this month AND poNumbers must be filled — otherwise still in no-PO view
         if (!e.poAddedDate) return false;
+        const hasPO = e.poNumbers && String(e.poNumbers).trim() !== '';
+        if (!hasPO) return false; // dedup: no-PO view owns this employee until poNumbers is filled
         const d = new Date(e.poAddedDate);
         return d.getFullYear() === year && d.getMonth() + 1 === month;
       })
