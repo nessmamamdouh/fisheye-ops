@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { FinanceModule } from './FinanceModule';
 import ClientPortal from './ClientPortal';
