@@ -44,7 +44,7 @@ const MD = "#00293A";  // Fisheye Navy    — Pantone 303C
 const ML = "#c04060";  // Crimson light tint
 const TODAY = new Date();
 TODAY.setHours(0, 0, 0, 0);
-const CLIENTS_LIST = ["Sela","SPL","Channelplay","Riva Engineering 2","Combuzz HR"];
+const CLIENTS_LIST = ["Sela","Channelplay","Riva Engineering 2"];
 const CLIENT_META = {
   "Sela":               { badge:"#bbf7d0", text:"#14532d", dot:"#16a34a", phone:"" },
   "SPL":                { badge:"#e9d5ff", text:"#4c1d95", dot:"#7c3aed", phone:"" },
@@ -1534,17 +1534,31 @@ function ExpiryCalendar({ employees, calOffset, setCalOffset, onSelect, clients=
 }
 
 // ─── WORKFORCE VIEW ────────────────────────────────────────────────────
+// ── Persistent filter helpers ──────────────────────────────────────────────
+const WF_FILTERS_KEY = "fisheye_wf_filters_v1";
+const loadWFFilters = () => {
+  try { return JSON.parse(localStorage.getItem(WF_FILTERS_KEY) || "{}"); }
+  catch { return {}; }
+};
+const saveWFFilter = (key, val) => {
+  try {
+    const cur = loadWFFilters();
+    localStorage.setItem(WF_FILTERS_KEY, JSON.stringify({ ...cur, [key]: val }));
+  } catch {}
+};
+
 function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV, pendingOpenEmpId, onPendingOpenHandled}) {
-  const [client, setClient] = useState("All");
-  const [search, setSearch] = useState("");
-  const [fStatus, setFStatus] = useState("");
-  const [fWF, setFWF] = useState("");
-  const [fProject, setFPrj] = useState("");
+  const _f = loadWFFilters(); // read once at mount
+  const [client, setClient] = useState(_f.client || "All");
+  const [search, setSearch] = useState("");   // search is intentionally not persisted
+  const [fStatus, setFStatus] = useState(_f.fStatus || "");
+  const [fWF, setFWF] = useState(_f.fWF || "");
+  const [fProject, setFPrj] = useState(_f.fProject || "");
   // ── Sprint 3: Advanced filters
-  const [fPO, setFPO] = useState("");
-  const [fSourcing, setFSourcing] = useState("");
-  const [fPartner, setFPartner] = useState("");
-  const [fNationality, setFNationality] = useState("");
+  const [fPO, setFPO] = useState(_f.fPO || "");
+  const [fSourcing, setFSourcing] = useState(_f.fSourcing || "");
+  const [fPartner, setFPartner] = useState(_f.fPartner || "");
+  const [fNationality, setFNationality] = useState(_f.fNationality || "");
   const [showImportMenu, setShowImportMenu] = useState(false);
   const [pendingCSVDiff, setPendingCSVDiff] = useState(null); // { changes, notFound, skipped, applyFn }
   const [importBackup, setImportBackup] = useState(null);     // snapshot for rollback
@@ -1564,7 +1578,7 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
     if (!pendingOpenEmpId) return;
     const emp = employees.find(e => e._id === pendingOpenEmpId);
     if (emp) { setProfile(emp); onPendingOpenHandled?.(); }
-  }, [pendingOpenEmpId, employees]);
+  }, [pendingOpenEmpId, employees, onPendingOpenHandled]);
   const [showWAPanel, setShowWAPanel] = useState(false);
   const [waCopied, setWACopied] = useState({});
   const [showProfitMode, setShowProfitMode] = useState({
@@ -1579,6 +1593,13 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
   const [bulkPartner, setBulkPartner] = useState("");
   const [bulkClient, setBulkClient] = useState("");
   const [bulkGosi, setBulkGosi] = useState("");
+
+  // ── Lightweight toast ─────────────────────────────────────────────────────
+  const [wfToast, setWFToast] = useState(null); // { msg, color }
+  const showWFToast = useCallback((msg, color = "#16a34a") => {
+    setWFToast({ msg, color });
+    setTimeout(() => setWFToast(null), 3000);
+  }, []);
 
   // 1. الحسابات والفلترة
   const projects = useMemo(() =>
@@ -1597,9 +1618,14 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
     ["", ...new Set(employees.map(e => e.partnerAssigned).filter(Boolean).sort())],
     [employees]
   );
-  const counts = useMemo(() =>
-    CLIENTS_LIST.reduce((a, c) => ({ ...a, [c]: employees.filter(e => e.client === c && !isExcluded(e)).length }), {}),
+  // Dynamic client list — derived from actual employee data
+  const clientsList = useMemo(() =>
+    [...new Set(employees.map(e => e.client).filter(Boolean))].sort(),
     [employees]
+  );
+  const counts = useMemo(() =>
+    clientsList.reduce((a, c) => ({ ...a, [c]: employees.filter(e => e.client === c && !isExcluded(e)).length }), {}),
+    [employees, clientsList]
   );
   const filtered = useMemo(() =>
     employees.filter(e => {
@@ -1623,20 +1649,35 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
     [employees, client, search, fStatus, fWF, fProject, fPO, fSourcing, fPartner, fNationality]
   );
   const activeFilterCount = [fStatus, fWF, fProject, fPO, fSourcing, fPartner, fNationality].filter(Boolean).length;
-  const clearAllFilters = () => { setFStatus(""); setFWF(""); setFPrj(""); setFPO(""); setFSourcing(""); setFPartner(""); setFNationality(""); };
+
+  // Persist-aware setters — save to localStorage on every change
+  const setClientP      = v => { setClient(v);      saveWFFilter("client",      v); };
+  const setFStatusP     = v => { setFStatus(v);     saveWFFilter("fStatus",     v); };
+  const setFWFP         = v => { setFWF(v);         saveWFFilter("fWF",         v); };
+  const setFPrjP        = v => { setFPrj(v);        saveWFFilter("fProject",    v); };
+  const setFPOP         = v => { setFPO(v);         saveWFFilter("fPO",         v); };
+  const setFSourcingP   = v => { setFSourcing(v);   saveWFFilter("fSourcing",   v); };
+  const setFPartnerP    = v => { setFPartner(v);    saveWFFilter("fPartner",    v); };
+  const setFNationalityP= v => { setFNationality(v);saveWFFilter("fNationality",v); };
+
+  const clearAllFilters = () => {
+    setFStatusP(""); setFWFP(""); setFPrjP(""); setFPOP("");
+    setFSourcingP(""); setFPartnerP(""); setFNationalityP("");
+  };
 
   // ── KPI values for header strip ──────────────────────────────────────────
   const kpiTotal    = useMemo(() => employees.filter(e => !isExcluded(e)).length, [employees]);
   const kpiNew      = useMemo(() => employees.filter(e => (e.status||"").toLowerCase()==="new").length, [employees]);
   const kpiExpiring = useMemo(() => employees.filter(e => { const d=daysUntil(e.endDate); return d>=0&&d<=30&&!isExcluded(e); }).length, [employees]);
-  const kpiNoPO     = useMemo(() => employees.filter(e => {
-    const st = (e.status || "").toLowerCase().trim();
-    const isResigned = ["resigned", "resigned_ar", "مستقيل"].includes(st);
-    return e.client === "Sela" && !isResigned && hasMissingPO(e);
-  }).length, [employees]);
+  const kpiNoPO     = useMemo(() => employees.filter(e =>
+    e.client === "Sela" && !isExcluded(e) && hasMissingPO(e)
+  ).length, [employees]);
   // ─── handleUpdateField: تحديث حقل واحد لموظف محدد (كان مفقود من props!) ───
   const handleUpdateField = async (id, field, value) => {
     const extraFields = {};
+
+    // Capture old snapshot before any state update — used for rollback if Supabase fails
+    const oldEmp = employees.find(e => e._id === id);
 
     if (field === "workflowStatus") {
       extraFields.wfDate = new Date().toISOString().split("T")[0];
@@ -1648,8 +1689,7 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
       }));
     } else if (field === "poNumbers") {
       // سجّل تاريخ إضافة الـ PO لأول مرة (أو أي تعديل عليها)
-      const emp = employees.find(e => e._id === id);
-      const hadPO = emp?.poNumbers && String(emp.poNumbers).trim() !== "";
+      const hadPO = oldEmp?.poNumbers && String(oldEmp.poNumbers).trim() !== "";
       const hasPO = value && String(value).trim() !== "";
       if (hasPO && !hadPO) {
         // PO جديدة — سجّل اليوم
@@ -1668,8 +1708,8 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
       if (error) throw error;
     } catch (err) {
       console.error("handleUpdateField error:", err.message);
-      // rollback محلي لو فشل الحفظ
-      setEmployees(prev => prev.map(e => e._id === id ? { ...e, [field]: e[field] } : e));
+      // rollback محلي لو فشل الحفظ — نرجع الـ snapshot القديمة
+      if (oldEmp) setEmployees(prev => prev.map(e => e._id === id ? oldEmp : e));
       alert("❌ فشل التحديث: " + err.message);
     }
   };
@@ -1723,8 +1763,7 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
   // 3. رفع CSV
   const handleCSVImport = async (e) => {
     const file = e.target.files[0];
-    console.log('📂 CSV import triggered, file:', file?.name);
-    if (!file) { console.warn('No file selected'); return; }
+    if (!file) return;
     e.target.value = '';
 
     const text = await file.text();
@@ -1789,10 +1828,12 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
 
   const doInsertCSV = async (records) => {
     try {
+      // Strip temp _id so Supabase auto-generates the real one
+      const clean = records.map(({ _id, ...rest }) => rest);
       // Insert in chunks of 50
       let allInserted = [];
-      for (let i = 0; i < records.length; i += 50) {
-        const { data, error } = await supabase.from('employees_master').insert(records.slice(i, i + 50)).select();
+      for (let i = 0; i < clean.length; i += 50) {
+        const { data, error } = await supabase.from('employees_master').insert(clean.slice(i, i + 50)).select();
         if (error) throw error;
         allInserted = [...allInserted, ...data];
       }
@@ -1809,11 +1850,7 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
   const { _id, ...fieldsToUpdate } = updated;
 
   // تحديث محلي سريع بـ _id الصح
-  setEmployees(prev => {
-    const n = prev.map(e => (e._id === _id ? updated : e));
-    localStorage.setItem("fisheyeData_v3", JSON.stringify(n));
-    return n;
-  });
+  setEmployees(prev => prev.map(e => (e._id === _id ? updated : e)));
 
   // حفظ في Supabase
  try {
@@ -1823,11 +1860,7 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
     .eq('_id', Number(_id))
     .select();
 
-  console.log("Supabase response:", response);
-
   if (response.error) throw response.error;
-  
-  console.log("✅ Updated rows:", response.data);
 
 } catch (err) {
   console.error("Save Error:", err.message);
@@ -1835,30 +1868,29 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
 }
 };
   const bulkUpd = async (field, value) => {
-  alert("bulkUpd called: " + field + " = " + value);
+  // إضافة wfDate تلقائياً لو الـ field هو workflowStatus (نفس منطق handleUpdateField)
+  const today = new Date().toISOString().split("T")[0];
+  const extraFields = field === "workflowStatus" ? { wfDate: today } : {};
+
   // 1. تحديث محلي سريع
-  setEmployees(prev => {
-    const n = prev.map(e =>
-      selected.includes(e._id) ? { ...e, [field]: value } : e
-    );
-    localStorage.setItem("fisheyeData_v3", JSON.stringify(n));
-    return n;
-  });
+  setEmployees(prev => prev.map(e =>
+    selected.includes(e._id) ? { ...e, [field]: value, ...extraFields } : e
+  ));
 
   // 2. حفظ في Supabase
   try {
     const { error } = await supabase
       .from('employees_master')
-      .update({ [field]: value })
+      .update({ [field]: value, ...extraFields })
       .in('_id', selected.map(Number));
 
     if (error) throw error;
-    console.log(`✅ Bulk updated ${selected.length} employees: ${field} = ${value}`);
     setShowBulk(false);
     setSelected([]);
+    showWFToast(`✅ Updated ${selected.length} employee${selected.length !== 1 ? "s" : ""}`);
   } catch (err) {
     console.error("Bulk Save Error:", err.message);
-    alert("❌ فشل الحفظ: " + err.message);
+    showWFToast(`❌ فشل الحفظ: ${err.message}`, "#dc2626");
   }
   };
   const selectedEmps = employees.filter(e => selected.includes(e._id));
@@ -1894,11 +1926,29 @@ const submitRenew = async () => {
   };
   const { _id, ...fields } = updated;
   setEmployees(prev => prev.map(e => e._id === _id ? updated : e));
-  await supabase.from('employees_master').update(fields).eq('_id', Number(_id));
+  const { error } = await supabase.from('employees_master').update(fields).eq('_id', Number(_id));
   setRenewEmp(null);
+  if (error) {
+    showWFToast(`❌ Renewal failed: ${error.message}`, "#dc2626");
+  } else {
+    showWFToast(`🔄 Contract renewed for ${renewEmp.name}`);
+  }
 };
   return (
     <div style={{ display: "flex", gap: 16 }}>
+
+      {/* ── Toast ── */}
+      {wfToast && (
+        <div style={{
+          position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
+          zIndex: 9999, backgroundColor: wfToast.color, color: "white",
+          padding: "10px 20px", borderRadius: 10, fontSize: 13, fontWeight: 600,
+          boxShadow: "0 4px 16px rgba(0,0,0,0.18)", pointerEvents: "none",
+          animation: "fadeIn 0.2s ease",
+        }}>
+          {wfToast.msg}
+        </div>
+      )}
 
       {/* ── Sidebar ── */}
       <div style={{ width: 180, flexShrink: 0 }}>
@@ -1908,12 +1958,12 @@ const submitRenew = async () => {
           </div>
           <span style={{ fontSize: 11, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.08em" }}>Clients</span>
         </div>
-        {["All", ...CLIENTS_LIST].map(c => {
+        {["All", ...clientsList].map(c => {
           const isA = client === c;
           const count = c === "All" ? employees.filter(e => !isExcluded(e)).length : counts[c] || 0;
           const dotColor = CLIENT_META[c]?.dot || M;
           return (
-            <button key={c} onClick={() => setClient(c)} style={{
+            <button key={c} onClick={() => setClientP(c)} style={{
               width: "100%", textAlign: "left", padding: "9px 12px", borderRadius: 10,
               border: isA ? `1px solid ${M}30` : "1px solid transparent",
               cursor: "pointer", fontSize: 12, fontWeight: 600,
@@ -2169,12 +2219,12 @@ const submitRenew = async () => {
           {showFilt && (
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", padding: "7px 10px", backgroundColor: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10 }}>
               {[
-                { label: "Status",      value: fStatus,      set: setFStatus,      opts: [["", "Status"], ...STATUS_OPTS.map(o=>[o,o])] },
-                { label: "Workflow",    value: fWF,          set: setFWF,          opts: [["", "Workflow"], ...WORKFLOW_OPTS.map(o=>[o,o])] },
-                { label: "Project",     value: fProject,     set: setFPrj,         opts: [["", "Project"], ...projects.filter(Boolean).map(o=>[o,o])] },
-                { label: "Sourcing",    value: fSourcing,    set: setFSourcing,    opts: [["", "Sourcing"], ...sourcingOpts.filter(Boolean).map(o=>[o,o])] },
-                { label: "Partner",     value: fPartner,     set: setFPartner,     opts: [["", "Partner"], ...partnerOpts.filter(Boolean).map(o=>[o,o])] },
-                { label: "Nationality", value: fNationality, set: setFNationality, opts: [["", "Nationality"], ...nationalityOpts.filter(Boolean).map(o=>[o,o])] },
+                { label: "Status",      value: fStatus,      set: setFStatusP,      opts: [["", "Status"], ...STATUS_OPTS.map(o=>[o,o])] },
+                { label: "Workflow",    value: fWF,          set: setFWFP,          opts: [["", "Workflow"], ...WORKFLOW_OPTS.map(o=>[o,o])] },
+                { label: "Project",     value: fProject,     set: setFPrjP,         opts: [["", "Project"], ...projects.filter(Boolean).map(o=>[o,o])] },
+                { label: "Sourcing",    value: fSourcing,    set: setFSourcingP,    opts: [["", "Sourcing"], ...sourcingOpts.filter(Boolean).map(o=>[o,o])] },
+                { label: "Partner",     value: fPartner,     set: setFPartnerP,     opts: [["", "Partner"], ...partnerOpts.filter(Boolean).map(o=>[o,o])] },
+                { label: "Nationality", value: fNationality, set: setFNationalityP, opts: [["", "Nationality"], ...nationalityOpts.filter(Boolean).map(o=>[o,o])] },
               ].map(({ label, value, set, opts }) => (
                 <select key={label} value={value} onChange={e => set(e.target.value)} style={{
                   padding: "5px 8px", borderRadius: 7, fontSize: 12, fontWeight: value ? 700 : 400,
@@ -2189,7 +2239,7 @@ const submitRenew = async () => {
               {/* PO Status pills */}
               <div style={{ display: "flex", gap: 2, backgroundColor: "#e5e7eb", borderRadius: 7, padding: 2 }}>
                 {[["", "PO: All"], ["has", "Has PO"], ["missing", "No PO"]].map(([v, l]) => (
-                  <button key={v} onClick={() => setFPO(v)} style={{
+                  <button key={v} onClick={() => setFPOP(v)} style={{
                     padding: "4px 9px", borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: "pointer", border: "none",
                     backgroundColor: fPO === v ? "white" : "transparent",
                     color: fPO === v ? (v === "missing" ? "#dc2626" : v === "has" ? "#16a34a" : "#374151") : "#9ca3af",
@@ -2315,7 +2365,7 @@ const submitRenew = async () => {
       style={{ ...s.sel, flex: 1 }}
     >
       <option value="">— Select Client —</option>
-      {CLIENTS_LIST.map(c => (
+      {clientsList.map(c => (
         <option key={c} value={c}>{c}</option>
       ))}
     </select>
@@ -2589,12 +2639,12 @@ const submitRenew = async () => {
       {/* ── WA Message Panel ── */}
       {showWAPanel && (() => {
         const pool = selected.length > 0 ? filtered.filter(e => selected.includes(e._id)) : filtered;
-        const byClient = CLIENTS_LIST.reduce((acc, c) => {
+        const byClient = clientsList.reduce((acc, c) => {
           const emps = pool.filter(e => e.client === c);
           if (emps.length > 0) acc[c] = emps;
           return acc;
         }, {});
-        const otherEmps = pool.filter(e => !CLIENTS_LIST.includes(e.client));
+        const otherEmps = pool.filter(e => !clientsList.includes(e.client));
         if (otherEmps.length > 0) byClient["Other"] = otherEmps;
 
         const buildMsg = (clientName, emps) => {
@@ -2846,7 +2896,7 @@ const submitRenew = async () => {
                         <span style={{ fontSize:11, color:"#9ca3af" }}>{byProject[proj].length} موظف</span>
                       </div>
                       <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                        {CLIENTS_LIST.map(c => {
+                        {clientsList.map(c => {
                           const meta = CLIENT_META[c] || {};
                           const sel = csvClientAssign[proj] === c;
                           return (
@@ -3412,10 +3462,8 @@ function calcClientHealth(clientName, employees) {
 // ─── CLIENT HUB ─────────────────────────────────────────────────────────
 const DEF_CLIENTS=[
   {id:"C-01",name:"Sela",region:"Riyadh",email:"contact@sela.sa",status:"active",contacts:[{name:"Ahmed Al-Saleh",role:"HR Director",phone:"+966501234567"},{name:"Layla Al-Rashid",role:"Finance",phone:"+966502345678"}],notes:"Primary client · Multiple projects",requestLog:[{ts:"2026-04-20T10:00:00Z",type:"Invoice",employee:"Batch A",status:"Completed"},{ts:"2026-04-28T15:00:00Z",type:"Contract Update",employee:"Batch B",status:"Pending"}]},
-  {id:"C-02",name:"SPL",region:"Riyadh",email:"hr@spl.sa",status:"active",contacts:[{name:"Faisal Al-Dosari",role:"Operations",phone:"+966509876543"}],notes:"Staffing provider",requestLog:[{ts:"2026-04-25T12:00:00Z",type:"Invoice",employee:"Monthly",status:"Completed"}]},
   {id:"C-03",name:"Channelplay",region:"Eastern Province",email:"admin@channelplay.sa",status:"active",contacts:[{name:"Sara Mohammed",role:"HR Manager",phone:"+966507654321"}],notes:"Tech company · SILQFI projects",requestLog:[]},
   {id:"C-04",name:"Riva Engineering 2",region:"Riyadh",email:"ops@riva.sa",status:"active",contacts:[{name:"Mohammed CEO",role:"Executive",phone:"+966501111111"}],notes:"CEO projects",requestLog:[]},
-  {id:"C-05",name:"Combuzz HR",region:"Riyadh",email:"info@combuzz.sa",status:"active",contacts:[{name:"Support Team",role:"General",phone:"+966505555555"}],notes:"Multiple brands handling",requestLog:[]},
 ];
 
 function ClientHub({ employees, clients, saveClients }) {
@@ -6335,6 +6383,11 @@ function FisheyeOpsPro({ employees, setEmployees }) {
             clients={clients}
             partners={partners}
             onNavigate={k => { setNav(k); localStorage.setItem("fisheye_nav", k); }}
+            onOpenEmployee={emp => {
+              setNav("workforce");
+              localStorage.setItem("fisheye_nav", "workforce");
+              setPendingOpenEmpId(emp._id);
+            }}
           />}
 
           {/* ── ENTITY VIEWS ── */}

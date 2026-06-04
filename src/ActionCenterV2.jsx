@@ -19,7 +19,7 @@ import {
   Bell, TrendingUp, BarChart2, FileText, Building2,
   Copy, Check, Mail, MessageCircle, Layers, CalendarDays,
 } from "lucide-react";
-import { useOperationalIssues } from "./useOperationalIssues";
+import { useOperationalIssues, daysUntil } from "./useOperationalIssues";
 import { isExcluded } from "./utils/helpers";
 
 // ─── Brand colors (ساعتك matches App.jsx) ─────────────────────────────────
@@ -229,6 +229,16 @@ const WORKFLOW_OPTS = [
 // ═══════════════════════════════════════════════════════════════════════════════
 const TABS = [
   {
+    key: "all",
+    label: "All",
+    emoji: "⚡",
+    color: M,
+    bg: "#fff5f5",
+    border: `${M}44`,
+    icon: Layers,
+    desc: "Every open issue",
+  },
+  {
     key: "urgent",
     label: "Urgent",
     emoji: "🔴",
@@ -336,9 +346,9 @@ function SeverityBadge({ severity }) {
 }
 
 // ─── Calendar helpers ─────────────────────────────────────────────────────────
+// daysUntil is imported from useOperationalIssues — single source of truth
 const TODAY_CAL = new Date();
 TODAY_CAL.setHours(0, 0, 0, 0);
-const daysUntil = d => d ? Math.ceil((new Date(d) - TODAY_CAL) / 86400000) : 9999;
 const CLIENTS_LIST = ["Sela","SPL","Channelplay","Riva Engineering 2","Combuzz HR"];
 const PRIORITY_OPS = { CRITICAL:0, HIGH:1, MEDIUM:2, LOW:3 };
 const PRIORITY_META_OPS = {
@@ -471,6 +481,8 @@ function IssueCard({
   onSendReminder,
   onEscalate,
   resolvePartnerContact,
+  isSelected,
+  onToggleSelect,
 }) {
   const [showWFPicker, setShowWFPicker] = useState(false);
   const [showPartnerPicker, setShowPartnerPicker] = useState(false);
@@ -523,6 +535,16 @@ function IssueCard({
       <div style={{ padding: "11px 14px" }}>
         {/* Row 1: Name + badges + WA */}
         <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
+          {/* Bulk select checkbox */}
+          {onToggleSelect && (
+            <input
+              type="checkbox"
+              checked={!!isSelected}
+              onChange={() => onToggleSelect(issue.id)}
+              onClick={ev => ev.stopPropagation()}
+              style={{ marginTop: 3, flexShrink: 0, accentColor: tabCfg.color, cursor: "pointer" }}
+            />
+          )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <span style={{ fontWeight: 700, fontSize: 13, color: "#111827" }}>{e?.name || "—"}</span>
@@ -788,6 +810,14 @@ function EscalationModal({ issue, onClose, onConfirm, clients = [] }) {
   const [selectedContact, setSelectedContact] = useState(
     clientContacts[0]?.name || ""
   );
+
+  // Load previous escalations for THIS employee from localStorage
+  const prevEscalations = useMemo(() => {
+    try {
+      const log = JSON.parse(localStorage.getItem("fisheye_escalations") || "[]");
+      return log.filter(l => l.employee === e?.name).slice(0, 3);
+    } catch { return []; }
+  }, [e?.name]);
   const [externalName,  setExternalName]  = useState("");
   const [externalEmail, setExternalEmail] = useState("");
   const [externalPhone, setExternalPhone] = useState("");
@@ -953,6 +983,22 @@ function EscalationModal({ issue, onClose, onConfirm, clients = [] }) {
             />
           </div>
 
+          {/* ── Previous escalations for this employee ── */}
+          {prevEscalations.length > 0 && (
+            <div style={{ padding: "10px 14px", borderRadius: 8, backgroundColor: "#f9fafb", border: "1px solid #e5e7eb" }}>
+              <p style={{ margin: "0 0 8px", fontSize: 10, fontWeight: 800, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Previous Escalations — {e?.name}
+              </p>
+              {prevEscalations.map((l, i) => (
+                <div key={i} style={{ fontSize: 11, color: "#374151", marginBottom: 4, paddingBottom: 4, borderBottom: i < prevEscalations.length - 1 ? "1px solid #f3f4f6" : "none" }}>
+                  <span style={{ fontWeight: 700 }}>{new Date(l.ts).toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" })}</span>
+                  {" · "}<span style={{ color: "#6b7280" }}>To: {l.to}{l.contact ? ` (${l.contact})` : ""}</span>
+                  {l.note && <span style={{ color: "#9ca3af" }}> — {l.note}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* ── Action buttons ── */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", paddingTop: 4 }}>
             <button onClick={onClose} style={{
@@ -992,7 +1038,7 @@ function EscalationModal({ issue, onClose, onConfirm, clients = [] }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN ACTION CENTER
 // ═══════════════════════════════════════════════════════════════════════════════
-export function ActionCenter({ employees = [], setEmployees, onNavigate, clients = [], partners = [] }) {
+export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenEmployee, clients = [], partners = [] }) {
 
   // ─── Resolve partner phone from partners array ────────────────────────────
   const resolvePartnerContact = useCallback((partnerAssigned, fullRecord = false) => {
@@ -1024,71 +1070,35 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, clients
   const [escalationIssue, setEscalationIssue] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [toast, setToast] = useState(null);
+  const [selectedIssueIds, setSelectedIssueIds] = useState(new Set());
 
   const tabCfg = TABS.find((t) => t.key === activeTab) || TABS[0];
 
-  // ─── Partner tab issues ─────────────────────────────────────────────────────
-  const partnerIssues = useMemo(() => {
-    // 1. Existing issues flagged as partner/iqama from the hook
-    const fromHook = (issues.all || []).filter(i => {
-      const lbl = (i.label || "").toLowerCase();
-      const wf  = (i.employee?.workflowStatus || "").toLowerCase();
-      return (
-        lbl.includes("iqama") || lbl.includes("transfer") ||
-        lbl.includes("partner") || lbl.includes("missing doc") ||
-        lbl.includes("settlement") || lbl.includes("payroll confirm") ||
-        wf.includes("iqama") || wf.includes("qiwa") ||
-        i.type === "iqama_transfer" || i.type === "partner"
-      );
-    });
+  // Clear selection whenever user switches tab
+  const handleSetActiveTab = useCallback((key) => {
+    setActiveTab(key);
+    setSelectedIssueIds(new Set());
+  }, []);
 
-    // 2. Employees with "Qiwa Approved" → route by profitMode
-    const qiwaApproved = employees
-      .filter(e =>
-        !["expired","resigned"].includes((e.status||"").toLowerCase()) &&
-        (e.workflowStatus||"").toLowerCase() === "qiwa approved"
-      )
-      .map(e => {
-        const isPartner = e.profitMode === "partner" && e.partnerAssigned;
-        return {
-          id:       `iqama_pending_${e._id}`,
-          type:     isPartner ? "iqama_transfer" : "followup_iqama",
-          label:    isPartner ? "Iqama Transfer Pending — Partner Action" : "Iqama Transfer Pending — Follow Up",
-          severity: "high",
-          daysLeft: null,
-          employee: e,
-          client:   e.client,
-          reason:   isPartner
-            ? `Qiwa approved — partner (${e.partnerAssigned}) must complete Iqama transfer`
-            : "Qiwa approved — awaiting Iqama transfer confirmation",
-          recommendedAction: isPartner
-            ? `Contact ${e.partnerAssigned} to initiate Iqama transfer`
-            : "Follow up with employee — confirm Iqama transfer is in progress",
-          actions: isPartner
-            ? ["contact_partner", "send_reminder", "open_employee", "mark_resolved"]
-            : ["send_reminder", "follow_up", "open_employee", "mark_resolved"],
-          partnerPhone: e.partnerPhone || null,
-          partnerName:  e.partnerAssigned || null,
-          // used to route to correct tab
-          _tab: isPartner ? "partner" : "followups",
-        };
-      });
-
-    // Merge, deduplicate by id
-    const seen = new Set(fromHook.map(i => i.id));
-    const merged = [...fromHook];
-    qiwaApproved.forEach(i => { if (!seen.has(i.id)) merged.push(i); });
-    return merged;
-  }, [issues, employees]);
+  // ─── Partner tab issues — now sourced from the hook ─────────────────────────
+  // The hook computes these in useOperationalIssues and returns issues.partner
+  const partnerIssues = useMemo(() => issues.partner || [], [issues.partner]);
 
   // ─── Filter issues for active tab ─────────────────────────────────────────
   const tabIssues = useMemo(() => {
     let raw;
-    if (activeTab === "partner") {
-      // partner tab: hook partner issues + qiwa approved with partner
+    if (activeTab === "all") {
+      // All issues: hook all + partner issues (deduplicated by id)
+      const seen = new Set((issues.all || []).map(i => i.id));
+      const extraPartner = partnerIssues.filter(i => !seen.has(i.id));
+      raw = [...(issues.all || []), ...extraPartner]
+        .sort((a, b) => {
+          const order = { critical: 0, high: 1, medium: 2, low: 3 };
+          return (order[a.severity] ?? 4) - (order[b.severity] ?? 4);
+        });
+    } else if (activeTab === "partner") {
       raw = partnerIssues.filter(i => i._tab === "partner" || !i._tab);
     } else if (activeTab === "followups") {
-      // followups tab: hook followups + qiwa approved direct
       const hookFollowups = issues["followups"] || [];
       const qiwaDirect = partnerIssues.filter(i => i._tab === "followups");
       raw = [...hookFollowups, ...qiwaDirect];
@@ -1117,6 +1127,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, clients
     const result = { ...issues.counts };
     // For each tab, count how many of its issues are resolved
     TABS.forEach(t => {
+      if (t.key === "all") return; // calculated separately below
       let tabList;
       if (t.key === "partner") {
         tabList = partnerIssues.filter(i => i._tab === "partner" || !i._tab);
@@ -1137,6 +1148,8 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, clients
     result.critical = Math.max(0, (issues.counts.critical || 0) -
       (issues.all || []).filter(i => resolvedIds.has(i.id) && i.severity === "critical").length);
     result.total = Math.max(0, (issues.counts.total || 0) - resolvedIds.size);
+    // "all" tab count = every unresolved issue across all tabs
+    result.all = result.total;
     return result;
   }, [issues, partnerIssues, resolvedIds]);
 
@@ -1183,10 +1196,15 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, clients
   }, [setEmployees, showToast]);
 
   const handleOpenEmployee = useCallback((issue) => {
-    // Navigate to workforce view — in the real app this could open the profile modal
-    if (onNavigate) onNavigate("workforce");
-    showToast(`📂 Opening ${issue.employee?.name}`);
-  }, [onNavigate, showToast]);
+    const emp = issue.employee;
+    if (onOpenEmployee && emp) {
+      // Open the employee's profile card directly
+      onOpenEmployee(emp);
+    } else if (onNavigate) {
+      onNavigate("workforce");
+    }
+    showToast(`📂 Opening ${emp?.name}`);
+  }, [onNavigate, onOpenEmployee, showToast]);
 
   const handleSendReminder = useCallback((issue) => {
     const e  = issue.employee;
@@ -1208,10 +1226,24 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, clients
     setEscalationIssue(issue);
   }, []);
 
-  const handleEscalateConfirm = useCallback(({ to, note }) => {
+  const handleEscalateConfirm = useCallback(({ to, note, contact }) => {
     const e = escalationIssue?.employee;
-    console.log("ESCALATED:", { issue: escalationIssue?.id, to, note, employee: e?.name });
-    showToast(`🚨 Escalated to ${to}`);
+    try {
+      const log = JSON.parse(localStorage.getItem("fisheye_escalations") || "[]");
+      log.unshift({
+        ts:       new Date().toISOString(),
+        issueId:  escalationIssue?.id,
+        label:    stdLabel(escalationIssue?.label),
+        employee: e?.name,
+        client:   e?.client,
+        to,
+        contact:  contact?.name || null,
+        note:     note || null,
+      });
+      // keep last 50 escalations
+      localStorage.setItem("fisheye_escalations", JSON.stringify(log.slice(0, 50)));
+    } catch {}
+    showToast(`🚨 Escalated to ${to} — logged`);
     setEscalationIssue(null);
   }, [escalationIssue, showToast]);
 
@@ -1320,7 +1352,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, clients
       )}
 
       {/* ── Tab Navigation ──────────────────────────────────────────────────── */}
-      <TabNavBar counts={adjustedCounts} activeTab={activeTab} setActiveTab={setActiveTab} />
+      <TabNavBar counts={adjustedCounts} activeTab={activeTab} setActiveTab={handleSetActiveTab} />
 
       {/* ── Filters row ─────────────────────────────────────────────────────── */}
       <div style={{
@@ -1401,11 +1433,48 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, clients
               label={`${tabCfg.emoji} ${tabCfg.label} Report${clientFilter !== "all" ? ` — ${clientFilter}` : ""}`}
               color={tabCfg.color}
             />
+            {/* Resolve Selected — only shown when items are checked */}
+            {selectedIssueIds.size > 0 && (
+              <button
+                onClick={() => {
+                  const ids = [...selectedIssueIds];
+                  setResolvedIds((prev) => {
+                    const next = new Set([...prev, ...ids]);
+                    try {
+                      const stored = JSON.parse(localStorage.getItem("fisheye_resolved_meta") || "[]");
+                      const now = Date.now();
+                      ids.forEach(id => stored.push({ id, ts: now }));
+                      const fresh = stored.filter(e => now - e.ts < 172800000);
+                      localStorage.setItem("fisheye_resolved_meta", JSON.stringify(fresh));
+                      localStorage.setItem("fisheye_resolved_issues", JSON.stringify([...next]));
+                    } catch {}
+                    return next;
+                  });
+                  setSelectedIssueIds(new Set());
+                  showToast(`✅ Resolved ${ids.length} selected`);
+                }}
+                style={{ padding: "5px 11px", borderRadius: 7, border: `1.5px solid #16a34a`, backgroundColor: "#f0fdf4", color: "#16a34a", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+              >
+                ✅ Resolve Selected ({selectedIssueIds.size})
+              </button>
+            )}
             {visibleIssues.length > 0 && (
               <button
                 onClick={() => {
                   const ids = visibleIssues.map((i) => i.id);
-                  setResolvedIds((prev) => new Set([...prev, ...ids]));
+                  setResolvedIds((prev) => {
+                    const next = new Set([...prev, ...ids]);
+                    try {
+                      const stored = JSON.parse(localStorage.getItem("fisheye_resolved_meta") || "[]");
+                      const now = Date.now();
+                      ids.forEach(id => stored.push({ id, ts: now }));
+                      const fresh = stored.filter(e => now - e.ts < 172800000);
+                      localStorage.setItem("fisheye_resolved_meta", JSON.stringify(fresh));
+                      localStorage.setItem("fisheye_resolved_issues", JSON.stringify([...next]));
+                    } catch {}
+                    return next;
+                  });
+                  setSelectedIssueIds(new Set());
                   showToast(`✅ Resolved all ${ids.length} items`);
                 }}
                 style={{ padding: "5px 11px", borderRadius: 7, border: `1px solid ${tabCfg.color}`, backgroundColor: "white", color: tabCfg.color, fontSize: 11, fontWeight: 700, cursor: "pointer" }}
@@ -1438,6 +1507,12 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, clients
                 onSendReminder={handleSendReminder}
                 onEscalate={handleEscalate}
                 resolvePartnerContact={resolvePartnerContact}
+                isSelected={selectedIssueIds.has(issue.id)}
+                onToggleSelect={(id) => setSelectedIssueIds(prev => {
+                  const next = new Set(prev);
+                  next.has(id) ? next.delete(id) : next.add(id);
+                  return next;
+                })}
               />
             ))
           )}
@@ -1474,6 +1549,32 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, clients
 // Re-export for convenience
 export { useOperationalIssues };
 // ─── Local helpers for OperationsCalendar & ClientCommandCenter ──────────────
+
+/** Small WhatsApp icon-link button used inside ClientCommandCenter cards */
+function WAButton({ phone }) {
+  const href = waHref(phone);
+  if (!href) return null;
+  return (
+    <a href={href} target="_blank" rel="noreferrer" style={{
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      width: 28, height: 28, borderRadius: 8,
+      backgroundColor: "#16a34a", color: "white",
+      textDecoration: "none", fontSize: 13, flexShrink: 0,
+    }} title="WhatsApp">💬</a>
+  );
+}
+
+/** Coloured dot reflecting issue severity string: critical / high / medium / low */
+function PriorityDot({ severity }) {
+  const colorMap = { critical: "#dc2626", high: "#ea580c", medium: "#d97706", low: "#22c55e" };
+  return (
+    <span style={{
+      display: "inline-block", width: 7, height: 7,
+      borderRadius: "50%", backgroundColor: colorMap[severity] || "#9ca3af", flexShrink: 0,
+    }} />
+  );
+}
+
 function ACCard({ children, style={}, border, onClick }) {
   return (
     <div className="fe-card" style={{ border: border || undefined, ...style }} onClick={onClick}>
@@ -1650,7 +1751,7 @@ export function OperationsCalendar({ employees }) {
                   fontSize:11,fontWeight:800,flexShrink:0,
                   color:evt.color,
                 }}>
-                  {daysUntil(evt.date) === 0 ? "TODAY_CAL" : `${daysUntil(evt.date)}d`}
+                  {daysUntil(evt.date) === 0 ? "Today" : `${daysUntil(evt.date)}d`}
                 </span>
               </div>
             ))}
@@ -1667,19 +1768,23 @@ export function OperationsCalendar({ employees }) {
 // 🏢 CLIENT COMMAND CENTER (with Health Score)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function calcClientHealth(clientName, employees, issues) {
-  const clientEmps = employees.filter(e => e.client === clientName && !isExcluded(e));
-  const clientIssues = issues.filter(i => i.client === clientName);
+function calcClientHealth(clientName, employees, allIssues) {
+  const clientEmps   = employees.filter(e => e.client === clientName && !isExcluded(e));
+  // Issues from the hook store client inside employee object
+  const clientIssues = allIssues.filter(i => (i.employee?.client || i.client) === clientName);
 
   // Scoring factors (higher = healthier)
   let score = 100;
 
-  // Penalize per critical issue
-  const critIssues = clientIssues.filter(i => i.priority === PRIORITY_OPS.CRITICAL).length;
-  const highIssues = clientIssues.filter(i => i.priority === PRIORITY_OPS.HIGH).length;
-  const stuckIssues = clientIssues.filter(i => i.type === "stuck_workflow").length;
-  const missingPO = clientIssues.filter(i => i.type === "missing_po").length;
-  const expiringContracts = clientIssues.filter(i => i.type === "contract_expiry").length;
+  // Use severity strings (as returned by useOperationalIssues)
+  const critIssues       = clientIssues.filter(i => i.severity === "critical").length;
+  const highIssues       = clientIssues.filter(i => i.severity === "high").length;
+  // Use subtype strings (as returned by useOperationalIssues)
+  const stuckIssues      = clientIssues.filter(i => i.subtype === "no_workflow").length;
+  const missingPO        = clientIssues.filter(i => i.subtype === "missing_po").length;
+  const expiringContracts = clientIssues.filter(i =>
+    i.subtype === "expiring_critical" || i.subtype === "renewal_needed"
+  ).length;
 
   score -= critIssues * 20;
   score -= highIssues * 10;
@@ -1687,9 +1792,7 @@ function calcClientHealth(clientName, employees, issues) {
   score -= missingPO * 5;
   score -= expiringContracts * 12;
 
-  // Bonus for having workforce
-  const hasWorkforce = clientEmps.length > 0;
-  if (!hasWorkforce) score -= 10;
+  if (clientEmps.length === 0) score -= 10;
 
   const finalScore = Math.max(0, Math.min(100, score));
   const label = finalScore >= 80 ? "Healthy" : finalScore >= 60 ? "Attention" : finalScore >= 40 ? "At Risk" : "Critical";
@@ -1700,15 +1803,22 @@ function calcClientHealth(clientName, employees, issues) {
 
 export function ClientCommandCenter({ employees }) {
   const [selectedClient, setSelectedClient] = useState(null);
-  const { issues } = useOperationalIssues(employees);
+  // `all` is the flat array of every issue across all tabs
+  const { all: allIssues } = useOperationalIssues(employees);
+
+  // Build client list dynamically from the actual employee data
+  const clientsList = useMemo(
+    () => [...new Set(employees.map(e => e.client).filter(Boolean))].sort(),
+    [employees]
+  );
 
   const clientData = useMemo(() => {
-    return CLIENTS_LIST.map(name => ({
+    return clientsList.map(name => ({
       name,
-      ...calcClientHealth(name, employees, issues),
+      ...calcClientHealth(name, employees, allIssues),
       meta: CLIENT_META[name],
     }));
-  }, [employees, issues]);
+  }, [employees, allIssues, clientsList]);
 
   const selected = selectedClient ? clientData.find(c => c.name === selectedClient) : null;
 
@@ -1769,15 +1879,19 @@ export function ClientCommandCenter({ employees }) {
                 </div>
                 {cd.issues.length > 0 && (
                   <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
-                    {cd.issues.slice(0,3).map(iss => (
-                      <span key={iss.id} style={{
-                        fontSize:10,padding:"2px 7px",borderRadius:999,fontWeight:700,
-                        backgroundColor: PRIORITY_META_OPS[iss.priority].bg,
-                        color: PRIORITY_META_OPS[iss.priority].color,
-                      }}>
-                        {iss.title.length > 30 ? iss.title.slice(0,30)+"…" : iss.title}
-                      </span>
-                    ))}
+                    {cd.issues.slice(0,3).map(iss => {
+                      const sevBg    = { critical:"#fee2e2", high:"#ffedd5", medium:"#fef9c3", low:"#f3f4f6" }[iss.severity] || "#f3f4f6";
+                      const sevColor = { critical:"#991b1b", high:"#9a3412", medium:"#854d0e", low:"#374151" }[iss.severity] || "#374151";
+                      const lbl = stdLabel(iss.label) || "";
+                      return (
+                        <span key={iss.id} style={{
+                          fontSize:10, padding:"2px 7px", borderRadius:999, fontWeight:700,
+                          backgroundColor: sevBg, color: sevColor,
+                        }}>
+                          {lbl.length > 30 ? lbl.slice(0,30)+"…" : lbl}
+                        </span>
+                      );
+                    })}
                     {cd.issues.length > 3 && (
                       <span style={{fontSize:10,color:"#9ca3af"}}>+{cd.issues.length-3} more</span>
                     )}
@@ -1813,7 +1927,7 @@ export function ClientCommandCenter({ employees }) {
                             fontSize:10,fontWeight:800,flexShrink:0,
                             color: days<=7?"#dc2626":days<=30?"#d97706":"#9ca3af",
                           }}>
-                            {days<0?"EXPIRED":days===0?"TODAY_CAL":`${days}d`}
+                            {days<0?"Expired":days===0?"Today":`${days}d`}
                           </span>
                         )}
                         {e.phone && <WAButton phone={e.phone}/>}
@@ -1837,23 +1951,28 @@ export function ClientCommandCenter({ employees }) {
             color={selected.color}
           />
           <div style={{maxHeight:360,overflowY:"auto"}}>
-            {selected.issues.map(issue => (
-              <div key={issue.id} style={{
-                display:"flex",alignItems:"flex-start",gap:12,padding:"10px 16px",
-                borderBottom:"1px solid #f9fafb",
-              }}>
-                <div style={{width:3,alignSelf:"stretch",borderRadius:999,backgroundColor:PRIORITY_META_OPS[issue.priority].color,flexShrink:0,marginTop:2}}/>
-                <div style={{flex:1}}>
-                  <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-                    <PriorityDot priority={issue.priority}/>
-                    <span style={{fontSize:12,fontWeight:700,color:"#111827"}}>{issue.title}</span>
+            {selected.issues.map(issue => {
+              const sevColor = { critical:"#dc2626", high:"#ea580c", medium:"#d97706", low:"#22c55e" }[issue.severity] || "#9ca3af";
+              const lbl = stdLabel(issue.label) || "—";
+              return (
+                <div key={issue.id} style={{
+                  display:"flex",alignItems:"flex-start",gap:12,padding:"10px 16px",
+                  borderBottom:"1px solid #f9fafb",
+                }}>
+                  <div style={{width:3,alignSelf:"stretch",borderRadius:999,backgroundColor:sevColor,flexShrink:0,marginTop:2}}/>
+                  <div style={{flex:1}}>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                      <PriorityDot severity={issue.severity}/>
+                      <span style={{fontSize:12,fontWeight:700,color:"#111827"}}>{lbl}</span>
+                    </div>
+                    {issue.recommendedAction && (
+                      <p style={{margin:"3px 0 0",fontSize:11,fontWeight:600,color:M}}>→ {issue.recommendedAction}</p>
+                    )}
                   </div>
-                  <p style={{margin:"3px 0 0",fontSize:11,color:"#6b7280"}}>{issue.reason}</p>
-                  <p style={{margin:"3px 0 0",fontSize:11,fontWeight:600,color:M}}>→ {issue.recommendedAction}</p>
+                  {issue.employee?.phone && <WAButton phone={issue.employee.phone}/>}
                 </div>
-                {issue.employee?.phone && <WAButton phone={issue.employee.phone}/>}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </ACCard>
       )}

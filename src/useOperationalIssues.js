@@ -27,7 +27,7 @@ export { isExcluded };
 // active pool: excludes BOTH expired + resigned (via isExcluded from helpers)
 // allNonResigned: excludes resigned only — used for the expired-with-missing-PO alert
 const isResigned = (e) =>
-  ["resigned", "مستقيل"].includes((e.status || "").toLowerCase());
+  ["resigned", "resigned_ar", "مستقيل"].includes((e.status || "").toLowerCase());
 
 export const isWFDone = (w) =>
   ["complete", "agreement signed", "iqama transferred"].some(
@@ -96,18 +96,25 @@ export function useOperationalIssues(employees = []) {
         });
       }
 
-      // Docs requested > 3 days
+      // Docs requested > 3 days (only flag after 3+ days waiting, not immediately)
       if (wf === "docs requested") {
-        urgent.push({
-          id: `urg-docs-${e._id}`,
-          tab: "urgent",
-          subtype: "docs_overdue",
-          employee: e,
-          daysLeft: null,
-          label: "Docs Requested — not received",
-          severity: "high",
-          actions: ["send_reminder", "escalate", "open_employee", "move_workflow"],
-        });
+        const docsWfDays = e.wfDate ? Math.abs(daysUntil(e.wfDate)) : null;
+        const docsOverdue = docsWfDays === null || docsWfDays > 3; // no wfDate = unknown → flag anyway
+        if (docsOverdue) {
+          urgent.push({
+            id: `urg-docs-${e._id}`,
+            tab: "urgent",
+            subtype: "docs_overdue",
+            employee: e,
+            daysLeft: null,
+            daysWaiting: docsWfDays,
+            label: docsWfDays
+              ? `Docs Requested — not received (${docsWfDays}d)`
+              : "Docs Requested — not received",
+            severity: docsWfDays && docsWfDays > 7 ? "critical" : "high",
+            actions: ["send_reminder", "escalate", "open_employee", "move_workflow"],
+          });
+        }
       }
     });
 
@@ -267,8 +274,15 @@ active
     // ── 6. BLOCKERS (stuck workflow, missing critical data) ───────────────────
     const blockers = [];
 
+    // Grace period: new employees (started ≤7 days ago) don't need a workflow yet
+    const BLOCKER_GRACE_DAYS = 7;
+    const isNewEmployee = (e) => {
+      if (!e.startDate) return false;
+      return daysUntil(e.startDate) >= -BLOCKER_GRACE_DAYS;
+    };
+
     active
-      .filter((e) => !e.workflowStatus || e.workflowStatus.trim() === "")
+      .filter((e) => (!e.workflowStatus || e.workflowStatus.trim() === "") && !isNewEmployee(e))
       .forEach((e) => {
         blockers.push({
           id: `blk-nowf-${e._id}`,
@@ -312,6 +326,36 @@ active
         });
       });
 
+    // ── 7. PARTNER OPS (Qiwa Approved → route by profitMode) ─────────────────
+    const partner = [];
+
+    active
+      .filter((e) => (e.workflowStatus || "").toLowerCase() === "qiwa approved")
+      .forEach((e) => {
+        const isPartnerMode = e.profitMode === "partner" && e.partnerAssigned;
+        partner.push({
+          id:       `iqama_pending_${e._id}`,
+          tab:      "partner",
+          subtype:  isPartnerMode ? "iqama_transfer" : "followup_iqama",
+          label:    isPartnerMode
+            ? "Iqama Transfer Pending — Partner Action"
+            : "Iqama Transfer Pending — Follow Up",
+          severity: "high",
+          daysLeft: null,
+          employee: e,
+          recommendedAction: isPartnerMode
+            ? `Contact ${e.partnerAssigned} to initiate Iqama transfer`
+            : "Follow up with employee — confirm Iqama transfer is in progress",
+          actions: isPartnerMode
+            ? ["contact_partner", "send_reminder", "open_employee", "mark_resolved"]
+            : ["send_reminder", "follow_up", "open_employee", "mark_resolved"],
+          partnerPhone: e.partnerPhone || null,
+          partnerName:  e.partnerAssigned || null,
+          // _tab used by ActionCenter to route to correct sub-bucket
+          _tab: isPartnerMode ? "partner" : "followups",
+        });
+      });
+
     // ── Sort all by priority ───────────────────────────────────────────────────
     const sortFn = (a, b) => scorePriority(b) - scorePriority(a);
 
@@ -322,18 +366,21 @@ active
       ...approvals,
       ...renewals,
       ...blockers,
+      // partner issues are NOT included in `all` to avoid double-counting
+      // in followups tab (the followup_iqama subtype ones already land in followups)
     ].sort(sortFn);
 
     // ── Summary counts ─────────────────────────────────────────────────────────
     const counts = {
-      urgent: urgent.length,
+      urgent:    urgent.length,
       followups: followups.length,
-      payroll: payroll.length,
+      payroll:   payroll.length,
       approvals: approvals.length,
-      renewals: renewals.length,
-      blockers: blockers.length,
-      total: allIssues.length,
-      critical: allIssues.filter((i) => i.severity === "critical").length,
+      renewals:  renewals.length,
+      blockers:  blockers.length,
+      partner:   partner.filter(i => i._tab === "partner").length,
+      total:     allIssues.length,
+      critical:  allIssues.filter((i) => i.severity === "critical").length,
     };
 
     // ── Per-client breakdown ───────────────────────────────────────────────────
@@ -361,6 +408,7 @@ active
       approvals,
       renewals,
       blockers,
+      partner,
       // All together
       all: allIssues,
       // Summaries

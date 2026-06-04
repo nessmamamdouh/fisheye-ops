@@ -83,7 +83,7 @@ export function calcProration(emp, year, month) {
  
   if (startsThisMonth && endsThisMonth) {
     // Joined and left same month
-    workedDays = Math.max(1, end.getDate() - start.getDate() + 1);
+    workedDays = Math.min(DAYS, Math.max(1, end.getDate() - start.getDate() + 1));
     isJoiner = true; isLeaver = true;
   } else if (startsThisMonth) {
     // Joined mid-month: days from startDate to day 30
@@ -285,7 +285,7 @@ function MiniStat({ label, value, color = M }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB 1 — PAYROLL
 // ═══════════════════════════════════════════════════════════════════════════════
-function PayrollTab({ employees }) {
+function PayrollTab({ employees, setEmployees, flows, onSaveFlows }) {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(
     `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
@@ -295,7 +295,37 @@ function PayrollTab({ employees }) {
   const [viewMode, setViewMode]         = useState("all"); // "all" | "joiners" | "leavers"
   const [filterPO, setFilterPO]         = useState("all"); // "all" | "has_po" | "no_po"
   const [expandedCard, setExpandedCard] = useState(null);  // null | "joiners" | "leavers" | "newpos"
+  const [selectedPOIds, setSelectedPOIds] = useState(new Set());
+  const [bulkDate, setBulkDate] = useState(new Date().toISOString().split("T")[0]);
+  const [selectedRowIds, setSelectedRowIds] = useState(new Set());
+  const [editingPODateId, setEditingPODateId] = useState(null);
+  const [showEditPODates, setShowEditPODates] = useState(false);
  
+  // ── Stable employee key (name-based, same as PayrollFlowTracker) ────────────
+  const empStableKey = e => (e.name || '').trim().toLowerCase().replace(/\s+/g, '_') || String(e._id);
+
+  // ── Last paid month: scan flows for last month where salary===true ───────────
+  // Flows are stored as flat keys: "YYYY-MM_emp_stable_key" → { salary, timesheet, invoice, ... }
+  const lastPaidMonthFor = e => {
+    const sk = empStableKey(e);
+    const allFlows = flows || {};
+    const paidMonths = Object.entries(allFlows)
+      .filter(([fkey, fdata]) => {
+        // flat key format: "YYYY-MM_name_slug"
+        if (typeof fdata !== 'object' || fdata === null) return false;
+        const underscoreIdx = fkey.indexOf('_', 7); // skip "YYYY-MM"
+        if (underscoreIdx === -1) return false;
+        const empPart = fkey.slice(underscoreIdx + 1);
+        return empPart === sk && fdata.salary === true;
+      })
+      .map(([fkey]) => fkey.slice(0, 7)) // extract "YYYY-MM"
+      .sort();
+    if (paidMonths.length === 0) return 'New';
+    const last = paidMonths[paidMonths.length - 1];
+    const [y, m] = last.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+  };
+
   const months = Array.from({ length: 12 }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     return {
@@ -313,7 +343,13 @@ function PayrollTab({ employees }) {
       const hasPO   = e.poNumbers && String(e.poNumbers).trim() !== "";
       // Resigned → never show
       if (["resigned","resigned_ar","مستقيل"].includes(status)) return false;
-      if (status === "expired") {
+      // "expired" status branch — but ONLY if endDate has truly passed before this month.
+      // If endDate is still in this month or later, treat the employee as active (data may be ahead of status).
+      const endDt = parseDate(e.endDate);
+      const monthStart2 = new Date(year, month - 1, 1);
+      const contractTrulyExpired = endDt && endDt < monthStart2;
+      const isExpiredByStatus = status.includes('expired') || status.includes('منتهي');
+      if (isExpiredByStatus && contractTrulyExpired) {
         if (isSela && !hasPO) {
           // Exclude if poAddedDate is this month — data entry in progress, will appear in expiredNewPO once poNumbers is filled
           if (e.poAddedDate) {
@@ -343,20 +379,24 @@ function PayrollTab({ employees }) {
       const st = (e.status || '').toLowerCase();
       // Resigned → never
       if (['resigned', 'resigned_ar', 'مستقيل'].includes(st)) return false;
-      // PO received this month → always include (accumulated salary due, regardless of endDate)
-      if (e.poAddedDate) {
-        const d = parseDate(e.poAddedDate);
-        if (d && d.getFullYear() === year && d.getMonth() + 1 === month) return true;
-      }
-      // Expired: include only if contract ends within this month (leaver)
-      if (['expired', 'expired_ar', 'منتهي'].includes(st)) {
-        const end = parseDate(e.endDate);
-        if (!end || end < monthStart) return false;
+      // Detect expired by status string (broad match) or by endDate already passed
+      const isExpiredStatus = st.includes('expired') || st.includes('منتهي');
+      const end2 = parseDate(e.endDate);
+      const contractEndedBeforeMonth = end2 && end2 < monthStart;
+      // Treat as "expired needing PO" only when:
+      //   (a) endDate is actually before this month, OR
+      //   (b) status says expired AND there is no endDate (status is the only signal)
+      // This prevents employees whose status is "expired" but endDate is still in this/future month
+      // from being incorrectly blocked (e.g. contract ending June 2 with status already "expired").
+      const treatAsExpired = contractEndedBeforeMonth || (isExpiredStatus && !end2);
+      if (treatAsExpired) {
+        if (!e.poAddedDate) return false;
+        const poDate = parseDate(e.poAddedDate);
+        if (!poDate || poDate.getFullYear() !== year || poDate.getMonth() + 1 !== month) return false;
+        return true; // expired + PO added this month → show (accumulated salary)
       }
       const start = parseDate(e.startDate);
       if (start && start > monthEnd) return false;
-      const end2 = parseDate(e.endDate);
-      if (end2 && end2 < monthStart) return false;
       return true;
     });
   }, [employees, year, month]);
@@ -365,6 +405,53 @@ function PayrollTab({ employees }) {
     () => classifyMovements(eligibleForPayroll, year, month),
     [eligibleForPayroll, year, month]
   );
+
+  // Expired Sela employees with PO number but NO poAddedDate — imported externally, need date set manually
+  const expiredNeedsPODate = useMemo(() => {
+    return employees.filter(e => {
+      const st = (e.status || '').toLowerCase();
+      if (!['expired', 'expired_ar', 'منتهي'].includes(st)) return false;
+      if (['resigned', 'resigned_ar', 'مستقيل'].includes(st)) return false;
+      const isSela = (e.client || '').toLowerCase() === 'sela';
+      if (!isSela) return false;
+      const hasPO = e.poNumbers && String(e.poNumbers).trim() !== '';
+      if (!hasPO) return false;          // no PO → belongs to no-PO view
+      if (e.poAddedDate) return false;   // has date → handled by normal flow
+      // Exclude employees whose contract ended before March 2026 (end of Feb 2026)
+      if (e.endDate) {
+        const raw = String(e.endDate).trim();
+        let endDt = null;
+        if (raw.includes('-')) {
+          // ISO format: YYYY-MM-DD or YYYY-M-D
+          endDt = new Date(raw);
+        } else if (raw.includes('/')) {
+          // Spreadsheet format: MM/DD/YY or MM/DD/YYYY
+          const parts = raw.split('/');
+          if (parts.length === 3) {
+            let m = parseInt(parts[0]), d = parseInt(parts[1]), y = parseInt(parts[2]);
+            if (y < 100) y += 2000;
+            endDt = new Date(y, m - 1, d);
+          }
+        }
+        if (endDt && !isNaN(endDt) && endDt < new Date(2026, 2, 1)) return false;
+      }
+      return true; // PO exists but no date → needs manual resolution
+    }).map(e => ({ ...e, _accumulated: calcAccumulatedSalary(e, year, month) }));
+  }, [employees, year, month]);
+
+  // Expired Sela employees who already HAVE poAddedDate — shown for editing
+  const expiredHasPODate = useMemo(() => {
+    return employees.filter(e => {
+      const st = (e.status || '').toLowerCase();
+      const isExpired = st.includes('expired') || st.includes('منتهي');
+      if (!isExpired) return false;
+      if (st.includes('resigned') || st.includes('مستقيل')) return false;
+      const isSela = (e.client || '').toLowerCase() === 'sela';
+      if (!isSela) return false;
+      if (!e.poAddedDate) return false;
+      return true;
+    });
+  }, [employees]);
 
   // Employees eligible but dropped by classifyMovements (endDate < monthStart, but PO arrived this month)
   const expiredNewPO = useMemo(() => {
@@ -398,33 +485,60 @@ function PayrollTab({ employees }) {
   );
 
   const rows = useMemo(() => {
+    let list;
     if (filterPO === "no_po") {
-      return allSelaNoP
+      list = allSelaNoP
         .filter(e => (e.name||"").toLowerCase().includes(search.toLowerCase()))
         .map(e => ({ ...e, _pro: e._pro || calcProration(e, year, month) }))
         .sort((a, b) => (b._accumulated?.accumulated || 0) - (a._accumulated?.accumulated || 0));
+    } else {
+      list = displayPool.filter(e => {
+        const matchClient = filterClient === "all" || (e.client||"").toLowerCase() === filterClient.toLowerCase();
+        const matchSearch = (e.name||"").toLowerCase().includes(search.toLowerCase());
+        const hasPO = e.poNumbers && String(e.poNumbers).trim() !== "";
+        const isSela = (e.client||"").toLowerCase() === "sela";
+        const matchPO = filterPO === "all" || !isSela ? true : hasPO;
+        return matchClient && matchSearch && matchPO;
+      });
     }
-    return displayPool.filter(e => {
-      const matchClient = filterClient === "all" || (e.client||"").toLowerCase() === filterClient.toLowerCase();
-      const matchSearch = (e.name||"").toLowerCase().includes(search.toLowerCase());
-      const hasPO = e.poNumbers && String(e.poNumbers).trim() !== "";
-      const isSela = (e.client||"").toLowerCase() === "sela";
-      const matchPO = filterPO === "all" || !isSela ? true : hasPO;
-      return matchClient && matchSearch && matchPO;
+    // Deduplicate by stable key — keep the record with the latest endDate (most recent active contract)
+    // Tie-break: higher totalPackage
+    const seen = new Map();
+    list.forEach(e => {
+      const sk = empStableKey(e);
+      const existing = seen.get(sk);
+      if (!existing) { seen.set(sk, e); return; }
+      const eEnd = parseDate(e.endDate);
+      const exEnd = parseDate(existing.endDate);
+      const ePkg  = Number(e.totalPackage||0);
+      const exPkg = Number(existing.totalPackage||0);
+      // Prefer later endDate; if equal prefer higher package
+      const eScore  = eEnd  ? eEnd.getTime()  : 0;
+      const exScore = exEnd ? exEnd.getTime() : 0;
+      if (eScore > exScore || (eScore === exScore && ePkg > exPkg)) {
+        seen.set(sk, e);
+      }
     });
+    return Array.from(seen.values());
   }, [displayPool, allSelaNoP, filterClient, search, filterPO, year, month]);
  
+  // Selected rows from main table
+  const selectedRows = useMemo(() =>
+    selectedRowIds.size > 0 ? rows.filter(e => selectedRowIds.has(e._id)) : rows,
+  [rows, selectedRowIds]);
+
   const totals = useMemo(() => ({
-    headcount:     rows.length,
-    payroll:       rows.reduce((s, e) => s + e._pro.proratedPkg,    0),
-    basic:         rows.reduce((s, e) => s + e._pro.proratedBasic,  0),
-    hra:           rows.reduce((s, e) => s + e._pro.proratedHRA,    0),
-    tpt:           rows.reduce((s, e) => s + e._pro.proratedTPT,    0),
-    fullPayroll:   rows.reduce((s, e) => s + Number(e.totalPackage||0), 0),
-    proratedDiff:  rows.reduce((s, e) => s + Number(e.totalPackage||0) - e._pro.proratedPkg, 0),
-    gosiTotal:     rows.reduce((s, e) => s + (e._pro.gosiDeduction || 0), 0),
-    netTotal:      rows.reduce((s, e) => s + (e._pro.netProrated   || e._pro.proratedPkg), 0),
-  }), [rows]);
+    headcount:     selectedRows.length,
+    payroll:       selectedRows.reduce((s, e) => s + e._pro.proratedPkg,    0),
+    basic:         selectedRows.reduce((s, e) => s + e._pro.proratedBasic,  0),
+    hra:           selectedRows.reduce((s, e) => s + e._pro.proratedHRA,    0),
+    tpt:           selectedRows.reduce((s, e) => s + e._pro.proratedTPT,    0),
+    fullPayroll:   selectedRows.reduce((s, e) => s + Number(e.totalPackage||0), 0),
+    proratedDiff:  selectedRows.reduce((s, e) => s + Number(e.totalPackage||0) - e._pro.proratedPkg, 0),
+    gosiTotal:     selectedRows.reduce((s, e) => s + (e._pro.gosiDeduction || 0), 0),
+    netTotal:      selectedRows.reduce((s, e) => s + (e._pro.netProrated   || e._pro.proratedPkg), 0),
+    isFiltered:    selectedRowIds.size > 0,
+  }), [selectedRows, selectedRowIds]);
 
   // ── Month-over-Month comparison ──────────────────────────────────────────
   const mom = useMemo(() => {
@@ -472,6 +586,209 @@ function PayrollTab({ employees }) {
           );
         })}
       </div>
+
+      {/* ⚠️ Expired employees with PO but no date — imported externally, need manual date */}
+      {expiredNeedsPODate.length > 0 && (
+        <div style={{ backgroundColor: "#fffbeb", border: "1.5px solid #fde68a", borderLeft: "4px solid #d97706", borderRadius: 10, padding: "12px 16px" }}>
+          {/* Header row */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 15 }}>⚠️</span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: "#92400e", flex: 1 }}>
+              {expiredNeedsPODate.length} موظف expired عندهم PO بس تاريخ استلامه مش مسجّل — تم الإضافة عبر import
+            </span>
+            {selectedPOIds.size > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, backgroundColor: "#fef3c7", borderRadius: 8, padding: "6px 10px", border: "1px solid #fde68a" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#92400e" }}>
+                  {selectedPOIds.size} محدد
+                </span>
+                <input
+                  type="date"
+                  value={bulkDate}
+                  onChange={e => setBulkDate(e.target.value)}
+                  style={{ fontSize: 11, padding: "3px 8px", border: "1px solid #d1d5db", borderRadius: 6 }}
+                />
+                <button
+                  onClick={async () => {
+                    if (!bulkDate) return;
+                    const toUpdate = expiredNeedsPODate.filter(e => selectedPOIds.has(e._id));
+                    setEmployees(prev => prev.map(emp => {
+                      if (selectedPOIds.has(emp._id)) return { ...emp, poAddedDate: bulkDate };
+                      return emp;
+                    }));
+                    setSelectedPOIds(new Set());
+                    for (const emp of toUpdate) {
+                      try { await supabase.from('employees_master').update({ poAddedDate: bulkDate }).eq('_id', emp._id); } catch {}
+                    }
+                  }}
+                  style={{ fontSize: 11, fontWeight: 800, padding: "4px 14px", backgroundColor: "#d97706", color: "white", border: "none", borderRadius: 6, cursor: "pointer", whiteSpace: "nowrap" }}
+                >
+                  حفظ الكل ({selectedPOIds.size})
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Select-all row */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, padding: "4px 12px" }}>
+            <input
+              type="checkbox"
+              checked={selectedPOIds.size === expiredNeedsPODate.length && expiredNeedsPODate.length > 0}
+              onChange={e => {
+                if (e.target.checked) setSelectedPOIds(new Set(expiredNeedsPODate.map(x => x._id)));
+                else setSelectedPOIds(new Set());
+              }}
+              style={{ cursor: "pointer", width: 14, height: 14, accentColor: "#d97706" }}
+            />
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#92400e" }}>تحديد الكل</span>
+          </div>
+
+          {/* Employee rows */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {expiredNeedsPODate.map(e => {
+              const isChecked = selectedPOIds.has(e._id);
+              return (
+                <div
+                  key={e._id}
+                  onClick={() => setSelectedPOIds(prev => {
+                    const next = new Set(prev);
+                    if (next.has(e._id)) next.delete(e._id); else next.add(e._id);
+                    return next;
+                  })}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10, borderRadius: 8,
+                    padding: "8px 12px", cursor: "pointer", transition: "all 0.12s",
+                    backgroundColor: isChecked ? "#fef3c7" : "white",
+                    border: `1px solid ${isChecked ? "#f59e0b" : "#fde68a"}`,
+                    boxShadow: isChecked ? "0 0 0 2px #fde68a" : "none",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={ev => {
+                      ev.stopPropagation();
+                      setSelectedPOIds(prev => {
+                        const next = new Set(prev);
+                        if (next.has(e._id)) next.delete(e._id); else next.add(e._id);
+                        return next;
+                      });
+                    }}
+                    style={{ cursor: "pointer", width: 14, height: 14, accentColor: "#d97706", flexShrink: 0 }}
+                  />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#374151", minWidth: 180 }}>{e.name}</span>
+                  <span style={{ fontSize: 11, color: "#9ca3af", minWidth: 100 }}>End: {e.endDate}</span>
+                  <span style={{ fontSize: 11, color: "#7c3aed", fontFamily: "monospace", minWidth: 80 }}>{e.poNumbers}</span>
+                  <span style={{ fontSize: 11, color: "#059669", fontFamily: "monospace" }}>
+                    Accum: SAR {(e._accumulated?.accumulated || 0).toLocaleString()}
+                  </span>
+                  {/* Individual date + save — only when not in bulk selection */}
+                  {!isChecked && (
+                    <>
+                      <input
+                        type="date"
+                        defaultValue={new Date().toISOString().split("T")[0]}
+                        style={{ fontSize: 11, padding: "3px 8px", border: "1px solid #d1d5db", borderRadius: 6, marginLeft: "auto" }}
+                        id={`po-date-${e._id}`}
+                        onClick={ev => ev.stopPropagation()}
+                      />
+                      <button
+                        onClick={async ev => {
+                          ev.stopPropagation();
+                          const dateInput = document.getElementById(`po-date-${e._id}`);
+                          const poDate = dateInput?.value;
+                          if (!poDate) return;
+                          setEmployees(prev => prev.map(emp => emp._id === e._id ? { ...emp, poAddedDate: poDate } : emp));
+                          try { await supabase.from('employees_master').update({ poAddedDate: poDate }).eq('_id', e._id); } catch {}
+                        }}
+                        style={{ fontSize: 11, fontWeight: 700, padding: "4px 12px", backgroundColor: "#d97706", color: "white", border: "none", borderRadius: 6, cursor: "pointer", flexShrink: 0 }}
+                      >
+                        حفظ
+                      </button>
+                    </>
+                  )}
+                  {isChecked && (
+                    <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "#d97706" }}>✓ محدد</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ✏️ Edit existing poAddedDate for expired employees */}
+      {expiredHasPODate.length > 0 && (
+        <div style={{ backgroundColor: "#f0f9ff", border: "1.5px solid #bae6fd", borderLeft: "4px solid #0284c7", borderRadius: 10, padding: "10px 16px" }}>
+          <div
+            onClick={() => setShowEditPODates(v => !v)}
+            style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}
+          >
+            <span style={{ fontSize: 14 }}>✏️</span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: "#0c4a6e", flex: 1 }}>
+              {expiredHasPODate.length} موظف expired عندهم تاريخ PO مسجّل — اضغط للتعديل
+            </span>
+            <span style={{ fontSize: 11, color: "#0284c7", fontWeight: 700 }}>{showEditPODates ? "▲ إخفاء" : "▼ إظهار"}</span>
+          </div>
+
+          {showEditPODates && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 10 }}>
+              {expiredHasPODate.map(e => (
+                <div key={e._id} style={{ display: "flex", alignItems: "center", gap: 10, backgroundColor: "white", borderRadius: 8, padding: "8px 12px", border: "1px solid #bae6fd" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#1e3a5f", minWidth: 180 }}>{e.name}</span>
+                  <span style={{ fontSize: 11, color: "#9ca3af", minWidth: 100 }}>End: {e.endDate}</span>
+                  <span style={{ fontSize: 11, color: "#7c3aed", fontFamily: "monospace", minWidth: 80 }}>{e.poNumbers}</span>
+                  {editingPODateId === e._id ? (
+                    <>
+                      <input
+                        type="date"
+                        defaultValue={e.poAddedDate ? e.poAddedDate.slice(0, 10) : ''}
+                        style={{ fontSize: 11, padding: "3px 8px", border: "1.5px solid #0284c7", borderRadius: 6, marginLeft: "auto" }}
+                        id={`edit-po-date-${e._id}`}
+                        autoFocus
+                      />
+                      <button
+                        onClick={async () => {
+                          const input = document.getElementById(`edit-po-date-${e._id}`);
+                          const newDate = input?.value;
+                          if (!newDate) return;
+                          setEmployees(prev => prev.map(emp => emp._id === e._id ? { ...emp, poAddedDate: newDate } : emp));
+                          setEditingPODateId(null);
+                          try { await supabase.from('employees_master').update({ poAddedDate: newDate }).eq('_id', e._id); } catch {}
+                        }}
+                        style={{ fontSize: 11, fontWeight: 800, padding: "4px 12px", backgroundColor: "#0284c7", color: "white", border: "none", borderRadius: 6, cursor: "pointer" }}
+                      >حفظ</button>
+                      <button
+                        onClick={() => setEditingPODateId(null)}
+                        style={{ fontSize: 11, fontWeight: 600, padding: "4px 10px", backgroundColor: "#f1f5f9", color: "#64748b", border: "1px solid #e2e8f0", borderRadius: 6, cursor: "pointer" }}
+                      >إلغاء</button>
+                      <button
+                        onClick={async () => {
+                          const confirmed = window.confirm(`هتمسح تاريخ الـ PO لـ ${e.name}؟`);
+                          if (!confirmed) return;
+                          setEmployees(prev => prev.map(emp => emp._id === e._id ? { ...emp, poAddedDate: null } : emp));
+                          setEditingPODateId(null);
+                          try { await supabase.from('employees_master').update({ poAddedDate: null }).eq('_id', e._id); } catch {}
+                        }}
+                        style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", backgroundColor: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 6, cursor: "pointer" }}
+                      >🗑 مسح</button>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: 11, color: "#0284c7", fontFamily: "monospace", marginLeft: "auto" }}>
+                        📅 {e.poAddedDate ? new Date(e.poAddedDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                      </span>
+                      <button
+                        onClick={() => setEditingPODateId(e._id)}
+                        style={{ fontSize: 11, fontWeight: 700, padding: "4px 12px", backgroundColor: "#e0f2fe", color: "#0284c7", border: "1px solid #bae6fd", borderRadius: 6, cursor: "pointer" }}
+                      >✏️ تعديل</button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Summary Strip — 5 cards, Joiners/Leavers/NewPOs are clickable */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
@@ -717,7 +1034,19 @@ function PayrollTab({ employees }) {
           <table className="fe-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
             <thead>
               <tr style={{ backgroundColor: "#f9fafb" }}>
-                <th style={{ ...th, borderLeft: `4px solid ${M}` }}>Employee</th>
+                <th style={{ ...th, width: 36, textAlign: "center", borderLeft: `4px solid ${M}` }}>
+                  <input
+                    type="checkbox"
+                    checked={rows.length > 0 && selectedRowIds.size === rows.length}
+                    ref={el => { if (el) el.indeterminate = selectedRowIds.size > 0 && selectedRowIds.size < rows.length; }}
+                    onChange={e => {
+                      if (e.target.checked) setSelectedRowIds(new Set(rows.map(r => r._id)));
+                      else setSelectedRowIds(new Set());
+                    }}
+                    style={{ cursor: "pointer", width: 14, height: 14, accentColor: M }}
+                  />
+                </th>
+                <th style={th}>Employee</th>
                 <th style={th}>Client</th>
                 {filterPO === "no_po" ? (<>
                   <th style={{ ...th, textAlign: "right" }}>Package / Month</th>
@@ -726,6 +1055,7 @@ function PayrollTab({ employees }) {
                   <th style={{ ...th, textAlign: "right", color: "#c2410c" }}>Accumulated ⚠</th>
                 </>) : (<>
                   <th style={{ ...th, textAlign: "center", width: 80 }}>Days</th>
+                  <th style={{ ...th, textAlign: "center", width: 90, color: "#7c3aed" }}>Last Paid</th>
                   <th style={{ ...th, textAlign: "right" }}>Basic</th>
                   <th style={{ ...th, textAlign: "right" }}>HRA</th>
                   <th style={{ ...th, textAlign: "right" }}>Transport</th>
@@ -737,7 +1067,7 @@ function PayrollTab({ employees }) {
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={8} style={{ padding: 40, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No employees found</td></tr>
+                <tr><td colSpan={10} style={{ padding: 40, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No employees found</td></tr>
               ) : rows.map((emp, rowIdx) => {
                 const pro  = emp._pro;
                 const acc  = emp._accumulated;
@@ -756,8 +1086,18 @@ function PayrollTab({ employees }) {
                   : isL   ? "#f97316"
                   : "transparent";
                 return (
-                  <tr key={emp._id} style={{ borderBottom: "1px solid #f3f4f6", backgroundColor: rowBg }}>
-                    <td style={{ ...td, borderLeft: `4px solid ${accentColor}` }}>
+                  <tr key={emp._id} style={{ borderBottom: "1px solid #f3f4f6", backgroundColor: selectedRowIds.has(emp._id) ? "#fdf4ff" : rowBg, cursor: "pointer" }}
+                    onClick={() => setSelectedRowIds(prev => { const n = new Set(prev); if (n.has(emp._id)) n.delete(emp._id); else n.add(emp._id); return n; })}
+                  >
+                    <td style={{ ...td, textAlign: "center", borderLeft: `4px solid ${accentColor}` }} onClick={ev => ev.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedRowIds.has(emp._id)}
+                        onChange={() => setSelectedRowIds(prev => { const n = new Set(prev); if (n.has(emp._id)) n.delete(emp._id); else n.add(emp._id); return n; })}
+                        style={{ cursor: "pointer", width: 14, height: 14, accentColor: M }}
+                      />
+                    </td>
+                    <td style={{ ...td }}>
                       <div style={{ fontWeight: 700, color: "#111827", display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                         {emp.name}
                         {isJ   && <span style={{ fontSize: 9, fontWeight: 800, backgroundColor: "#dcfce7", color: "#16a34a", padding: "1px 5px", borderRadius: 999 }}>JOIN</span>}
@@ -799,6 +1139,15 @@ function PayrollTab({ employees }) {
                           {pro.workedDays}/{pro.totalDays}
                         </span>
                         {!pro.isFullMonth && <div style={{ fontSize: 9, color: "#9ca3af" }}>{Math.round(pro.factor*100)}%</div>}
+                      </td>
+                      {/* Last Paid Month */}
+                      <td style={{ ...td, textAlign: "center" }}>
+                        {(() => {
+                          const lp = lastPaidMonthFor(emp);
+                          return lp === 'New'
+                            ? <span style={{ fontSize: 10, fontWeight: 800, backgroundColor: "#ede9fe", color: "#7c3aed", padding: "2px 7px", borderRadius: 999 }}>New</span>
+                            : <span style={{ fontSize: 10, fontWeight: 700, color: "#374151" }}>{lp}</span>;
+                        })()}
                       </td>
                       <td style={{ ...td, textAlign: "right", fontFamily: "monospace", fontSize: 12 }}>
                         {fmtPro(pro.proratedBasic)}
@@ -847,7 +1196,7 @@ function PayrollTab({ employees }) {
               <tfoot>
                 <tr style={{ backgroundColor: "#f9fafb", borderTop: "2px solid #e5e7eb" }}>
                   {filterPO === "no_po" ? (<>
-                    <td style={{ ...td, fontWeight: 700, color: "#6b7280", fontSize: 12 }} colSpan={4}>{rows.length} employees without PO</td>
+                    <td style={{ ...td, fontWeight: 700, color: "#6b7280", fontSize: 12 }} colSpan={5}>{rows.length} employees without PO</td>
                     <td style={{ ...td, textAlign: "center", fontWeight: 700, color: "#d97706", fontSize: 12 }}>
                       {rows.reduce((s,e) => s+(e._accumulated?.months||0), 0)} months total
                     </td>
@@ -855,7 +1204,9 @@ function PayrollTab({ employees }) {
                       SR {fmtPro(rows.reduce((s,e) => s+(e._accumulated?.accumulated||0), 0))}
                     </td>
                   </>) : (<>
-                    <td style={{ ...td, fontWeight: 700, color: "#6b7280", fontSize: 12 }} colSpan={3}>{totals.headcount} employees</td>
+                    <td style={{ ...td, fontWeight: 700, color: "#6b7280", fontSize: 12 }} colSpan={5}>
+                      {totals.isFiltered ? `${totals.headcount} / ${rows.length} selected` : `${totals.headcount} employees`}
+                    </td>
                     <td style={{ ...td, textAlign: "right", fontWeight: 700, fontFamily: "monospace", fontSize: 12, color: "#374151" }}>{fmtPro(totals.basic)}</td>
                     <td style={{ ...td, textAlign: "right", fontWeight: 700, fontFamily: "monospace", fontSize: 12, color: "#374151" }}>{fmtPro(totals.hra)}</td>
                     <td style={{ ...td, textAlign: "right", fontWeight: 700, fontFamily: "monospace", fontSize: 12, color: "#374151" }}>{fmtPro(totals.tpt)}</td>
@@ -875,6 +1226,115 @@ function PayrollTab({ employees }) {
           </table>
         </div>
       </div>
+
+      {/* ── Action Bar ─────────────────────────────────────────────────────────── */}
+      {rows.length > 0 && filterPO !== "no_po" && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+          backgroundColor: "#00293A", borderRadius: 12,
+          padding: "12px 18px", marginTop: 4,
+          boxShadow: "0 4px 16px rgba(0,41,58,0.18)",
+        }}>
+          {/* Totals summary */}
+          <div style={{ display: "flex", gap: 18, flex: 1, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em" }}>Selected</div>
+              <div style={{ fontSize: 15, fontWeight: 900, color: "white", fontFamily: "monospace" }}>
+                {totals.isFiltered ? `${totals.headcount}/${rows.length}` : totals.headcount}
+              </div>
+            </div>
+            <div style={{ width: 1, height: 32, backgroundColor: "#334155" }} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em" }}>Total Gross</div>
+              <div style={{ fontSize: 13, fontWeight: 900, color: "#e2e8f0", fontFamily: "monospace" }}>SAR {fmtPro(totals.payroll)}</div>
+            </div>
+            <div style={{ width: 1, height: 32, backgroundColor: "#334155" }} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em" }}>GOSI</div>
+              <div style={{ fontSize: 13, fontWeight: 900, color: "#fbbf24", fontFamily: "monospace" }}>SAR {fmtPro(totals.gosiTotal)}</div>
+            </div>
+            <div style={{ width: 1, height: 32, backgroundColor: "#334155" }} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em" }}>Net Payroll</div>
+              <div style={{ fontSize: 13, fontWeight: 900, color: "#4ade80", fontFamily: "monospace" }}>SAR {fmtPro(totals.netTotal)}</div>
+            </div>
+          </div>
+          {/* Action buttons */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {/* Export to Excel */}
+            <button
+              onClick={() => {
+                const headers = ["Employee","Client","Days","Last Paid","Basic","HRA","Transport","Full Package","GOSI","Net Prorated"];
+                const csvRows = rows.map(e => {
+                  const p = e._pro;
+                  const lp = lastPaidMonthFor(e);
+                  return [
+                    `"${e.name}"`, `"${e.client||''}"`,
+                    `${p.workedDays}/${p.totalDays}`,
+                    `"${lp}"`,
+                    p.proratedBasic, p.proratedHRA, p.proratedTPT,
+                    e.totalPackage, p.gosiDeduction || 0, p.netProrated,
+                  ].join(",");
+                });
+                const csv = [headers.join(","), ...csvRows].join("\n");
+                const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url; a.download = `payroll_${selectedMonth}.csv`; a.click();
+                URL.revokeObjectURL(url);
+              }}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "1.5px solid #334155", backgroundColor: "#1e293b", color: "#e2e8f0", transition: "all 0.15s" }}
+            >
+              <Download size={13} /> Export Excel
+            </button>
+            {/* Send via Email */}
+            <button
+              onClick={() => {
+                const subject = encodeURIComponent(`Payroll List — ${months.find(m => m.key === selectedMonth)?.label || selectedMonth}`);
+                const body = encodeURIComponent(
+                  `Payroll Summary\nMonth: ${months.find(m => m.key === selectedMonth)?.label || selectedMonth}\nEmployees: ${totals.headcount}\nGross: SAR ${fmtPro(totals.payroll)}\nGOSI: SAR ${fmtPro(totals.gosiTotal)}\nNet: SAR ${fmtPro(totals.netTotal)}`
+                );
+                window.open(`mailto:?subject=${subject}&body=${body}`);
+              }}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "1.5px solid #334155", backgroundColor: "#1e293b", color: "#e2e8f0", transition: "all 0.15s" }}
+            >
+              <FileText size={13} /> Send Email
+            </button>
+            {/* Send for Approval */}
+            <button
+              onClick={() => alert(`📤 Payroll for ${months.find(m => m.key === selectedMonth)?.label} sent for approval.\n${totals.headcount} employees · Net SAR ${fmtPro(totals.netTotal)}`)}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", backgroundColor: "#f59e0b", color: "white", transition: "all 0.15s" }}
+            >
+              <TrendingUp size={13} /> Send for Approval
+            </button>
+            {/* Approve & Process */}
+            <button
+              onClick={() => {
+                const monthLabel = months.find(m => m.key === selectedMonth)?.label || selectedMonth;
+                const confirmed = window.confirm(`✅ Approve & process payroll?\n\nMonth: ${monthLabel}\nEmployees: ${totals.headcount}\nNet: SAR ${fmtPro(totals.netTotal)}\n\nThis will mark all listed employees as paid for this month.`);
+                if (!confirmed) return;
+                // Build updated flows: set salary=true using flat key "YYYY-MM_emp_slug"
+                const updated = { ...(flows || {}) };
+                selectedRows.forEach(emp => {
+                  const sk = empStableKey(emp);
+                  const fkey = `${selectedMonth}_${sk}`;
+                  updated[fkey] = {
+                    ...(updated[fkey] || {}),
+                    salary: true,
+                    approvedAt: new Date().toISOString(),
+                    net: emp._pro?.netProrated || emp._pro?.proratedPkg || 0,
+                  };
+                });
+                if (onSaveFlows) onSaveFlows(updated);
+                alert(`✅ تم الاعتماد والمعالجة بنجاح\n\nشهر: ${monthLabel}\nموظفين: ${totals.headcount}\nصافي: SAR ${fmtPro(totals.netTotal)}`);
+              }}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 800, cursor: "pointer", border: "none", backgroundColor: "#A02843", color: "white", boxShadow: "0 2px 8px rgba(160,40,67,0.35)", transition: "all 0.15s" }}
+            >
+              <CheckCircle size={13} /> Approve & Process
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2382,7 +2842,7 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
       </div>
 
       {/* ── Tab Content ── */}
-      {activeTab === "payroll"      && <PayrollTab          employees={employees} />}
+      {activeTab === "payroll"      && <PayrollTab          employees={employees} setEmployees={setEmployees} flows={flows} onSaveFlows={saveFlows} />}
       {activeTab === "partner_flow" && <PartnerFlowTab       employees={employees} sharedFlows={flows} onSaveFlows={saveFlows} />}
       {activeTab === "invoices"     && <InvoiceManager employees={employees} setEmployees={setEmployees} />}
       {activeTab === "po_recon"     && <POReconciliationTab  employees={employees} initialFilter={poSearchFilter} />}
