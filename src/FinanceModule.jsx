@@ -71,8 +71,9 @@ export function calcProration(emp, year, month) {
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd   = new Date(year, month - 1, 30); // 30th always
  
-  const start = emp.startDate ? new Date(emp.startDate) : null;
-  const end   = emp.endDate   ? new Date(emp.endDate)   : null;
+  // Use parseDate() to avoid UTC midnight shift (new Date("YYYY-MM-DD") = UTC → wrong local day)
+  const start = parseDate(emp.startDate);
+  const end   = parseDate(emp.endDate);
  
   const startsThisMonth = start && start.getFullYear() === year && start.getMonth() === month - 1;
   const endsThisMonth   = end   && end.getFullYear()   === year && end.getMonth()   === month - 1;
@@ -138,11 +139,11 @@ export function calcProration(emp, year, month) {
  */
 function calcAccumulatedSalary(emp, year, month) {
   const monthEndDate = new Date(year, month - 1, 30); // نهاية الشهر المختار
-  const start = emp.startDate ? new Date(emp.startDate) : null;
+  const start = parseDate(emp.startDate);
   if (!start) return { months: 0, totalDays: 0, accumulated: 0, breakdown: [] };
 
   // End = endDate if expired and before monthEnd, otherwise end of selected month
-  const empEnd = emp.endDate ? new Date(emp.endDate) : null;
+  const empEnd = parseDate(emp.endDate);
   const end = empEnd && empEnd < monthEndDate ? empEnd : monthEndDate;
 
   const pkg = Number(emp.totalPackage || 0);
