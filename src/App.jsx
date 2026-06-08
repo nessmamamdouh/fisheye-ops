@@ -3513,37 +3513,74 @@ function ClientHub({ employees, clients, saveClients }) {
   if (!clients) clients = [];
   const [showAdd,setShowAdd]=useState(false);
   const [filter,setFilter]=useState("active");
+  const [search,setSearch]=useState("");
   const [openId,setOpenId]=useState(null);
   const [detailTab,setDetailTab]=useState("overview");
   const [editingInfo,setEditingInfo]=useState(false);
-  const [infoForm,setInfoForm]=useState({name:"",region:"",email:""});
+  const [infoForm,setInfoForm]=useState({name:"",region:"",email:"",notes:""});
   const [nC,setNC]=useState({name:"",region:"",email:"",notes:""});
+  const [showNewAction,setShowNewAction]=useState(false);
+  const [newAction,setNewAction]=useState({desc:"",type:"Invoice"});
+  const [confirmDeleteId,setConfirmDeleteId]=useState(null);
 
   const save=c=>{ if(saveClients) saveClients(c); else { localStorage.setItem("fisheyeClients_v1",JSON.stringify(c)); } };
-  const add=()=>{save([...clients,{...nC,id:`C-${String(clients.length+1).padStart(2,"0")}`,status:"active",contacts:[],requestLog:[]}]);setShowAdd(false);setNC({name:"",region:"",email:"",notes:""});};
+  const add=()=>{
+    // Use timestamp-based ID to avoid collisions after deletions
+    const newId = `C-${Date.now().toString(36).toUpperCase()}`;
+    save([...clients,{...nC,id:newId,status:"active",contacts:[],requestLog:[]}]);
+    setShowAdd(false);
+    setNC({name:"",region:"",email:"",notes:""});
+  };
   const archive=id=>save(clients.map(c=>c.id===id?{...c,status:"archived"}:c));
   const unarchive=id=>save(clients.map(c=>c.id===id?{...c,status:"active"}:c));
-  const deleteC=id=>{if(window.confirm("Delete?"))save(clients.filter(c=>c.id!==id));};
+  const deleteC=id=>{ save(clients.filter(c=>c.id!==id)); setConfirmDeleteId(null); if(openId===id) setOpenId(null); };
   const addContact=cid=>save(clients.map(c=>c.id===cid?{...c,contacts:[...c.contacts,{name:"New Contact",role:"",phone:""}]}:c));
   const updContact=(cid,ci,f,v)=>save(clients.map(c=>c.id===cid?{...c,contacts:c.contacts.map((co,i)=>i===ci?{...co,[f]:v}:co)}:c));
   const addRequest=(cid,req)=>save(clients.map(c=>c.id===cid?{...c,requestLog:[...c.requestLog,req]}:c));
   const updReqStatus=(cid,ri,st)=>save(clients.map(c=>c.id===cid?{...c,requestLog:c.requestLog.map((r,i)=>i===ri?{...r,status:st}:r)}:c));
-  const getHC=cid=>employees.filter(e=>e.client===clients.find(c=>c.id===cid)?.name&&!isExcluded(e)).length;
-  const displayed=clients.filter(c=>filter==="all"||(filter==="archived"?c.status==="archived":c.status!=="archived"));
+  // Pre-compute health + headcount for ALL clients once — avoids re-computing inside map()
+  const clientStats = useMemo(() => {
+    const m = {};
+    clients.forEach(c => {
+      m[c.id] = {
+        hc:     employees.filter(e => e.client === c.name && !isExcluded(e)).length,
+        health: calcClientHealth(c.name, employees),
+      };
+    });
+    return m;
+  }, [clients, employees]);
+
+  const displayed = useMemo(() =>
+    clients.filter(c => {
+      const matchFilter = filter === "all" || (filter === "archived" ? c.status === "archived" : c.status !== "archived");
+      const matchSearch = !search || c.name.toLowerCase().includes(search.toLowerCase());
+      return matchFilter && matchSearch;
+    }),
+  [clients, filter, search]);
 
   const totalPending=clients.reduce((s,c)=>s+(c.requestLog||[]).filter(r=>r.status==="Pending").length,0);
-  const totalPOIssues=employees.filter(e=>e.client==="Sela"&&!isExcluded(e)&&hasMissingPO(e)).length;
+  // PO issues: include expired (same as Action Center) — expired Sela employees still need PO for invoicing
+  const isResignedEmp=e=>["resigned","resigned_ar","مستقيل"].includes((e.status||"").toLowerCase().trim());
+  const totalPOIssues=employees.filter(e=>e.client==="Sela"&&!isResignedEmp(e)&&hasMissingPO(e)).length;
   const totalOverdue=clients.reduce((s,c)=>s+(c.requestLog||[]).filter(r=>r.status==="Pending"&&Math.floor((Date.now()-new Date(r.ts))/(864e5))>5).length,0);
 
   // ── detail modal data ──
   const openClient=clients.find(c=>c.id===openId)||null;
-  const selEmps=openClient?employees.filter(e=>e.client===openClient.name&&!isExcluded(e)):[];
-  const selHealth=openClient?calcClientHealth(openClient.name,employees):null;
-  const isSela=openClient?.name==="Sela";
-  const missingPO=selEmps.filter(hasMissingPO);
-  const hasPO=selEmps.filter(hasValidPO);
+  // Normalise potentially missing arrays on the client object
+  const safeClient = openClient ? {
+    ...openClient,
+    contacts:   Array.isArray(openClient.contacts)   ? openClient.contacts   : [],
+    requestLog: Array.isArray(openClient.requestLog) ? openClient.requestLog : [],
+  } : null;
+  const selEmps=safeClient?employees.filter(e=>e.client===safeClient.name&&!isExcluded(e)):[];
+  const selHealth=safeClient ? (clientStats[safeClient.id]?.health || calcClientHealth(safeClient.name,employees)) : null;
+  const isSela=safeClient?.name==="Sela";
+  // For PO tab: include expired (can't invoice without PO) — exclude only resigned
+  const selEmpsForPO=safeClient?employees.filter(e=>e.client===safeClient.name&&!isResignedEmp(e)):[];
+  const missingPO=selEmpsForPO.filter(hasMissingPO);
+  const hasPO=selEmpsForPO.filter(hasValidPO);
   const byProject=useMemo(()=>{const m={};selEmps.forEach(e=>{const p=e.project||"Unassigned";if(!m[p])m[p]=[];m[p].push(e);});return Object.entries(m).sort((a,b)=>b[1].length-a[1].length);},[selEmps]);
-  const pendingActions=openClient?(openClient.requestLog||[]).map((r,i)=>({...r,i,dw:Math.floor((Date.now()-new Date(r.ts))/864e5)})).filter(r=>r.status==="Pending").sort((a,b)=>b.dw-a.dw):[];
+  const pendingActions=safeClient?safeClient.requestLog.map((r,i)=>({...r,i,dw:Math.floor((Date.now()-new Date(r.ts))/864e5)})).filter(r=>r.status==="Pending").sort((a,b)=>b.dw-a.dw):[];
 
   const TABS=[
     {k:"overview", l:"Overview"},
@@ -3592,6 +3629,18 @@ function ClientHub({ employees, clients, saveClients }) {
           ))}
         </div>
 
+        {/* Search */}
+        <div style={{ padding:"6px 10px", borderBottom:"1px solid #f3f4f6" }}>
+          <div style={{ position:"relative" }}>
+            <Search size={11} style={{ position:"absolute", left:8, top:"50%", transform:"translateY(-50%)", color:"#9ca3af", pointerEvents:"none" }}/>
+            <input
+              value={search} onChange={e=>setSearch(e.target.value)}
+              placeholder="Search clients…"
+              style={{ width:"100%", padding:"5px 8px 5px 24px", borderRadius:7, border:"1px solid #e5e7eb", fontSize:11, outline:"none", backgroundColor:"white", boxSizing:"border-box" }}
+            />
+          </div>
+        </div>
+
         {/* Client list */}
         <div style={{ flex:1, overflowY:"auto" }}>
           {displayed.length===0 && (
@@ -3601,11 +3650,10 @@ function ClientHub({ employees, clients, saveClients }) {
             </div>
           )}
           {displayed.map(c => {
-            const hc = getHC(c.id);
+            const { hc, health } = clientStats[c.id] || { hc: 0, health: { label: "—", color: "#9ca3af", score: 0 } };
             const pending = (c.requestLog||[]).filter(r=>r.status==="Pending").length;
             const overdue = (c.requestLog||[]).filter(r=>r.status==="Pending"&&Math.floor((Date.now()-new Date(r.ts))/864e5)>5).length;
             const isArchived = c.status === "archived";
-            const health = calcClientHealth(c.name, employees);
             const meta = CLIENT_META[c.name] || {};
             const accentColor = isArchived ? "#d1d5db" : (meta.dot || M);
             const isSelected = openId === c.id;
@@ -3680,12 +3728,18 @@ function ClientHub({ employees, clients, saveClients }) {
                       style={{ flex:2, fontSize:12, color:"white", background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:7, padding:"4px 9px", outline:"none", fontFamily:"inherit" }}
                     />
                   </div>
+                  <input
+                    value={infoForm.notes}
+                    onChange={e=>setInfoForm(f=>({...f,notes:e.target.value}))}
+                    placeholder="Notes…"
+                    style={{ fontSize:12, color:"white", background:"rgba(255,255,255,0.10)", border:"1px solid rgba(255,255,255,0.20)", borderRadius:7, padding:"4px 9px", outline:"none", fontFamily:"inherit", width:"100%" }}
+                  />
                 </div>
               ) : (
                 <div style={{ flex:1, minWidth:0 }}>
-                  <h3 style={{ margin:0, fontSize:19, fontWeight:800, color:"white", letterSpacing:"-0.01em" }}>{openClient.name}</h3>
+                  <h3 style={{ margin:0, fontSize:19, fontWeight:800, color:"white", letterSpacing:"-0.01em" }}>{safeClient.name}</h3>
                   <p style={{ margin:"4px 0 0", fontSize:12, color:"rgba(255,210,210,0.9)" }}>
-                    {[openClient.region, openClient.email].filter(Boolean).join(" · ") || "—"}
+                    {[safeClient.region, safeClient.email].filter(Boolean).join(" · ") || "—"}
                   </p>
                 </div>
               )}
@@ -3697,11 +3751,11 @@ function ClientHub({ employees, clients, saveClients }) {
                   </>
                 ) : (
                   <>
-                    <button onClick={()=>{ setInfoForm({name:openClient.name||"",region:openClient.region||"",email:openClient.email||""}); setEditingInfo(true); }} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.3)", backgroundColor:"rgba(255,255,255,0.12)", color:"white", cursor:"pointer" }}>Edit</button>
-                    <button onClick={()=>openClient.status==="archived"?unarchive(openId):archive(openId)} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.3)", backgroundColor:"rgba(255,255,255,0.12)", color:"white", cursor:"pointer" }}>
-                      {openClient.status==="archived" ? "Restore" : "Archive"}
+                    <button onClick={()=>{ setInfoForm({name:safeClient.name||"",region:safeClient.region||"",email:safeClient.email||"",notes:safeClient.notes||""}); setEditingInfo(true); }} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.3)", backgroundColor:"rgba(255,255,255,0.12)", color:"white", cursor:"pointer" }}>Edit</button>
+                    <button onClick={()=>safeClient.status==="archived"?unarchive(openId):archive(openId)} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.3)", backgroundColor:"rgba(255,255,255,0.12)", color:"white", cursor:"pointer" }}>
+                      {safeClient.status==="archived" ? "Restore" : "Archive"}
                     </button>
-                    <button onClick={()=>{ if(window.confirm("Delete client?")) deleteC(openId); }} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,100,100,0.4)", backgroundColor:"rgba(255,100,100,0.15)", color:"#fca5a5", cursor:"pointer" }}>Delete</button>
+                    <button onClick={()=>setConfirmDeleteId(openId)} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,100,100,0.4)", backgroundColor:"rgba(255,100,100,0.15)", color:"#fca5a5", cursor:"pointer" }}>Delete</button>
                   </>
                 )}
               </div>
@@ -3725,7 +3779,7 @@ function ClientHub({ employees, clients, saveClients }) {
             {[
               { l:"Employees",    v:selEmps.length,                                                               c:"#374151" },
               { l:"Expiring ≤14d",v:selEmps.filter(e=>{const d=daysUntil(e.endDate);return d>=0&&d<=14;}).length, c:"#d97706" },
-              { l:"WF Pending",   v:selEmps.filter(e=>!isWFDone(e.workflowStatus)).length,                        c:"#7c3aed" },
+              { l:"WF Pending",   v:selEmps.filter(e=>{ const wf=(e.workflowStatus||"").trim(); return wf && !isWFDone(wf); }).length, c:"#7c3aed" },
               { l:isSela?"Missing PO":"Projects", v:isSela?missingPO.length:byProject.length,                     c:isSela&&missingPO.length>0?"#dc2626":"#374151" },
             ].map(({l,v,c})=>(
               <div key={l} style={{ padding:"11px 8px", textAlign:"center", borderRight:"1px solid #f3f4f6" }}>
@@ -3742,9 +3796,7 @@ function ClientHub({ employees, clients, saveClients }) {
             ))}
             <div style={{ flex:1, display:"flex", justifyContent:"flex-end", alignItems:"center", padding:"0 16px" }}>
               <button onClick={()=>{
-                const desc=prompt("Action description:");
-                const type=prompt("Type (Invoice / Contract Update / Approval / Payment):");
-                if(desc&&type) addRequest(openClient.id,{ts:new Date().toISOString(),type,employee:desc,status:"Pending"});
+                setShowNewAction(true);
               }} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:`1px solid ${M}`, backgroundColor:M, color:"white", cursor:"pointer" }}>
                 + New Action
               </button>
@@ -3760,7 +3812,7 @@ function ClientHub({ employees, clients, saveClients }) {
                 <div style={{ padding:"10px 14px", borderRadius:10, backgroundColor:"#fefce8", border:"1px solid #fef9c3" }}>
                   <div style={{ fontSize:10, fontWeight:700, color:"#854d0e", marginBottom:6 }}>NOTES</div>
                   <textarea
-                    value={openClient.notes||""}
+                    value={safeClient.notes||""}
                     onChange={e=>save(clients.map(c=>c.id===openId?{...c,notes:e.target.value}:c))}
                     placeholder="Add notes about this client…"
                     rows={3}
@@ -3810,14 +3862,14 @@ function ClientHub({ employees, clients, saveClients }) {
                         {r.dw>0 && <span style={{ marginLeft:6, fontWeight:700, color:r.dw>5?"#dc2626":"#d97706" }}>· {r.dw}d waiting</span>}
                       </p>
                     </div>
-                    <button onClick={()=>updReqStatus(openClient.id,r.i,"Completed")} style={{ fontSize:11, fontWeight:700, padding:"5px 10px", borderRadius:8, border:"1px solid #bbf7d0", backgroundColor:"#f0fdf4", color:"#16a34a", cursor:"pointer", whiteSpace:"nowrap" }}>✓ Done</button>
+                    <button onClick={()=>updReqStatus(safeClient.id,r.i,"Completed")} style={{ fontSize:11, fontWeight:700, padding:"5px 10px", borderRadius:8, border:"1px solid #bbf7d0", backgroundColor:"#f0fdf4", color:"#16a34a", cursor:"pointer", whiteSpace:"nowrap" }}>✓ Done</button>
                   </div>
                 ))}
-                {(openClient.requestLog||[]).filter(r=>r.status==="Completed").length>0 && (
+                {(safeClient.requestLog||[]).filter(r=>r.status==="Completed").length>0 && (
                   <details style={{ marginTop:4 }}>
-                    <summary style={{ fontSize:11, color:"#9ca3af", cursor:"pointer", fontWeight:600 }}>{(openClient.requestLog||[]).filter(r=>r.status==="Completed").length} completed actions</summary>
+                    <summary style={{ fontSize:11, color:"#9ca3af", cursor:"pointer", fontWeight:600 }}>{(safeClient.requestLog||[]).filter(r=>r.status==="Completed").length} completed actions</summary>
                     <div style={{ display:"flex", flexDirection:"column", gap:5, marginTop:8 }}>
-                      {(openClient.requestLog||[]).filter(r=>r.status==="Completed").map((r,ri)=>(
+                      {(safeClient.requestLog||[]).filter(r=>r.status==="Completed").map((r,ri)=>(
                         <div key={ri} style={{ display:"flex", justifyContent:"space-between", padding:"8px 12px", borderRadius:9, backgroundColor:"#f9fafb", border:"1px solid #f3f4f6" }}>
                           <span style={{ fontSize:12, fontWeight:600, color:"#374151" }}>{r.employee}<span style={{ fontWeight:400, color:"#9ca3af", marginLeft:6 }}>{r.type}</span></span>
                           <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#dcfce7", color:"#166534" }}>✓</span>
@@ -3902,20 +3954,20 @@ function ClientHub({ employees, clients, saveClients }) {
             {detailTab==="contacts" && (
               <div>
                 <div style={{ ...s.flexBetween, marginBottom:12 }}>
-                  <span style={{ fontSize:11, fontWeight:700, color:"#9ca3af", textTransform:"uppercase" }}>Contacts ({openClient.contacts.length})</span>
-                  <button onClick={()=>addContact(openClient.id)} style={{ fontSize:11, fontWeight:700, color:M, background:"none", border:"none", cursor:"pointer" }}>+ Add</button>
+                  <span style={{ fontSize:11, fontWeight:700, color:"#9ca3af", textTransform:"uppercase" }}>Contacts ({safeClient.contacts.length})</span>
+                  <button onClick={()=>addContact(safeClient.id)} style={{ fontSize:11, fontWeight:700, color:M, background:"none", border:"none", cursor:"pointer" }}>+ Add</button>
                 </div>
-                {openClient.contacts.length===0 && <p style={{ textAlign:"center", color:"#9ca3af", padding:"24px 0", fontSize:13 }}>No contacts yet.</p>}
-                {openClient.contacts.map((co,ci)=>(
+                {safeClient.contacts.length===0 && <p style={{ textAlign:"center", color:"#9ca3af", padding:"24px 0", fontSize:13 }}>No contacts yet.</p>}
+                {safeClient.contacts.map((co,ci)=>(
                   <div key={ci} style={{ display:"flex", alignItems:"center", gap:10, padding:10, borderRadius:10, backgroundColor:"#f9fafb", marginBottom:6, border:"1px solid #f3f4f6" }}>
                     <div style={{ width:34, height:34, borderRadius:10, background:`linear-gradient(135deg,${MD},${M})`, display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:13, fontWeight:700, flexShrink:0 }}>{(co.name||"?")[0]}</div>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <input value={co.name} onChange={e=>updContact(openClient.id,ci,"name",e.target.value)} style={{ width:"100%", border:"none", backgroundColor:"transparent", fontSize:12, fontWeight:600, outline:"none" }}/>
-                      <input value={co.role} onChange={e=>updContact(openClient.id,ci,"role",e.target.value)} style={{ width:"100%", border:"none", backgroundColor:"transparent", fontSize:11, color:"#9ca3af", outline:"none" }}/>
+                      <input value={co.name} onChange={e=>updContact(safeClient.id,ci,"name",e.target.value)} style={{ width:"100%", border:"none", backgroundColor:"transparent", fontSize:12, fontWeight:600, outline:"none" }}/>
+                      <input value={co.role} onChange={e=>updContact(safeClient.id,ci,"role",e.target.value)} style={{ width:"100%", border:"none", backgroundColor:"transparent", fontSize:11, color:"#9ca3af", outline:"none" }}/>
                     </div>
-                    <input value={co.phone} onChange={e=>updContact(openClient.id,ci,"phone",e.target.value)} style={{ width:130, border:"none", backgroundColor:"transparent", fontSize:11, textAlign:"right", outline:"none", direction:"ltr" }}/>
+                    <input value={co.phone} onChange={e=>updContact(safeClient.id,ci,"phone",e.target.value)} style={{ width:130, border:"none", backgroundColor:"transparent", fontSize:11, textAlign:"right", outline:"none", direction:"ltr" }}/>
                     {co.phone && (
-                      <button onClick={()=>{ const msg=`مرحباً ${co.name},\n\nأتواصل معك بخصوص ${openClient.name}.\n\nتحياتي`; window.open(`https://wa.me/${co.phone.replace(/\D/g,"")}?text=${encodeURIComponent(msg)}`,"_blank"); }} style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:30, height:30, borderRadius:8, border:"1px solid #16a34a", backgroundColor:"white", color:"#16a34a", cursor:"pointer", flexShrink:0 }}>
+                      <button onClick={()=>{ const msg=`مرحباً ${co.name},\n\nأتواصل معك بخصوص ${safeClient.name}.\n\nتحياتي`; window.open(`https://wa.me/${co.phone.replace(/\D/g,"")}?text=${encodeURIComponent(msg)}`,"_blank"); }} style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:30, height:30, borderRadius:8, border:"1px solid #16a34a", backgroundColor:"white", color:"#16a34a", cursor:"pointer", flexShrink:0 }}>
                         <MessageCircle size={13}/>
                       </button>
                     )}
@@ -3940,6 +3992,62 @@ function ClientHub({ employees, clients, saveClients }) {
             <div style={{ display:"flex", gap:12, marginTop:8 }}>
               <Btn variant="ghost" onClick={()=>setShowAdd(false)} full>Cancel</Btn>
               <Btn onClick={add} disabled={!nC.name} full style={{ backgroundColor:M, color:"white" }}><Plus size={14}/> Add Client</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* New Action Modal */}
+      {showNewAction && safeClient && (
+        <Modal title={`New Action · ${safeClient.name}`} onClose={()=>{ setShowNewAction(false); setNewAction({desc:"",type:"Invoice"}); }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div>
+              <label style={s.label}>Type</label>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:4 }}>
+                {["Invoice","Contract Update","Approval","Payment","Other"].map(t=>(
+                  <button key={t} onClick={()=>setNewAction(a=>({...a,type:t}))} style={{ padding:"5px 12px", borderRadius:20, fontSize:11, fontWeight:700, cursor:"pointer", border:`1.5px solid ${newAction.type===t?M:"#e5e7eb"}`, backgroundColor:newAction.type===t?`${M}12`:"white", color:newAction.type===t?M:"#6b7280" }}>{t}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label style={s.label}>Description</label>
+              <textarea
+                autoFocus
+                value={newAction.desc}
+                onChange={e=>setNewAction(a=>({...a,desc:e.target.value}))}
+                placeholder="Describe the action…"
+                rows={3}
+                style={{ ...s.inp, resize:"vertical", marginTop:4 }}
+              />
+            </div>
+            <div style={{ display:"flex", gap:10, marginTop:4 }}>
+              <Btn variant="ghost" onClick={()=>{ setShowNewAction(false); setNewAction({desc:"",type:"Invoice"}); }} full>Cancel</Btn>
+              <Btn onClick={()=>{
+                if(!newAction.desc.trim()) return;
+                addRequest(safeClient.id,{ ts:new Date().toISOString(), type:newAction.type, employee:newAction.desc, status:"Pending" });
+                setShowNewAction(false);
+                setNewAction({desc:"",type:"Invoice"});
+                setDetailTab("actions");
+              }} disabled={!newAction.desc.trim()} full style={{ backgroundColor:M, color:"white" }}>
+                <Plus size={14}/> Add Action
+              </Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {confirmDeleteId && (
+        <Modal title="Delete Client?" onClose={()=>setConfirmDeleteId(null)}>
+          <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+            <p style={{ margin:0, fontSize:13, color:"#374151" }}>
+              هتتحذف بيانات الـ client دي نهائياً. مش ممكن تتراجعي.
+            </p>
+            <div style={{ display:"flex", gap:10 }}>
+              <Btn variant="ghost" onClick={()=>setConfirmDeleteId(null)} full>Cancel</Btn>
+              <Btn onClick={()=>deleteC(confirmDeleteId)} full style={{ backgroundColor:"#dc2626", color:"white" }}>
+                Delete
+              </Btn>
             </div>
           </div>
         </Modal>
