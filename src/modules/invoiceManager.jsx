@@ -176,6 +176,16 @@ const STORAGE_KEY = 'fisheye_invoices_v1';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtN = n => Number(n || 0).toLocaleString('en-SA', { minimumFractionDigits: 2 });
 const fmtSAR = n => `SAR ${fmtN(n)}`;
+// Display formatter: YYYY-MM-DD → "28 Mar 2026"
+const DISP_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmtDate = (d) => {
+  if (!d) return '—';
+  const s = normalizeDate(String(d).trim());
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return s;
+  const [, yyyy, mm, dd] = m;
+  return `${parseInt(dd)} ${DISP_MONTHS[parseInt(mm) - 1]} ${yyyy}`;
+};
 
 function loadInvoices() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
@@ -221,7 +231,7 @@ function buildRow(poNum, invoiceNum, invoiceDate, names, preVat, vat, totalDue, 
     id: `${invoiceNum || i}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     poNumber: String(poNum || '').trim(),
     invoiceNumber: String(invoiceNum || '').trim(),
-    invoiceDate: String(invoiceDate || '').trim(),
+    invoiceDate: normalizeDate(String(invoiceDate || '').trim()),
     candidateNames: String(names || '').trim(),
     amountPreVat: preVat,
     vat,
@@ -429,6 +439,37 @@ function parseInvoiceSheet(text) {
   }
   if (rows.length === 0) return { rows: [], error: 'No data rows found. Check that the file has the right columns.' };
   return { rows, error: null };
+}
+
+// ─── Date normalizer ────────────────────────────────────────────────────────────
+// Converts ANY stored date format to YYYY-MM-DD.
+// Handles: "8-Mar-26", "19-Apr-2026", "28/03/2026", "2026-05-04", O→0 typos.
+const MONTH_MAP = {
+  jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',
+  jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12',
+};
+export function normalizeDate(d) {
+  if (!d) return d;
+  // Replace letter-O with digit-0 (common OCR/copy-paste typo)
+  let s = String(d).trim().replace(/[Oo]/g, '0');
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // DD/MM/YYYY or D/M/YYYY
+  const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slash) {
+    const [, dd, mm, yyyy] = slash;
+    return `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+  }
+  // DD-Mon-YY or DD-Mon-YYYY (e.g. "8-Mar-26", "19-Apr-2026")
+  const mon = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
+  if (mon) {
+    const [, dd, mStr, yr] = mon;
+    const mm = MONTH_MAP[mStr.toLowerCase()];
+    if (!mm) return s;
+    const yyyy = yr.length === 2 ? `20${yr}` : yr;
+    return `${yyyy}-${mm}-${dd.padStart(2,'0')}`;
+  }
+  return s; // unrecognised — return as-is
 }
 
 // ─── Status config ─────────────────────────────────────────────────────────────
@@ -735,11 +776,24 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
   const applySOAMigration = (list) => {
     let changed = false;
     const migrated = list.map(inv => {
-      if (inv.soaYear) return inv; // already tagged — never overwrite
-      const num = String(inv.invoiceNumber || '').trim();
-      if (SOA_2025_NUMS.has(num)) { changed = true; return { ...inv, soaYear: '2025' }; }
-      if (SOA_2026_NUMS.has(num)) { changed = true; return { ...inv, soaYear: '2026' }; }
-      return inv;
+      let updated = inv;
+
+      // ── 1. Normalize date formats → YYYY-MM-DD ──────────────────────────────
+      const normInvDate  = normalizeDate(inv.invoiceDate);
+      const normPaidDate = normalizeDate(inv.paidDate);
+      if (normInvDate !== inv.invoiceDate || normPaidDate !== inv.paidDate) {
+        changed = true;
+        updated = { ...updated, invoiceDate: normInvDate, paidDate: normPaidDate };
+      }
+
+      // ── 2. Tag soaYear (only if not already set) ────────────────────────────
+      if (!updated.soaYear) {
+        const num = String(inv.invoiceNumber || '').trim();
+        if (SOA_2025_NUMS.has(num)) { changed = true; updated = { ...updated, soaYear: '2025' }; }
+        else if (SOA_2026_NUMS.has(num)) { changed = true; updated = { ...updated, soaYear: '2026' }; }
+      }
+
+      return updated;
     });
     return { list: changed ? migrated : list, changed };
   };
@@ -1370,7 +1424,7 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
                             <tr key={inv.id} style={{ borderBottom: '1px solid #f9fafb' }}>
                               <td style={{ ...td, fontWeight: 700, fontFamily: 'var(--font-mono)', fontSize: 12, width: 100 }}>{inv.invoiceNumber || '—'}</td>
                               <td style={{ ...td, color: '#6b7280', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{inv.poNumber || '—'}</td>
-                              <td style={{ ...td, color: '#6b7280', whiteSpace: 'nowrap' }}>{inv.invoiceDate || '—'}</td>
+                              <td style={{ ...td, color: '#6b7280', whiteSpace: 'nowrap' }}>{fmtDate(inv.invoiceDate)}</td>
                               <td style={{ ...td, maxWidth: 240 }}>
                                 <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={inv.candidateNames}>
                                   {inv.candidateNames || '—'}
@@ -1471,7 +1525,7 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
                       {inv.poNumber || '—'}
                     </td>
                     <td style={{ ...td, fontSize: 12, color: '#6b7280', whiteSpace: 'nowrap' }}>
-                      {inv.invoiceDate || '—'}
+                      {fmtDate(inv.invoiceDate)}
                     </td>
                     <td style={{ ...td, maxWidth: 200, fontSize: 12 }}>
                       <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#374151' }}
@@ -2568,8 +2622,8 @@ function DupAuditModal({ onClose, invoices, employees, onDelete }) {
                               <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)', fontSize: 11, color: '#6b7280' }}>
                                 {inv.poNumber || '—'}
                               </td>
-                              <td style={{ padding: '8px 12px', color: '#374151' }}>
-                                {inv.invoiceDate || '—'}
+                              <td style={{ padding: '8px 12px', color: '#374151', whiteSpace: 'nowrap' }}>
+                                {fmtDate(inv.invoiceDate)}
                               </td>
                               <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 900, color: M }}>
                                 {fmtN(inv.totalDue)}
@@ -2846,9 +2900,9 @@ function SOAReconcileModal({ onClose, invoices, onMarkPaid, filterYear = 'all' }
                     <div key={inv.id} style={{ ...rowStyle, backgroundColor: '#faf5ff' }}>
                       <span style={{ fontWeight: 700, color: '#7c3aed', fontFamily: 'var(--font-mono)' }}>{inv.invoiceNumber}</span>
                       <span style={{ color: '#374151' }}>{fmtSAR(inv.totalDue)}</span>
-                      <span style={{ color: '#6b7280' }}>{inv.paidDate || '—'}</span>
+                      <span style={{ color: '#6b7280' }}>{fmtDate(inv.paidDate)}</span>
                       <span style={{ color: '#6b7280', fontSize: 11 }}>{inv.poNumber || '—'}</span>
-                      <span style={{ color: '#6b7280' }}>{inv.invoiceDate || '—'}</span>
+                      <span style={{ color: '#6b7280' }}>{fmtDate(inv.invoiceDate)}</span>
                     </div>
                   ))}
                 </>
