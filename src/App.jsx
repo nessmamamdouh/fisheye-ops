@@ -4096,12 +4096,13 @@ function PartnerHub({ employees, partners, savePartners }) {
   if (!partners) partners = [];
   const [showAdd,setShowAdd]=useState(false);
   const [filter,setFilter]=useState("active");
+  const [typeFilter,setTypeFilter]=useState("all");
   const [search,setSearch]=useState("");
   const [openId,setOpenId]=useState(null);
   const [detailTab,setDetailTab]=useState("overview");
   const [editingInfo,setEditingInfo]=useState(false);
-  const [infoForm,setInfoForm]=useState({name:"",region:"",email:"",notes:""});
-  const [nP,setNP]=useState({name:"",region:"",email:"",notes:""});
+  const [infoForm,setInfoForm]=useState({name:"",region:"",email:"",notes:"",partnerType:""});
+  const [nP,setNP]=useState({name:"",region:"",email:"",notes:"",partnerType:"operational"});
   const [showNewAction,setShowNewAction]=useState(false);
   const [newAction,setNewAction]=useState({desc:"",type:"Handover"});
   const [confirmDeleteId,setConfirmDeleteId]=useState(null);
@@ -4133,7 +4134,7 @@ function PartnerHub({ employees, partners, savePartners }) {
       let score=100;
       if(linked.length){
         const total=linked.length;
-        const expiring=linked.filter(e=>{const d=daysUntil(e.endDate);return d>=0&&d<=14;}).length;
+        const expiring=linked.filter(e=>{const d=daysUntil(e.endDate);return d>=0&&d<=30;}).length;
         score-=Math.round((expiring/total)*40);
         const wfPending=linked.filter(e=>!isWFDone(e.workflowStatus)).length;
         score-=Math.round((wfPending/total)*30);
@@ -4150,9 +4151,10 @@ function PartnerHub({ employees, partners, savePartners }) {
 
   const displayed=useMemo(()=>partners.filter(p=>{
     const matchFilter=filter==="all"||(filter==="archived"?p.status==="archived":p.status!=="archived");
+    const matchType=typeFilter==="all"||p.partnerType===typeFilter;
     const matchSearch=!search||p.name.toLowerCase().includes(search.toLowerCase());
-    return matchFilter&&matchSearch;
-  }),[partners,filter,search]);
+    return matchFilter&&matchType&&matchSearch;
+  }),[partners,filter,typeFilter,search]);
 
   // ── Global stats ──
   const totalPending=partners.reduce((s,p)=>s+(p.requestLog||[]).filter(r=>r.status==="Pending").length,0);
@@ -4170,7 +4172,10 @@ function PartnerHub({ employees, partners, savePartners }) {
   const linkedEmps=safePartner?(partnerStats[safePartner.id]?.linked||getLinked(safePartner.id)):[];
   const expiringLinked=linkedEmps.filter(e=>{const d=daysUntil(e.endDate);return d>=0&&d<=30;}).length;
   const pendingActions=safePartner?safePartner.requestLog.map((r,i)=>({...r,i,dw:Math.floor((Date.now()-new Date(r.ts))/864e5)})).filter(r=>r.status==="Pending").sort((a,b)=>b.dw-a.dw):[];
-  const completionRate=safePartner&&safePartner.requestLog.length>0?Math.round((safePartner.requestLog.filter(r=>r.status==="Completed").length/safePartner.requestLog.length)*100):null;
+  const completedCount=safePartner?safePartner.requestLog.filter(r=>r.status==="Completed").length:0;
+  const totalActions=safePartner?safePartner.requestLog.length:0;
+  const completionRate=totalActions>0?Math.round((completedCount/totalActions)*100):null;
+  const completionLabel=completionRate!==null?`${completionRate}% (${completedCount}/${totalActions})`:"—";
 
   // Sync notes val when partner changes
   useEffect(()=>{ setNotesVal(safePartner?.notes||""); },[openId]);
@@ -4195,6 +4200,17 @@ function PartnerHub({ employees, partners, savePartners }) {
     linkedEmps.forEach(e=>{const w=e.workflowStatus||"Unknown";if(!m[w])m[w]=0;m[w]++;});
     return Object.entries(m).sort((a,b)=>b[1]-a[1]);
   },[linkedEmps]);
+
+  // Employees sorted by urgency: expiring soonest first, then expired, then rest
+  const sortedLinkedEmps=useMemo(()=>[...linkedEmps].sort((a,b)=>{
+    const da=daysUntil(a.endDate); const db=daysUntil(b.endDate);
+    // Active & expiring first (d≥0), most urgent first
+    if(da>=0&&db>=0) return da-db;
+    if(da>=0) return -1;
+    if(db>=0) return 1;
+    // Both expired — most recently expired first
+    return db-da;
+  }),[linkedEmps]);
 
   const TABS=[
     {k:"overview",  l:"Overview"},
@@ -4270,6 +4286,12 @@ function PartnerHub({ employees, partners, savePartners }) {
               style={{ width:"100%", padding:"5px 8px 5px 24px", borderRadius:7, border:"1px solid #e5e7eb", fontSize:11, outline:"none", backgroundColor:"white", boxSizing:"border-box" }}/>
           </div>
         </div>
+        {/* Type filter pills */}
+        <div style={{ padding:"6px 10px", borderBottom:"1px solid #f3f4f6", display:"flex", gap:4 }}>
+          {[["all","All"],["operational","Operational"],["commission","Commission"]].map(([k,l])=>(
+            <button key={k} onClick={()=>setTypeFilter(k)} style={{ flex:1, padding:"4px 0", border:"none", fontSize:9, fontWeight:700, cursor:"pointer", borderRadius:6, backgroundColor:typeFilter===k?PC:"#f3f4f6", color:typeFilter===k?"white":"#9ca3af", transition:"all 0.12s", whiteSpace:"nowrap" }}>{l}</button>
+          ))}
+        </div>
 
         {/* Partner list */}
         <div style={{ flex:1, overflowY:"auto" }}>
@@ -4343,6 +4365,11 @@ function PartnerHub({ employees, partners, savePartners }) {
                     <input value={infoForm.region} onChange={e=>setInfoForm(f=>({...f,region:e.target.value}))} placeholder="Region" style={{ flex:1, fontSize:12, color:"white", background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:7, padding:"4px 9px", outline:"none", fontFamily:"inherit" }}/>
                     <input value={infoForm.email} onChange={e=>setInfoForm(f=>({...f,email:e.target.value}))} placeholder="Email" type="email" style={{ flex:2, fontSize:12, color:"white", background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:7, padding:"4px 9px", outline:"none", fontFamily:"inherit" }}/>
                   </div>
+                  <div style={{ display:"flex", gap:6 }}>
+                    {["operational","commission"].map(t=>(
+                      <button key={t} onClick={()=>setInfoForm(f=>({...f,partnerType:t}))} style={{ flex:1, padding:"4px 8px", borderRadius:7, fontSize:11, fontWeight:700, cursor:"pointer", border:`1px solid ${infoForm.partnerType===t?"rgba(255,255,255,0.7)":"rgba(255,255,255,0.2)"}`, backgroundColor:infoForm.partnerType===t?"rgba(255,255,255,0.25)":"transparent", color:"white", textTransform:"capitalize" }}>{t}</button>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <div style={{ flex:1, minWidth:0 }}>
@@ -4361,7 +4388,7 @@ function PartnerHub({ employees, partners, savePartners }) {
                   </>
                 ) : (
                   <>
-                    <button onClick={()=>{ setInfoForm({name:safePartner.name||"",region:safePartner.region||"",email:safePartner.email||"",notes:safePartner.notes||""}); setEditingInfo(true); }} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.3)", backgroundColor:"rgba(255,255,255,0.12)", color:"white", cursor:"pointer" }}>Edit</button>
+                    <button onClick={()=>{ setInfoForm({name:safePartner.name||"",region:safePartner.region||"",email:safePartner.email||"",notes:safePartner.notes||"",partnerType:safePartner.partnerType||"operational"}); setEditingInfo(true); }} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.3)", backgroundColor:"rgba(255,255,255,0.12)", color:"white", cursor:"pointer" }}>Edit</button>
                     <button onClick={()=>safePartner.status==="archived"?unarchive(openId):archive(openId)} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.3)", backgroundColor:"rgba(255,255,255,0.12)", color:"white", cursor:"pointer" }}>
                       {safePartner.status==="archived" ? "Restore" : "Archive"}
                     </button>
@@ -4390,11 +4417,11 @@ function PartnerHub({ employees, partners, savePartners }) {
               { l:"Headcount",    v:linkedEmps.length,                                                             c:PC },
               { l:"Expiring ≤30d",v:expiringLinked,                                                                c:expiringLinked>0?"#d97706":"#374151" },
               { l:"WF Pending",   v:linkedEmps.filter(e=>{const wf=(e.workflowStatus||"").trim();return wf&&!isWFDone(wf);}).length, c:"#dc2626" },
-              { l:"Completion",   v:completionRate!==null?`${completionRate}%`:"—",                                c:completionRate===null?"#9ca3af":completionRate>=80?"#16a34a":"#d97706" },
+              { l:"Completion",   v:completionLabel,                                                                c:completionRate===null?"#9ca3af":completionRate>=80?"#16a34a":"#d97706" },
             ].map(({l,v,c})=>(
               <div key={l} style={{ padding:"11px 8px", textAlign:"center", borderRight:"1px solid #f3f4f6" }}>
                 <div style={{ fontSize:9, color:"#9ca3af", fontWeight:700, textTransform:"uppercase", marginBottom:3 }}>{l}</div>
-                <div style={{ fontSize:19, fontWeight:900, color:c, lineHeight:1 }}>{v}</div>
+                <div style={{ fontSize:l==="Completion"?12:19, fontWeight:900, color:c, lineHeight:1 }}>{v}</div>
               </div>
             ))}
           </div>
@@ -4510,11 +4537,11 @@ function PartnerHub({ employees, partners, savePartners }) {
               </div>
             )}
 
-            {/* EMPLOYEES */}
+            {/* EMPLOYEES — sorted by urgency (soonest expiry first) */}
             {detailTab==="employees" && (
               <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-                {linkedEmps.length===0 && <p style={{ textAlign:"center", color:"#9ca3af", padding:"32px 0", fontSize:13 }}>No employees assigned.</p>}
-                {linkedEmps.map(e=>{
+                {sortedLinkedEmps.length===0 && <p style={{ textAlign:"center", color:"#9ca3af", padding:"32px 0", fontSize:13 }}>No employees assigned.</p>}
+                {sortedLinkedEmps.map(e=>{
                   const d=daysUntil(e.endDate);
                   const urg=d>=0&&d<=30;
                   return (
@@ -4577,6 +4604,14 @@ function PartnerHub({ employees, partners, savePartners }) {
               <Inp label="Email"  value={nP.email}  onChange={v=>setNP(p=>({...p,email:v}))}/>
             </div>
             <Inp label="Notes" value={nP.notes} onChange={v=>setNP(p=>({...p,notes:v}))}/>
+            <div>
+              <label style={s.label}>Partner Type</label>
+              <div style={{ display:"flex", gap:8, marginTop:4 }}>
+                {["operational","commission"].map(t=>(
+                  <button key={t} onClick={()=>setNP(p=>({...p,partnerType:t}))} style={{ flex:1, padding:"7px 0", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", border:`1.5px solid ${nP.partnerType===t?PC:"#e5e7eb"}`, backgroundColor:nP.partnerType===t?`${PC}10`:"white", color:nP.partnerType===t?PC:"#6b7280", textTransform:"capitalize" }}>{t}</button>
+                ))}
+              </div>
+            </div>
             <div style={{ display:"flex", gap:12, marginTop:8 }}>
               <Btn variant="ghost" onClick={()=>setShowAdd(false)} full>Cancel</Btn>
               <Btn onClick={add} disabled={!nP.name} full style={{ backgroundColor:PC, color:"white" }}><Plus size={14}/> Add Partner</Btn>
