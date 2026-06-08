@@ -575,13 +575,15 @@ function PayrollTab({ employees, setEmployees, flows, onSaveFlows }) {
     const prevDate  = new Date(year, month - 2, 1); // الشهر السابق
     const prevYear  = prevDate.getFullYear();
     const prevMonth = prevDate.getMonth() + 1;
-    const { active: prevActive } = classifyMovements(allEmployees, prevYear, prevMonth);
+    // Use eligibleForPayroll as base (same as current month) — not allEmployees
+    // allEmployees includes Sela-no-PO and not-yet-started which inflates the prev month count
+    const { active: prevActive } = classifyMovements(eligibleForPayroll, prevYear, prevMonth);
     const prevPayroll   = prevActive.reduce((s, e) => s + e._pro.proratedPkg, 0);
     const prevHeadcount = prevActive.length;
     const payrollDiff   = totals.payroll - prevPayroll;
     const headcountDiff = totals.headcount - prevHeadcount;
     return { prevPayroll, prevHeadcount, payrollDiff, headcountDiff };
-  }, [allEmployees, year, month, totals.payroll, totals.headcount]);
+  }, [eligibleForPayroll, year, month, totals.payroll, totals.headcount]);
 
  const fmtPro = n => Number(n||0).toLocaleString("en-SA");
 
