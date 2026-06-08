@@ -2728,9 +2728,9 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
       // Only employees who were actually eligible for salary in this specific month
       const eligibleForMonth = active.filter(e => {
         const st = (e.status || '').toLowerCase();
-        if (['resigned', 'مستقيل'].includes(st)) return false;
+        if (['resigned', 'resigned_ar', 'مستقيل'].includes(st)) return false;
         // Expired: include only if contract ended within this month (leaver)
-        if (['expired', 'منتهي'].includes(st)) {
+        if (['expired', 'expired_ar', 'منتهي'].includes(st)) {
           const end = parseDate(e.endDate);
           if (!end || end < mStart) return false;
         }
