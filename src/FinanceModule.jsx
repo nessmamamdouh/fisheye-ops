@@ -2680,8 +2680,7 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
     };
   }, [active]);
 
-  const overdueCount    = operationalIssues.filter(i => i.type === "invoice_overdue").length;
-  const payrollGapCount = operationalIssues.filter(i => i.type === "payroll_gap").length;
+
 
   // ── Needs Attention items ──────────────────────────────────────────────────
   const attentionItems = useMemo(() => {
