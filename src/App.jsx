@@ -1563,6 +1563,7 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
   const [pendingCSVDiff, setPendingCSVDiff] = useState(null); // { changes, notFound, skipped, applyFn }
   const [importBackup, setImportBackup] = useState(null);     // snapshot for rollback
   const [csvApplying, setCsvApplying] = useState(false);      // loading state for apply btn
+  const [csvUnchecked, setCsvUnchecked] = useState(new Set()); // row keys to skip in diff preview
   const [pendingAddCSV, setPendingAddCSV] = useState(null);   // { resolved, needsClient }
   const [csvClientAssign, setCsvClientAssign] = useState({}); // { [project]: clientName }
   const csvAddRef    = useRef(null); // file input for "Add from CSV"
@@ -2159,10 +2160,10 @@ const submitRenew = async () => {
                           alert('No changes detected in this CSV.'); e.target.value = ''; return;
                         }
                         // ── Show diff preview modal ───────────────────────────
-                        const applyFn = async () => {
+                        const applyFn = async (filteredChanges) => {
                           const EXTENDED_FIELDS = ['iban', 'bank', 'requesterName', 'poAddedDate'];
                           let updated = 0; let errors = 0;
-                          for (const { emp, fieldsToUpdate } of changes) {
+                          for (const { emp, fieldsToUpdate } of filteredChanges) {
                             const coreFields = {}; const extFields = {};
                             Object.entries(fieldsToUpdate).forEach(([k, v]) => {
                               if (EXTENDED_FIELDS.includes(k)) extFields[k] = v; else coreFields[k] = v;
@@ -2179,6 +2180,7 @@ const submitRenew = async () => {
                             }
                           }
                           setPendingCSVDiff(null);
+                          setCsvUnchecked(new Set());
                           alert(`✅ Applied: ${updated} employees updated${errors > 0 ? `\n❌ Errors: ${errors}` : ''}`);
                         };
                         setPendingCSVDiff({ changes, notFound, skippedCount, applyFn });
@@ -2715,11 +2717,12 @@ const submitRenew = async () => {
         const { changes, notFound, skippedCount, applyFn } = pendingCSVDiff;
         const applying = csvApplying;
 
-        // Flatten rows: one row per (employee × changed field)
+        // Flatten rows: one row per (employee × changed field), each with a unique key
         const rows = changes.flatMap(({ emp, fieldDiffs, matchedBy }) =>
           fieldDiffs.map(({ field, oldVal, newVal }) => ({
+            key: `${emp._id}:${field}`,
+            empId: emp._id,
             name: emp.name,
-            empId: emp.employeeId,
             contractId: emp.contractId || '—',
             matchedBy: matchedBy || 'unique',
             field,
@@ -2727,6 +2730,27 @@ const submitRenew = async () => {
             newVal: String(newVal),
           }))
         );
+
+        const allKeys = rows.map(r => r.key);
+        const checkedCount = allKeys.filter(k => !csvUnchecked.has(k)).length;
+        const allChecked = checkedCount === allKeys.length;
+        const noneChecked = checkedCount === 0;
+
+        const toggleRow = (key) => setCsvUnchecked(prev => {
+          const next = new Set(prev);
+          if (next.has(key)) next.delete(key); else next.add(key);
+          return next;
+        });
+        const toggleAll = () => setCsvUnchecked(allChecked ? new Set(allKeys) : new Set());
+
+        // Build filteredChanges — only include employees that have at least one checked field
+        const filteredChanges = changes.map(({ emp, fieldsToUpdate, fieldDiffs, matchedBy }) => {
+          const checkedFields = fieldDiffs.filter(({ field }) => !csvUnchecked.has(`${emp._id}:${field}`));
+          if (checkedFields.length === 0) return null;
+          const newFieldsToUpdate = {};
+          checkedFields.forEach(({ field, newVal }) => { newFieldsToUpdate[field] = newVal; });
+          return { emp, fieldsToUpdate: newFieldsToUpdate, fieldDiffs: checkedFields, matchedBy };
+        }).filter(Boolean);
 
         const FIELD_LABEL = {
           workflowStatus: 'Workflow Status', idNumber: 'ID Number', project: 'Project',
@@ -2743,7 +2767,7 @@ const submitRenew = async () => {
             alignItems: "center", justifyContent: "center", padding: 20,
           }}>
             <div style={{
-              backgroundColor: "white", borderRadius: 16, width: "100%", maxWidth: 780,
+              backgroundColor: "white", borderRadius: 16, width: "100%", maxWidth: 820,
               maxHeight: "88vh", display: "flex", flexDirection: "column",
               boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
             }}>
@@ -2758,11 +2782,11 @@ const submitRenew = async () => {
                     📋 CSV Update Preview
                   </h2>
                   <p style={{ margin: "4px 0 0", fontSize: 12, color: "#6b7280" }}>
-                    راجع التغييرات قبل تطبيقها — {changes.length} موظف · {rows.length} تعديل
-                    {skippedCount > 0 && ` · ${skippedCount} skipped (ambiguous)`}
+                    راجع التغييرات — {checkedCount} من {rows.length} تعديل محدد
+                    {skippedCount > 0 && ` · ${skippedCount} skipped`}
                   </p>
                 </div>
-                <button onClick={() => setPendingCSVDiff(null)} disabled={applying}
+                <button onClick={() => { setPendingCSVDiff(null); setCsvUnchecked(new Set()); }} disabled={applying}
                   style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: 4, fontSize: 18, lineHeight: 1 }}>✕</button>
               </div>
 
@@ -2775,6 +2799,16 @@ const submitRenew = async () => {
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                       <thead>
                         <tr style={{ backgroundColor: "#f9fafb" }}>
+                          {/* Select All checkbox */}
+                          <th style={{ padding: "8px 10px", borderBottom: "1px solid #e5e7eb", width: 32 }}>
+                            <input
+                              type="checkbox"
+                              checked={allChecked}
+                              ref={el => { if (el) el.indeterminate = !allChecked && !noneChecked; }}
+                              onChange={toggleAll}
+                              style={{ cursor: "pointer", width: 14, height: 14 }}
+                            />
+                          </th>
                           {["Employee", "Contract ID", "Matched By", "Field", "Old Value", "New Value"].map(h => (
                             <th key={h} style={{
                               padding: "8px 10px", textAlign: "left", fontWeight: 700,
@@ -2785,10 +2819,21 @@ const submitRenew = async () => {
                       </thead>
                       <tbody>
                         {rows.map((r, i) => {
-                          const changed = r.oldVal !== r.newVal;
+                          const isChecked = !csvUnchecked.has(r.key);
                           const isWeakMatch = r.matchedBy !== 'unique' && !r.matchedBy.startsWith('contract:');
                           return (
-                            <tr key={i} style={{ backgroundColor: isWeakMatch ? "#fffbeb" : (i % 2 === 0 ? "white" : "#f9fafb") }}>
+                            <tr key={r.key} style={{
+                              backgroundColor: !isChecked ? "#f9fafb" : isWeakMatch ? "#fffbeb" : (i % 2 === 0 ? "white" : "#f9fafb"),
+                              opacity: isChecked ? 1 : 0.45,
+                            }}>
+                              <td style={{ padding: "7px 10px", borderBottom: "1px solid #f3f4f6", textAlign: "center" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => toggleRow(r.key)}
+                                  style={{ cursor: "pointer", width: 14, height: 14 }}
+                                />
+                              </td>
                               <td style={{ padding: "7px 10px", color: "#111827", fontWeight: 600, borderBottom: "1px solid #f3f4f6", whiteSpace: "nowrap" }}>{r.name}</td>
                               <td style={{ padding: "7px 10px", color: "#6b7280", borderBottom: "1px solid #f3f4f6", fontFamily: "monospace", whiteSpace: "nowrap" }}>{r.contractId}</td>
                               <td style={{ padding: "7px 10px", borderBottom: "1px solid #f3f4f6", whiteSpace: "nowrap" }}>
@@ -2801,15 +2846,8 @@ const submitRenew = async () => {
                                 </span>
                               </td>
                               <td style={{ padding: "7px 10px", color: "#374151", fontWeight: 600, borderBottom: "1px solid #f3f4f6" }}>{FIELD_LABEL[r.field] || r.field}</td>
-                              <td style={{
-                                padding: "7px 10px", color: "#dc2626",
-                                borderBottom: "1px solid #f3f4f6",
-                                textDecoration: "line-through", opacity: 0.8,
-                              }}>{r.oldVal}</td>
-                              <td style={{
-                                padding: "7px 10px", color: "#16a34a", fontWeight: 700,
-                                borderBottom: "1px solid #f3f4f6",
-                              }}>{r.newVal}</td>
+                              <td style={{ padding: "7px 10px", color: "#dc2626", borderBottom: "1px solid #f3f4f6", textDecoration: "line-through", opacity: 0.8 }}>{r.oldVal}</td>
+                              <td style={{ padding: "7px 10px", color: "#16a34a", fontWeight: 700, borderBottom: "1px solid #f3f4f6" }}>{r.newVal}</td>
                             </tr>
                           );
                         })}
@@ -2825,7 +2863,7 @@ const submitRenew = async () => {
                     border: "1px solid #fde68a", marginBottom: 16,
                   }}>
                     <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 12, color: "#92400e" }}>
-                      ⚠️ {notFound.length} Employee ID{notFound.length > 1 ? "s" : ""} not found in system:
+                      ⚠️ {notFound.length} Contract ID{notFound.length > 1 ? "s" : ""} not found in system:
                     </p>
                     <p style={{ margin: 0, fontSize: 11, color: "#78350f", fontFamily: "monospace", lineHeight: 1.8 }}>
                       {notFound.join(" · ")}
@@ -2843,28 +2881,33 @@ const submitRenew = async () => {
               {/* Footer */}
               <div style={{
                 padding: "14px 22px", borderTop: "1px solid #e5e7eb",
-                display: "flex", justifyContent: "flex-end", gap: 10,
+                display: "flex", justifyContent: "space-between", alignItems: "center",
                 flexShrink: 0, backgroundColor: "#f9fafb", borderRadius: "0 0 16px 16px",
               }}>
-                <button onClick={() => setPendingCSVDiff(null)} disabled={applying}
-                  style={{
-                    padding: "8px 18px", borderRadius: 8, fontSize: 13, fontWeight: 600,
-                    border: "1px solid #e5e7eb", backgroundColor: "white", cursor: "pointer",
-                    color: "#374151", opacity: applying ? 0.5 : 1,
-                  }}>❌ Cancel</button>
-                <button
-                  disabled={applying || changes.length === 0}
-                  onClick={async () => { setCsvApplying(true); await applyFn(); setCsvApplying(false); }}
-                  style={{
-                    padding: "8px 22px", borderRadius: 8, fontSize: 13, fontWeight: 700,
-                    border: "none", cursor: changes.length === 0 ? "not-allowed" : "pointer",
-                    backgroundColor: changes.length === 0 ? "#e5e7eb" : M,
-                    color: changes.length === 0 ? "#9ca3af" : "white",
-                    opacity: applying ? 0.7 : 1,
-                    display: "flex", alignItems: "center", gap: 6,
-                  }}>
-                  {applying ? "⏳ Applying..." : `✅ Apply ${changes.length} Changes`}
-                </button>
+                <span style={{ fontSize: 12, color: "#6b7280" }}>
+                  {checkedCount} تعديل محدد{csvUnchecked.size > 0 ? ` · ${csvUnchecked.size} متجاهل` : ''}
+                </span>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={() => { setPendingCSVDiff(null); setCsvUnchecked(new Set()); }} disabled={applying}
+                    style={{
+                      padding: "8px 18px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+                      border: "1px solid #e5e7eb", backgroundColor: "white", cursor: "pointer",
+                      color: "#374151", opacity: applying ? 0.5 : 1,
+                    }}>❌ Cancel</button>
+                  <button
+                    disabled={applying || noneChecked}
+                    onClick={async () => { setCsvApplying(true); await applyFn(filteredChanges); setCsvApplying(false); }}
+                    style={{
+                      padding: "8px 22px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                      border: "none", cursor: noneChecked ? "not-allowed" : "pointer",
+                      backgroundColor: noneChecked ? "#e5e7eb" : M,
+                      color: noneChecked ? "#9ca3af" : "white",
+                      opacity: applying ? 0.7 : 1,
+                      display: "flex", alignItems: "center", gap: 6,
+                    }}>
+                    {applying ? "⏳ Applying..." : `✅ Apply ${checkedCount} Changes`}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
