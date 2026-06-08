@@ -230,6 +230,29 @@ function classifyMovements(employees, year, month) {
  
  
 const card  = { backgroundColor: "white", borderRadius: 12, border: "1px solid #e5e7eb", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" };
+
+// ─── Single source of truth for client colours ─────────────────────────────
+// Used by ProfitPerClientTab AND MonthlyPLTrend.
+// getClientColor(name) falls back to a deterministic colour for unknown clients.
+const CLIENT_COLORS_MAP = {
+  "Sela":               { accent: "#A02843", light: "#fff5f5" },
+  "SPL":                { accent: "#7c3aed", light: "#f5f3ff" },
+  "Channelplay":        { accent: "#2563eb", light: "#eff6ff" },
+  "Riva Engineering 2": { accent: "#c2410c", light: "#fff7ed" },
+  "Combuzz HR":         { accent: "#d97706", light: "#fffbeb" },
+};
+const FALLBACK_PALETTE = ["#0369a1","#059669","#6d28d9","#b45309","#374151","#0f766e"];
+const _clientColorCache = {};
+function getClientColor(name) {
+  if (CLIENT_COLORS_MAP[name]) return CLIENT_COLORS_MAP[name];
+  if (_clientColorCache[name]) return _clientColorCache[name];
+  // Deterministic pick from palette based on name hash
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+  const accent = FALLBACK_PALETTE[h % FALLBACK_PALETTE.length];
+  _clientColorCache[name] = { accent, light: `${accent}12` };
+  return _clientColorCache[name];
+}
 const th    = { padding: "12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", backgroundColor: "#fdf8f8", borderBottom: "1px solid #f3f4f6" };
 const td    = { padding: "12px", borderBottom: "1px solid #f9fafb", fontSize: 13 };
 const tabStyle = active => ({
@@ -1534,15 +1557,8 @@ function InvoicesTab({ employees }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function ProfitPerClientTab({ employees }) {
   const [expandedClient, setExpandedClient] = useState(null);
+  const [showAllEmps, setShowAllEmps] = useState({}); // { [client]: bool }
   const active = useMemo(() => employees.filter(e => !isExcluded(e)), [employees]);
-
-  const CLIENT_COLORS = {
-    "Sela":               { accent: "#A02843", light: "#fff5f5" },
-    "SPL":                { accent: "#7c3aed", light: "#f5f3ff" },
-    "Channelplay":        { accent: "#2563eb", light: "#eff6ff" },
-    "Riva Engineering 2": { accent: "#c2410c", light: "#fff7ed" },
-    "Combuzz HR":         { accent: "#d97706", light: "#fffbeb" },
-  };
 
   const clientRows = useMemo(() => {
     const clients = Array.from(new Set(active.map(e => e.client).filter(Boolean))).sort();
@@ -1614,7 +1630,7 @@ function ProfitPerClientTab({ employees }) {
           <div style={{ fontSize: 11, fontWeight: 800, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>Net Profit by Client</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {clientRows.map(r => {
-              const col = CLIENT_COLORS[r.client] || { accent: M, light: "#fff5f5" };
+              const col = getClientColor(r.client);
               const pct = Math.round((r.netProfit / barMax) * 100);
               return (
                 <div key={r.client}>
@@ -1664,7 +1680,7 @@ function ProfitPerClientTab({ employees }) {
             </thead>
             <tbody>
               {clientRows.map((r, i) => {
-                const col = CLIENT_COLORS[r.client] || { accent: M, light: "#fff5f5" };
+                const col = getClientColor(r.client);
                 const isExp = expandedClient === r.client;
                 return (
                   <>
@@ -1707,7 +1723,7 @@ function ProfitPerClientTab({ employees }) {
                                 </tr>
                               </thead>
                               <tbody>
-                                {r.emps.slice(0, 8).map(e => {
+                                {(showAllEmps[r.client] ? r.emps : r.emps.slice(0, 8)).map(e => {
                                   const ln     = calcLine(e);
                                   const payout = calcPartnerPayout(e);
                                   const net    = ln.margin - payout;
@@ -1734,7 +1750,16 @@ function ProfitPerClientTab({ employees }) {
                                   );
                                 })}
                                 {r.emps.length > 8 && (
-                                  <tr><td colSpan={6} style={{ fontSize: 10, color: "#9ca3af", padding: "4px 8px", textAlign: "center" }}>+{r.emps.length - 8} more employees</td></tr>
+                                  <tr>
+                                    <td colSpan={8} style={{ padding: "6px 8px", textAlign: "center" }}>
+                                      <button
+                                        onClick={() => setShowAllEmps(prev => ({ ...prev, [r.client]: !prev[r.client] }))}
+                                        style={{ fontSize: 10, fontWeight: 700, color: M, background: "none", border: "none", cursor: "pointer" }}
+                                      >
+                                        {showAllEmps[r.client] ? "▲ Show less" : `▼ Show all ${r.emps.length} employees`}
+                                      </button>
+                                    </td>
+                                  </tr>
                                 )}
                               </tbody>
                             </table>
@@ -1774,27 +1799,23 @@ function ProfitPerClientTab({ employees }) {
 function MonthlyPLTrend({ employees, clientRows }) {
   const f = n => Number(n || 0).toLocaleString("en-SA", { maximumFractionDigits: 0 });
   const [view, setView] = useState("net");
-
-  const CLIENT_COLORS = {
-    "Sela": "#A02843", "SPL": "#7c3aed", "Channelplay": "#2563eb",
-    "Riva Engineering 2": "#c2410c", "Combuzz HR": "#d97706",
-  };
+  const [window, setWindow] = useState(6); // months to show: 3 | 6 | 12
 
   const months = useMemo(() => {
     const now = new Date();
-    return Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+    return Array.from({ length: window }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (window - 1) + i, 1);
       return {
         key: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`,
         label: d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }),
         year: d.getFullYear(), month: d.getMonth() + 1,
       };
     });
-  }, []);
+  }, [window]);
 
   const data = useMemo(() => {
     return clientRows.map(({ client }) => {
-      const color = CLIENT_COLORS[client] || "#6b7280";
+      const color = getClientColor(client).accent;
       const monthly = months.map(({ year, month, key, label }) => {
         const firstDay = new Date(year, month - 1, 1);
         const lastDay  = new Date(year, month, 0);
@@ -1835,9 +1856,17 @@ function MonthlyPLTrend({ employees, clientRows }) {
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "1px solid #f3f4f6" }}>
         <div style={{ flex: 1 }}>
           <p style={{ margin: 0, fontWeight: 800, fontSize: 13, color: "#111827" }}>Monthly P&L Trend</p>
-          <p style={{ margin: "2px 0 0", fontSize: 11, color: "#9ca3af" }}>آخر 6 شهور — per client</p>
+          <p style={{ margin: "2px 0 0", fontSize: 11, color: "#9ca3af" }}>آخر {window} شهور — per client</p>
         </div>
         <div style={{ display: "flex", gap: 4 }}>
+          {[[3,"3M"],[6,"6M"],[12,"12M"]].map(([n,l]) => (
+            <button key={n} onClick={() => setWindow(n)} style={{
+              fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 5, border: "none", cursor: "pointer",
+              backgroundColor: window === n ? "#6b7280" : "#f3f4f6",
+              color: window === n ? "white" : "#9ca3af",
+            }}>{l}</button>
+          ))}
+          <div style={{ width: 1, backgroundColor: "#e5e7eb", margin: "0 2px" }} />
           {[["net","Net Profit"],["billed","Billed"],["margin","Gross Margin"]].map(([k,l]) => (
             <button key={k} onClick={() => setView(k)} style={{
               fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 6, border: "none", cursor: "pointer",
