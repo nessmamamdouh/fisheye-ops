@@ -728,17 +728,54 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
   const [showSOAReconcile, setShowSOAReconcile] = useState(false);
   const [filterYear, setFilterYear]           = useState('all');
 
+  // ── One-time migration: tag each invoice with soaYear ────────────────────────
+  // We NEVER touch paidDate — we only add a soaYear field that records which
+  // annual bucket this invoice belongs to.  Invoices in SOA_2025_NUMS → "2025",
+  // SOA_2026_NUMS → "2026".  New invoices pick up soaYear when marked as paid.
+  const applySOAMigration = (list) => {
+    let changed = false;
+    const migrated = list.map(inv => {
+      if (inv.soaYear) return inv; // already tagged — never overwrite
+      const num = String(inv.invoiceNumber || '').trim();
+      if (SOA_2025_NUMS.has(num)) { changed = true; return { ...inv, soaYear: '2025' }; }
+      if (SOA_2026_NUMS.has(num)) { changed = true; return { ...inv, soaYear: '2026' }; }
+      return inv;
+    });
+    return { list: changed ? migrated : list, changed };
+  };
+
   // ── Load from Supabase on mount (prefer fisheye_invoices, fallback to app_data) ──
   useEffect(() => {
     supabase.from('fisheye_invoices').select('*').then(({ data, error }) => {
       if (!error && data && data.length > 0) {
-        saveInvoices(data);
-        setInvoices(data);
+        const { list, changed } = applySOAMigration(data);
+        saveInvoices(list);
+        setInvoices(list);
+        // Persist migration back to Supabase if anything changed
+        if (changed) {
+          const CHUNK = 50;
+          (async () => {
+            for (let i = 0; i < list.length; i += CHUNK) {
+              await supabase.from('fisheye_invoices').upsert(list.slice(i, i + CHUNK), { onConflict: 'id' });
+            }
+          })();
+        }
       } else {
-        // fallback: load from fisheye_app_data
         supabase.from('fisheye_app_data').select('data').eq('key', 'fisheye_invoices_v1').single()
           .then(({ data: row }) => {
-            if (row?.data?.length > 0) { saveInvoices(row.data); setInvoices(row.data); }
+            if (row?.data?.length > 0) {
+              const { list, changed } = applySOAMigration(row.data);
+              saveInvoices(list);
+              setInvoices(list);
+              if (changed) {
+                const CHUNK = 50;
+                (async () => {
+                  for (let i = 0; i < list.length; i += CHUNK) {
+                    await supabase.from('fisheye_invoices').upsert(list.slice(i, i + CHUNK), { onConflict: 'id' });
+                  }
+                })();
+              }
+            }
           });
       }
     });
@@ -758,11 +795,17 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
   };
 
   const updateStatus = (id, status) => {
-    persist(invoices.map(inv =>
-      inv.id === id
-        ? { ...inv, status, paidDate: status === 'paid' ? new Date().toISOString().split('T')[0] : inv.paidDate }
-        : inv
-    ));
+    persist(invoices.map(inv => {
+      if (inv.id !== id) return inv;
+      const today = new Date().toISOString().split('T')[0];
+      return {
+        ...inv,
+        status,
+        paidDate: status === 'paid' ? today : inv.paidDate,
+        // Auto-tag soaYear when marked paid (only if not already tagged)
+        soaYear: (status === 'paid' && !inv.soaYear) ? today.slice(0, 4) : inv.soaYear,
+      };
+    }));
   };
 
   const togglePartnerCommission = (id) => {
@@ -785,9 +828,15 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
     const numSet = new Set(invoiceNumbers.map(n => String(n).trim()));
     persist(invoices.map(inv => {
       if (!numSet.has(String(inv.invoiceNumber || '').trim())) return inv;
-      if (inv.status === 'paid') return inv; // already paid, don't overwrite date
+      if (inv.status === 'paid') return inv; // already paid, don't overwrite
       const info = SOA_PAYMENT_INFO[String(inv.invoiceNumber).trim()];
-      return { ...inv, status: 'paid', paidDate: info ? info.date : new Date().toISOString().split('T')[0] };
+      const paidDate = info ? info.date : new Date().toISOString().split('T')[0];
+      return {
+        ...inv,
+        status: 'paid',
+        paidDate,
+        soaYear: inv.soaYear || paidDate.slice(0, 4), // preserve existing soaYear
+      };
     }));
   };
 
@@ -919,43 +968,56 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
     return null;
   };
 
-  // Determine whether an invoice belongs to the selected SOA filter:
-  //   • Paid            → SOA payment list membership (reliable)
-  //   • Sent / Overdue  → if invoice# appears in a SOA batch, use that SOA;
-  //                       otherwise ALL outstanding belong to soa2026
-  //                       (the April 2026 SOA carries forward ALL unpaid balances)
-  const inSOAFilter = (inv, key) => {
-    if (key === 'all') return true;
-    const num    = String(inv.invoiceNumber || '').trim();
-    const soaSet = key === 'soa2025' ? SOA_2025_NUMS : SOA_2026_NUMS;
+  // ── Dynamic year list ────────────────────────────────────────────────────────
+  // Priority: explicit soaYear field → paidDate year → invoiceDate year
+  const availableYears = useMemo(() => {
+    const yrs = new Set();
+    invoices.forEach(inv => {
+      if (inv.soaYear) { yrs.add(inv.soaYear); return; }
+      const d = (inv.status === 'paid' || inv.status === 'credit_note')
+        ? (inv.paidDate || inv.invoiceDate || '')
+        : (inv.invoiceDate || '');
+      if (d.length >= 4) yrs.add(d.slice(0, 4));
+    });
+    return [...yrs].sort();
+  }, [invoices]);
 
+  const latestYear = availableYears[availableYears.length - 1] || String(new Date().getFullYear());
+
+  // Year-based filter:
+  // • paid / credit_note → soaYear (explicit) → paidDate year → invoiceDate year
+  // • sent / overdue     → invoiceDate year; undated → latest year bucket
+  const inYearFilter = (inv, year) => {
+    if (year === 'all') return true;
     if (inv.status === 'paid' || inv.status === 'credit_note') {
-      return soaSet.has(num);
+      // soaYear is the authoritative tag set by migration or manually
+      const y = inv.soaYear || (inv.paidDate || inv.invoiceDate || '').slice(0, 4);
+      return y === year;
     }
-
-    // Sent or Overdue: if the invoice# is referenced in any SOA batch → follow that SOA
-    if (SOA_PAID_NUMS.has(num)) return soaSet.has(num);
-    // All remaining outstanding (regardless of date/year) → current open balance → soa2026
-    return key === 'soa2026';
+    // sent / overdue
+    const d = inv.invoiceDate || '';
+    if (d) return d.startsWith(year);
+    return year === latestYear;
   };
 
   const filtered = useMemo(() => invoices.filter(inv => {
     const matchStatus = filterStatus === 'all' || inv.status === filterStatus;
-    const matchSOA    = inSOAFilter(inv, filterYear);
+    const matchYear   = inYearFilter(inv, filterYear);
     const q = search.toLowerCase();
     const matchSearch = !q
       || (inv.invoiceNumber || '').toLowerCase().includes(q)
       || (inv.poNumber || '').toLowerCase().includes(q)
       || (inv.candidateNames || '').toLowerCase().includes(q);
-    return matchStatus && matchSOA && matchSearch;
-  }), [invoices, filterStatus, filterYear, search]);
+    return matchStatus && matchYear && matchSearch;
+  }), [invoices, filterStatus, filterYear, search, latestYear]);
 
-  // Stats pool uses the same SOA-aware logic
+  // Stats pool: same year filter, but ignores the status pill (shows totals per status)
   const statsPool = useMemo(() =>
-    filterYear === 'all' ? invoices : invoices.filter(i => inSOAFilter(i, filterYear)),
-  [invoices, filterYear]);
+    filterYear === 'all' ? invoices : invoices.filter(i => inYearFilter(i, filterYear)),
+  [invoices, filterYear, latestYear]);
 
   const stats = useMemo(() => ({
+    allCnt:          statsPool.length,
     sentAmt:         statsPool.filter(i => i.status === 'sent').reduce((s, i) => s + i.totalDue, 0),
     paidAmt:         statsPool.filter(i => i.status === 'paid').reduce((s, i) => s + i.totalDue, 0),
     overdueAmt:      statsPool.filter(i => i.status === 'overdue').reduce((s, i) => s + i.totalDue, 0),
@@ -1144,7 +1206,7 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
                   color: isActive ? (cfg?.color || M) : '#6b7280',
                   transition: 'all 0.15s',
                 }}>
-                  {s === 'all' ? `All · ${invoices.length}` : `${cfg.label} · ${stats[`${s}Cnt`]}`}
+                  {s === 'all' ? `All · ${stats.allCnt}` : `${cfg.label} · ${stats[`${s}Cnt`]}`}
                 </button>
               );
             })}
@@ -1171,24 +1233,22 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
             ))}
           </div>
 
-          {/* SOA filter pills */}
+          {/* Year filter pills — derived dynamically from paidDates in data */}
           <div style={{ width: 1, height: 20, backgroundColor: '#e5e7eb' }} />
-          <span style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.05em', textTransform: 'uppercase' }}>SOA:</span>
-          {[
-            { key: 'all',     label: 'الكل',            cnt: invoices.length },
-            { key: 'soa2025', label: 'ديس ٢٠٢٥',       cnt: invoices.filter(i => inSOAFilter(i, 'soa2025')).length },
-            { key: 'soa2026', label: 'إبريل ٢٠٢٦',     cnt: invoices.filter(i => inSOAFilter(i, 'soa2026')).length },
-          ].map(({ key, label, cnt }) => {
-            const isActive = filterYear === key;
+          <span style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Year:</span>
+          {['all', ...availableYears].map(year => {
+            const isActive = filterYear === year;
+            const cnt = year === 'all' ? invoices.length : invoices.filter(i => inYearFilter(i, year)).length;
             return (
-              <button key={key} onClick={() => setFilterYear(key)} style={{
+              <button key={year} onClick={() => setFilterYear(year)} style={{
                 padding: '5px 11px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer',
                 border: `1.5px solid ${isActive ? M : '#e5e7eb'}`,
                 backgroundColor: isActive ? M : 'white',
                 color: isActive ? 'white' : '#6b7280',
                 transition: 'all 0.15s',
               }}>
-                {label}{key !== 'all' && <span style={{ opacity: 0.7, marginLeft: 4 }}>· {cnt}</span>}
+                {year === 'all' ? 'الكل' : year}
+                {year !== 'all' && <span style={{ opacity: 0.7, marginLeft: 4 }}>· {cnt}</span>}
               </button>
             );
           })}
@@ -1580,7 +1640,12 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
       {showManual    && <ManualModal    onClose={() => setShowManual(false)}    onSave={inv => { persist([...invoices, inv]); setShowManual(false); }} employees={employees} invoices={invoices} />}
       {showPDFImport && <PDFImportModal onClose={() => setShowPDFImport(false)} onImport={handleImport} employees={employees} invoices={invoices} />}
       {showDupAudit      && <DupAuditModal      onClose={() => setShowDupAudit(false)}      invoices={invoices} employees={employees} onDelete={ids => persist(invoices.filter(inv => !ids.has(inv.id)))} />}
-      {showSOAReconcile  && <SOAReconcileModal  onClose={() => setShowSOAReconcile(false)}  invoices={invoices} onMarkPaid={bulkMarkPaidBySOA} filterYear={filterYear} />}
+      {showSOAReconcile && <SOAReconcileModal
+        onClose={() => setShowSOAReconcile(false)}
+        invoices={invoices}
+        onMarkPaid={bulkMarkPaidBySOA}
+        filterYear={filterYear === '2025' ? 'soa2025' : filterYear === '2026' ? 'soa2026' : 'soa2026'}
+      />}
     </div>
   );
 }
