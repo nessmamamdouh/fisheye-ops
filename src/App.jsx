@@ -4096,23 +4096,63 @@ function PartnerHub({ employees, partners, savePartners }) {
   if (!partners) partners = [];
   const [showAdd,setShowAdd]=useState(false);
   const [filter,setFilter]=useState("active");
+  const [search,setSearch]=useState("");
   const [openId,setOpenId]=useState(null);
   const [detailTab,setDetailTab]=useState("overview");
   const [editingInfo,setEditingInfo]=useState(false);
-  const [infoForm,setInfoForm]=useState({name:"",region:"",email:""});
+  const [infoForm,setInfoForm]=useState({name:"",region:"",email:"",notes:""});
   const [nP,setNP]=useState({name:"",region:"",email:"",notes:""});
+  const [showNewAction,setShowNewAction]=useState(false);
+  const [newAction,setNewAction]=useState({desc:"",type:"Handover"});
+  const [confirmDeleteId,setConfirmDeleteId]=useState(null);
+  const [actionsFilter,setActionsFilter]=useState("pending");
+  const [notesVal,setNotesVal]=useState("");
+  const notesTimer=useRef(null);
 
   const save=p=>{ if(savePartners) savePartners(p); else { localStorage.setItem("fisheyePartners_v1",JSON.stringify(p)); } };
-  const add=()=>{save([...partners,{...nP,id:`P-${String(partners.length+1).padStart(2,"0")}`,status:"active",contacts:[],requestLog:[]}]);setShowAdd(false);setNP({name:"",region:"",email:"",notes:""});};
+  const add=()=>{
+    const newId=`P-${Date.now().toString(36).toUpperCase()}`;
+    save([...partners,{...nP,id:newId,status:"active",contacts:[],requestLog:[]}]);
+    setShowAdd(false); setNP({name:"",region:"",email:"",notes:""});
+  };
   const archive=id=>save(partners.map(p=>p.id===id?{...p,status:"archived"}:p));
   const unarchive=id=>save(partners.map(p=>p.id===id?{...p,status:"active"}:p));
-  const deleteP=id=>{if(window.confirm("Delete this partner?"))save(partners.filter(p=>p.id!==id));};
-  const addContact=pid=>save(partners.map(p=>p.id===pid?{...p,contacts:[...p.contacts,{name:"New Contact",role:"",phone:""}]}:p));
+  const deleteP=id=>{ save(partners.filter(p=>p.id!==id)); setConfirmDeleteId(null); if(openId===id) setOpenId(null); };
+  const addContact=pid=>save(partners.map(p=>p.id===pid?{...p,contacts:[...(p.contacts||[]),{name:"New Contact",role:"",phone:""}]}:p));
   const updContact=(pid,ci,f,v)=>save(partners.map(p=>p.id===pid?{...p,contacts:p.contacts.map((c,i)=>i===ci?{...c,[f]:v}:c)}:p));
-  const addRequest=(pid,req)=>save(partners.map(p=>p.id===pid?{...p,requestLog:[...p.requestLog,req]}:p));
+  const delContact=(pid,ci)=>save(partners.map(p=>p.id===pid?{...p,contacts:p.contacts.filter((_,i)=>i!==ci)}:p));
+  const addRequest=(pid,req)=>save(partners.map(p=>p.id===pid?{...p,requestLog:[...(p.requestLog||[]),req]}:p));
   const updReqStatus=(pid,ri,st)=>save(partners.map(p=>p.id===pid?{...p,requestLog:p.requestLog.map((r,i)=>i===ri?{...r,status:st}:r)}:p));
   const getLinked=pid=>{const p=partners.find(x=>x.id===pid);if(!p)return[];return employees.filter(e=>!isExcluded(e)&&e.profitMode==="partner"&&(e.partnerAssigned===p.id||e.partnerAssigned===p.name));};
-  const displayed=partners.filter(p=>filter==="all"||(filter==="archived"?p.status==="archived":p.status!=="archived"));
+
+  // Pre-compute linked count + health for ALL partners (H1 + H4)
+  const partnerStats=useMemo(()=>{
+    const m={};
+    partners.forEach(p=>{
+      const linked=employees.filter(e=>!isExcluded(e)&&e.profitMode==="partner"&&(e.partnerAssigned===p.id||e.partnerAssigned===p.name));
+      let score=100;
+      if(linked.length){
+        const total=linked.length;
+        const expiring=linked.filter(e=>{const d=daysUntil(e.endDate);return d>=0&&d<=14;}).length;
+        score-=Math.round((expiring/total)*40);
+        const wfPending=linked.filter(e=>!isWFDone(e.workflowStatus)).length;
+        score-=Math.round((wfPending/total)*30);
+        const overdue=(p.requestLog||[]).filter(r=>r.status==="Pending"&&Math.floor((Date.now()-new Date(r.ts))/864e5)>5).length;
+        if(overdue>0) score-=Math.min(30,overdue*10);
+        score=Math.max(0,Math.min(100,score));
+      }
+      const label=score>=80?"On Track":score>=60?"At Risk":score>=40?"Warning":"Critical";
+      const color=score>=80?"#16a34a":score>=60?"#d97706":score>=40?"#dc2626":"#7f1d1d";
+      m[p.id]={linked,score,label,color};
+    });
+    return m;
+  },[partners,employees]);
+
+  const displayed=useMemo(()=>partners.filter(p=>{
+    const matchFilter=filter==="all"||(filter==="archived"?p.status==="archived":p.status!=="archived");
+    const matchSearch=!search||p.name.toLowerCase().includes(search.toLowerCase());
+    return matchFilter&&matchSearch;
+  }),[partners,filter,search]);
 
   // ── Global stats ──
   const totalPending=partners.reduce((s,p)=>s+(p.requestLog||[]).filter(r=>r.status==="Pending").length,0);
@@ -4122,10 +4162,25 @@ function PartnerHub({ employees, partners, savePartners }) {
 
   // ── Detail modal data ──
   const openPartner=partners.find(p=>p.id===openId)||null;
-  const linkedEmps=openPartner?getLinked(openPartner.id):[];
+  const safePartner=openPartner?{
+    ...openPartner,
+    contacts:  Array.isArray(openPartner.contacts)  ?openPartner.contacts  :[],
+    requestLog:Array.isArray(openPartner.requestLog)?openPartner.requestLog:[],
+  }:null;
+  const linkedEmps=safePartner?(partnerStats[safePartner.id]?.linked||getLinked(safePartner.id)):[];
   const expiringLinked=linkedEmps.filter(e=>{const d=daysUntil(e.endDate);return d>=0&&d<=30;}).length;
-  const pendingActions=openPartner?(openPartner.requestLog||[]).map((r,i)=>({...r,i,dw:Math.floor((Date.now()-new Date(r.ts))/864e5)})).filter(r=>r.status==="Pending").sort((a,b)=>b.dw-a.dw):[];
-  const completionRate=openPartner&&(openPartner.requestLog||[]).length>0?Math.round(((openPartner.requestLog||[]).filter(r=>r.status==="Completed").length/(openPartner.requestLog||[]).length)*100):null;
+  const pendingActions=safePartner?safePartner.requestLog.map((r,i)=>({...r,i,dw:Math.floor((Date.now()-new Date(r.ts))/864e5)})).filter(r=>r.status==="Pending").sort((a,b)=>b.dw-a.dw):[];
+  const completionRate=safePartner&&safePartner.requestLog.length>0?Math.round((safePartner.requestLog.filter(r=>r.status==="Completed").length/safePartner.requestLog.length)*100):null;
+
+  // Sync notes val when partner changes
+  useEffect(()=>{ setNotesVal(safePartner?.notes||""); },[openId]);
+  const handleNotesChange=val=>{
+    setNotesVal(val);
+    clearTimeout(notesTimer.current);
+    notesTimer.current=setTimeout(()=>{
+      save(partners.map(p=>p.id===openId?{...p,notes:val}:p));
+    },500);
+  };
 
   // Employees by client
   const byClient=useMemo(()=>{
@@ -4208,6 +4263,13 @@ function PartnerHub({ employees, partners, savePartners }) {
             <button key={k} onClick={()=>setFilter(k)} style={{ flex:1, padding:"4px 0", border:"none", fontSize:10, fontWeight:700, cursor:"pointer", borderRadius:6, backgroundColor:filter===k?PC:"#f3f4f6", color:filter===k?"white":"#9ca3af", transition:"all 0.12s" }}>{l}</button>
           ))}
         </div>
+        <div style={{ padding:"6px 10px", borderBottom:"1px solid #f3f4f6" }}>
+          <div style={{ position:"relative" }}>
+            <Search size={11} style={{ position:"absolute", left:8, top:"50%", transform:"translateY(-50%)", color:"#9ca3af", pointerEvents:"none" }}/>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search partners…"
+              style={{ width:"100%", padding:"5px 8px 5px 24px", borderRadius:7, border:"1px solid #e5e7eb", fontSize:11, outline:"none", backgroundColor:"white", boxSizing:"border-box" }}/>
+          </div>
+        </div>
 
         {/* Partner list */}
         <div style={{ flex:1, overflowY:"auto" }}>
@@ -4218,11 +4280,10 @@ function PartnerHub({ employees, partners, savePartners }) {
             </div>
           )}
           {displayed.map(p => {
-            const linked = getLinked(p.id);
+            const {linked,label:healthLabel,color:healthColor}=partnerStats[p.id]||{linked:[],label:"—",color:"#9ca3af"};
             const pending = (p.requestLog||[]).filter(r=>r.status==="Pending").length;
             const overdue = (p.requestLog||[]).filter(r=>r.status==="Pending"&&Math.floor((Date.now()-new Date(r.ts))/864e5)>5).length;
             const isArchived = p.status === "archived";
-            const health = calcPartnerHealth(p.id);
             const isSelected = openId === p.id;
 
             return (
@@ -4239,9 +4300,9 @@ function PartnerHub({ employees, partners, savePartners }) {
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontWeight:700, fontSize:12, color:isArchived?"#9ca3af":"#111827", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</div>
                     <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:2 }}>
-                      {!isArchived && <span style={{ width:6, height:6, borderRadius:"50%", backgroundColor:health.color, flexShrink:0, display:"inline-block" }}/>}
+                      {!isArchived && <span style={{ width:6, height:6, borderRadius:"50%", backgroundColor:healthColor, flexShrink:0, display:"inline-block" }}/>}
                       <span style={{ fontSize:10, color:"#9ca3af", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                        {isArchived ? "Archived" : `${linked.length} employees · ${health.label}`}
+                        {isArchived ? "Archived" : `${linked.length} employees · ${healthLabel}`}
                       </span>
                     </div>
                   </div>
@@ -4285,10 +4346,10 @@ function PartnerHub({ employees, partners, savePartners }) {
                 </div>
               ) : (
                 <div style={{ flex:1, minWidth:0 }}>
-                  <h3 style={{ margin:0, fontSize:19, fontWeight:800, color:"white", letterSpacing:"-0.01em" }}>{openPartner.name}</h3>
+                  <h3 style={{ margin:0, fontSize:19, fontWeight:800, color:"white", letterSpacing:"-0.01em" }}>{safePartner.name}</h3>
                   <p style={{ margin:"4px 0 0", fontSize:12, color:"rgba(220,200,255,0.9)" }}>
-                    {[openPartner.region, openPartner.email].filter(Boolean).join(" · ") || "—"}
-                    {openPartner.partnerType && <span style={{ marginLeft:8, fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:999, backgroundColor:"rgba(255,255,255,0.18)", color:"white" }}>{openPartner.partnerType}</span>}
+                    {[safePartner.region, safePartner.email].filter(Boolean).join(" · ") || "—"}
+                    {safePartner.partnerType && <span style={{ marginLeft:8, fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:999, backgroundColor:"rgba(255,255,255,0.18)", color:"white" }}>{safePartner.partnerType}</span>}
                   </p>
                 </div>
               )}
@@ -4300,17 +4361,17 @@ function PartnerHub({ employees, partners, savePartners }) {
                   </>
                 ) : (
                   <>
-                    <button onClick={()=>{ setInfoForm({name:openPartner.name||"",region:openPartner.region||"",email:openPartner.email||""}); setEditingInfo(true); }} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.3)", backgroundColor:"rgba(255,255,255,0.12)", color:"white", cursor:"pointer" }}>Edit</button>
-                    <button onClick={()=>openPartner.status==="archived"?unarchive(openId):archive(openId)} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.3)", backgroundColor:"rgba(255,255,255,0.12)", color:"white", cursor:"pointer" }}>
-                      {openPartner.status==="archived" ? "Restore" : "Archive"}
+                    <button onClick={()=>{ setInfoForm({name:safePartner.name||"",region:safePartner.region||"",email:safePartner.email||"",notes:safePartner.notes||""}); setEditingInfo(true); }} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.3)", backgroundColor:"rgba(255,255,255,0.12)", color:"white", cursor:"pointer" }}>Edit</button>
+                    <button onClick={()=>safePartner.status==="archived"?unarchive(openId):archive(openId)} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.3)", backgroundColor:"rgba(255,255,255,0.12)", color:"white", cursor:"pointer" }}>
+                      {safePartner.status==="archived" ? "Restore" : "Archive"}
                     </button>
-                    <button onClick={()=>{ if(window.confirm("Delete partner?")) deleteP(openId); }} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,100,100,0.4)", backgroundColor:"rgba(255,100,100,0.15)", color:"#fca5a5", cursor:"pointer" }}>Delete</button>
+                    <button onClick={()=>setConfirmDeleteId(openId)} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,100,100,0.4)", backgroundColor:"rgba(255,100,100,0.15)", color:"#fca5a5", cursor:"pointer" }}>Delete</button>
                   </>
                 )}
               </div>
             </div>
-            {/* Performance bar */}
-            {(()=>{ const h=calcPartnerHealth(openPartner.id); return (
+            {/* Performance bar — uses pre-computed partnerStats */}
+            {(()=>{ const h=partnerStats[safePartner.id]||{score:100,label:"No Data"}; return (
               <div style={{ marginTop:13 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
                   <span style={{ fontSize:11, color:"rgba(220,200,255,0.85)", fontWeight:600 }}>Performance</span>
@@ -4328,7 +4389,7 @@ function PartnerHub({ employees, partners, savePartners }) {
             {[
               { l:"Headcount",    v:linkedEmps.length,                                                             c:PC },
               { l:"Expiring ≤30d",v:expiringLinked,                                                                c:expiringLinked>0?"#d97706":"#374151" },
-              { l:"WF Pending",   v:linkedEmps.filter(e=>!isWFDone(e.workflowStatus)).length,                      c:"#dc2626" },
+              { l:"WF Pending",   v:linkedEmps.filter(e=>{const wf=(e.workflowStatus||"").trim();return wf&&!isWFDone(wf);}).length, c:"#dc2626" },
               { l:"Completion",   v:completionRate!==null?`${completionRate}%`:"—",                                c:completionRate===null?"#9ca3af":completionRate>=80?"#16a34a":"#d97706" },
             ].map(({l,v,c})=>(
               <div key={l} style={{ padding:"11px 8px", textAlign:"center", borderRight:"1px solid #f3f4f6" }}>
@@ -4344,11 +4405,7 @@ function PartnerHub({ employees, partners, savePartners }) {
               <button key={t.k} onClick={()=>setDetailTab(t.k)} style={{ padding:"10px 16px", fontSize:11, fontWeight:700, border:"none", cursor:"pointer", whiteSpace:"nowrap", flexShrink:0, backgroundColor:"transparent", color:detailTab===t.k?PC:"#9ca3af", borderBottom:`2px solid ${detailTab===t.k?PC:"transparent"}`, transition:"color 0.1s" }}>{t.l}</button>
             ))}
             <div style={{ flex:1, display:"flex", justifyContent:"flex-end", alignItems:"center", padding:"0 16px" }}>
-              <button onClick={()=>{
-                const emp=prompt("Employee name / description:");
-                const type=prompt("Action type (Handover / Docs Request / GOSI / Iqama / Other):");
-                if(emp&&type) addRequest(openPartner.id,{ts:new Date().toISOString(),type,employee:emp,status:"Pending"});
-              }} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:`1px solid ${PC}`, backgroundColor:PC, color:"white", cursor:"pointer" }}>
+              <button onClick={()=>setShowNewAction(true)} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:`1px solid ${PC}`, backgroundColor:PC, color:"white", cursor:"pointer" }}>
                 + New Action
               </button>
             </div>
@@ -4364,8 +4421,8 @@ function PartnerHub({ employees, partners, savePartners }) {
                 <div style={{ padding:"10px 14px", borderRadius:10, backgroundColor:"#faf5ff", border:"1px solid #e9d5ff" }}>
                   <div style={{ fontSize:10, fontWeight:700, color:"#6b21a8", marginBottom:6 }}>NOTES</div>
                   <textarea
-                    value={openPartner.notes||""}
-                    onChange={e=>save(partners.map(p=>p.id===openId?{...p,notes:e.target.value}:p))}
+                    value={notesVal}
+                    onChange={e=>handleNotesChange(e.target.value)}
                     placeholder="Add notes about this partner…"
                     rows={3}
                     style={{ width:"100%", border:"none", backgroundColor:"transparent", fontSize:12, color:"#374151", lineHeight:1.6, resize:"vertical", outline:"none", fontFamily:"inherit", padding:0, margin:0 }}
@@ -4412,42 +4469,44 @@ function PartnerHub({ employees, partners, savePartners }) {
             {/* ACTIONS */}
             {detailTab==="actions" && (
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                {pendingActions.length===0 && (
-                  <div style={{ textAlign:"center", padding:"32px 0" }}>
-                    <CheckCircle size={28} style={{ margin:"0 auto 8px", display:"block", color:"#16a34a", opacity:0.4 }}/>
-                    <p style={{ fontWeight:600, fontSize:13, color:"#374151", margin:"0 0 4px" }}>No pending actions</p>
-                    <p style={{ fontSize:11, color:"#9ca3af", margin:0 }}>All partner actions are resolved.</p>
-                  </div>
-                )}
-                {pendingActions.map(r=>(
-                  <div key={r.i} style={{ padding:"12px 14px", borderRadius:12, border:`1px solid ${r.dw>5?"#fecaca":"#f3f4f6"}`, backgroundColor:r.dw>5?"#fef2f2":"#fafafa", display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:4 }}>
-                        <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#ede9fe", color:"#6d28d9" }}>{r.type}</span>
-                        {r.dw>5 && <span style={{ fontSize:10, fontWeight:700, color:"#dc2626" }}>Delayed {r.dw}d</span>}
+                {(() => {
+                  const allActions=safePartner.requestLog.map((r,i)=>({...r,i,dw:Math.floor((Date.now()-new Date(r.ts))/864e5)}));
+                  const pendingCnt=allActions.filter(r=>r.status==="Pending").length;
+                  const completedCnt=allActions.filter(r=>r.status==="Completed").length;
+                  const shown=actionsFilter==="all"?allActions:allActions.filter(r=>r.status===(actionsFilter==="pending"?"Pending":"Completed"));
+                  return (
+                    <>
+                      <div style={{ display:"flex", gap:5, marginBottom:2 }}>
+                        {[["pending",`Pending · ${pendingCnt}`],["completed",`Completed · ${completedCnt}`],["all","All"]].map(([k,l])=>(
+                          <button key={k} onClick={()=>setActionsFilter(k)} style={{ padding:"4px 11px", borderRadius:20, fontSize:10, fontWeight:700, cursor:"pointer", border:`1.5px solid ${actionsFilter===k?PC:"#e5e7eb"}`, backgroundColor:actionsFilter===k?`${PC}10`:"white", color:actionsFilter===k?PC:"#6b7280" }}>{l}</button>
+                        ))}
                       </div>
-                      <p style={{ fontWeight:600, fontSize:13, margin:"0 0 2px", color:"#1f2937" }}>{r.employee}</p>
-                      <p style={{ fontSize:11, color:"#9ca3af", margin:0 }}>
-                        {new Date(r.ts).toLocaleDateString("en-GB")}
-                        {r.dw>0 && <span style={{ marginLeft:6, fontWeight:700, color:r.dw>5?"#dc2626":"#d97706" }}>· {r.dw}d waiting</span>}
-                      </p>
-                    </div>
-                    <button onClick={()=>updReqStatus(openPartner.id,r.i,"Completed")} style={{ fontSize:11, fontWeight:700, padding:"5px 10px", borderRadius:8, border:"1px solid #bbf7d0", backgroundColor:"#f0fdf4", color:"#16a34a", cursor:"pointer", whiteSpace:"nowrap" }}>Done</button>
-                  </div>
-                ))}
-                {(openPartner.requestLog||[]).filter(r=>r.status==="Completed").length>0 && (
-                  <details style={{ marginTop:4 }}>
-                    <summary style={{ fontSize:11, color:"#9ca3af", cursor:"pointer", fontWeight:600 }}>{(openPartner.requestLog||[]).filter(r=>r.status==="Completed").length} completed actions</summary>
-                    <div style={{ display:"flex", flexDirection:"column", gap:5, marginTop:8 }}>
-                      {(openPartner.requestLog||[]).filter(r=>r.status==="Completed").map((r,ri)=>(
-                        <div key={ri} style={{ display:"flex", justifyContent:"space-between", padding:"8px 12px", borderRadius:9, backgroundColor:"#f9fafb", border:"1px solid #f3f4f6" }}>
-                          <span style={{ fontSize:12, fontWeight:600, color:"#374151" }}>{r.employee}<span style={{ fontWeight:400, color:"#9ca3af", marginLeft:6 }}>{r.type}</span></span>
-                          <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#dcfce7", color:"#166534" }}>✓</span>
+                      {shown.length===0 && (
+                        <div style={{ textAlign:"center", padding:"32px 0" }}>
+                          <CheckCircle size={28} style={{ margin:"0 auto 8px", display:"block", color:"#16a34a", opacity:0.4 }}/>
+                          <p style={{ fontWeight:600, fontSize:13, color:"#374151", margin:"0 0 4px" }}>No {actionsFilter==="all"?"":actionsFilter} actions</p>
+                        </div>
+                      )}
+                      {shown.map(r=>(
+                        <div key={r.i} style={{ padding:"12px 14px", borderRadius:12, border:`1px solid ${r.status==="Completed"?"#bbf7d0":r.dw>5?"#fecaca":"#f3f4f6"}`, backgroundColor:r.status==="Completed"?"#f0fdf4":r.dw>5?"#fef2f2":"#fafafa", display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:4 }}>
+                              <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#ede9fe", color:"#6d28d9" }}>{r.type}</span>
+                              {r.status==="Pending"&&r.dw>5&&<span style={{ fontSize:10, fontWeight:700, color:"#dc2626" }}>⚠ Delayed {r.dw}d</span>}
+                              {r.status==="Completed"&&<span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#dcfce7", color:"#166534" }}>✓ Done</span>}
+                            </div>
+                            <p style={{ fontWeight:600, fontSize:13, margin:"0 0 2px", color:"#1f2937" }}>{r.employee}</p>
+                            <p style={{ fontSize:11, color:"#9ca3af", margin:0 }}>
+                              {new Date(r.ts).toLocaleDateString("en-GB")}
+                              {r.status==="Pending"&&r.dw>0&&<span style={{ marginLeft:6, fontWeight:700, color:r.dw>5?"#dc2626":"#d97706" }}>· {r.dw}d waiting</span>}
+                            </p>
+                          </div>
+                          {r.status==="Pending"&&<button onClick={()=>updReqStatus(safePartner.id,r.i,"Completed")} style={{ fontSize:11, fontWeight:700, padding:"5px 10px", borderRadius:8, border:"1px solid #bbf7d0", backgroundColor:"#f0fdf4", color:"#16a34a", cursor:"pointer", whiteSpace:"nowrap" }}>✓ Done</button>}
                         </div>
                       ))}
-                    </div>
-                  </details>
-                )}
+                    </>
+                  );
+                })()}
               </div>
             )}
 
@@ -4480,23 +4539,26 @@ function PartnerHub({ employees, partners, savePartners }) {
             {detailTab==="contacts" && (
               <div>
                 <div style={{ ...s.flexBetween, marginBottom:12 }}>
-                  <span style={{ fontSize:11, fontWeight:700, color:"#9ca3af", textTransform:"uppercase" }}>Contacts ({openPartner.contacts.length})</span>
-                  <button onClick={()=>addContact(openPartner.id)} style={{ fontSize:11, fontWeight:700, color:PC, background:"none", border:"none", cursor:"pointer" }}>+ Add</button>
+                  <span style={{ fontSize:11, fontWeight:700, color:"#9ca3af", textTransform:"uppercase" }}>Contacts ({safePartner.contacts.length})</span>
+                  <button onClick={()=>addContact(safePartner.id)} style={{ fontSize:11, fontWeight:700, color:PC, background:"none", border:"none", cursor:"pointer" }}>+ Add</button>
                 </div>
-                {openPartner.contacts.length===0 && <p style={{ textAlign:"center", color:"#9ca3af", padding:"24px 0", fontSize:13 }}>No contacts yet.</p>}
-                {openPartner.contacts.map((co,ci)=>(
+                {safePartner.contacts.length===0 && <p style={{ textAlign:"center", color:"#9ca3af", padding:"24px 0", fontSize:13 }}>No contacts yet.</p>}
+                {safePartner.contacts.map((co,ci)=>(
                   <div key={ci} style={{ display:"flex", alignItems:"center", gap:10, padding:10, borderRadius:10, backgroundColor:"#f9fafb", marginBottom:6, border:"1px solid #f3f4f6" }}>
                     <div style={{ width:34, height:34, borderRadius:10, background:PU, display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:13, fontWeight:700, flexShrink:0 }}>{(co.name||"?")[0]}</div>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <input value={co.name} onChange={e=>updContact(openPartner.id,ci,"name",e.target.value)} style={{ width:"100%", border:"none", backgroundColor:"transparent", fontSize:12, fontWeight:600, outline:"none" }}/>
-                      <input value={co.role} onChange={e=>updContact(openPartner.id,ci,"role",e.target.value)} style={{ width:"100%", border:"none", backgroundColor:"transparent", fontSize:11, color:"#9ca3af", outline:"none" }}/>
+                      <input value={co.name} onChange={e=>updContact(safePartner.id,ci,"name",e.target.value)} style={{ width:"100%", border:"none", backgroundColor:"transparent", fontSize:12, fontWeight:600, outline:"none" }}/>
+                      <input value={co.role} onChange={e=>updContact(safePartner.id,ci,"role",e.target.value)} style={{ width:"100%", border:"none", backgroundColor:"transparent", fontSize:11, color:"#9ca3af", outline:"none" }}/>
                     </div>
-                    <input value={co.phone} onChange={e=>updContact(openPartner.id,ci,"phone",e.target.value)} style={{ width:130, border:"none", backgroundColor:"transparent", fontSize:11, textAlign:"right", outline:"none", direction:"ltr" }}/>
+                    <input value={co.phone} onChange={e=>updContact(safePartner.id,ci,"phone",e.target.value)} style={{ width:130, border:"none", backgroundColor:"transparent", fontSize:11, textAlign:"right", outline:"none", direction:"ltr" }}/>
                     {co.phone && (
                       <button onClick={()=>{ const msg=`مرحباً ${co.name},\n\nأتواصل معك بخصوص شراكتنا.\n\nتحياتي`; window.open(`https://wa.me/${co.phone.replace(/\D/g,"")}?text=${encodeURIComponent(msg)}`,"_blank"); }} style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:30, height:30, borderRadius:8, border:"1px solid #16a34a", backgroundColor:"white", color:"#16a34a", cursor:"pointer", flexShrink:0 }}>
                         <MessageCircle size={13}/>
                       </button>
                     )}
+                    <button onClick={()=>delContact(safePartner.id,ci)} title="Remove contact" style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:26, height:26, borderRadius:7, border:"1px solid #fecaca", backgroundColor:"#fff5f5", color:"#ef4444", cursor:"pointer", flexShrink:0 }}>
+                      <X size={11}/>
+                    </button>
                   </div>
                 ))}
               </div>
@@ -4518,6 +4580,50 @@ function PartnerHub({ employees, partners, savePartners }) {
             <div style={{ display:"flex", gap:12, marginTop:8 }}>
               <Btn variant="ghost" onClick={()=>setShowAdd(false)} full>Cancel</Btn>
               <Btn onClick={add} disabled={!nP.name} full style={{ backgroundColor:PC, color:"white" }}><Plus size={14}/> Add Partner</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* New Action Modal */}
+      {showNewAction && safePartner && (
+        <Modal title={`New Action · ${safePartner.name}`} onClose={()=>{ setShowNewAction(false); setNewAction({desc:"",type:"Handover"}); }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div>
+              <label style={s.label}>Type</label>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:4 }}>
+                {["Handover","Docs Request","GOSI","Iqama","Payment","Other"].map(t=>(
+                  <button key={t} onClick={()=>setNewAction(a=>({...a,type:t}))} style={{ padding:"5px 12px", borderRadius:20, fontSize:11, fontWeight:700, cursor:"pointer", border:`1.5px solid ${newAction.type===t?PC:"#e5e7eb"}`, backgroundColor:newAction.type===t?`${PC}12`:"white", color:newAction.type===t?PC:"#6b7280" }}>{t}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label style={s.label}>Description</label>
+              <textarea autoFocus value={newAction.desc} onChange={e=>setNewAction(a=>({...a,desc:e.target.value}))} placeholder="Describe the action…" rows={3} style={{ ...s.inp, resize:"vertical", marginTop:4 }}/>
+            </div>
+            <div style={{ display:"flex", gap:10, marginTop:4 }}>
+              <Btn variant="ghost" onClick={()=>{ setShowNewAction(false); setNewAction({desc:"",type:"Handover"}); }} full>Cancel</Btn>
+              <Btn onClick={()=>{
+                if(!newAction.desc.trim()) return;
+                addRequest(safePartner.id,{ ts:new Date().toISOString(), type:newAction.type, employee:newAction.desc, status:"Pending" });
+                setShowNewAction(false); setNewAction({desc:"",type:"Handover"});
+                setDetailTab("actions");
+              }} disabled={!newAction.desc.trim()} full style={{ backgroundColor:PC, color:"white" }}>
+                <Plus size={14}/> Add Action
+              </Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {confirmDeleteId && (
+        <Modal title="Delete Partner?" onClose={()=>setConfirmDeleteId(null)}>
+          <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+            <p style={{ margin:0, fontSize:13, color:"#374151" }}>هتتحذف بيانات الـ partner دي نهائياً. مش ممكن تتراجعي.</p>
+            <div style={{ display:"flex", gap:10 }}>
+              <Btn variant="ghost" onClick={()=>setConfirmDeleteId(null)} full>Cancel</Btn>
+              <Btn onClick={()=>deleteP(confirmDeleteId)} full style={{ backgroundColor:"#dc2626", color:"white" }}>Delete</Btn>
             </div>
           </div>
         </Modal>
