@@ -2034,12 +2034,8 @@ function PayrollFlowTracker({ employees, sharedFlows, onSaveFlows }) {
       if (d && d.getFullYear() === flowYear && d.getMonth() + 1 === flowMonth) return true;
     }
 
-    // Resigned → never
-    const st2 = (e.status || '').toLowerCase();
-    if (['resigned', 'resigned_ar', 'مستقيل'].includes(st2)) return false;
-
     // Expired: include only if contract ends within this month (leaver)
-    if (['expired', 'expired_ar', 'منتهي'].includes(st2)) {
+    if (['expired', 'expired_ar', 'منتهي'].includes(st)) {
       const end = parseDate(e.endDate);
       if (!end || end < monthStart) return false;
       // endDate >= monthStart → leaver this month → continue
