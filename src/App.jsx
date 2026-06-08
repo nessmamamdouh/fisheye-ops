@@ -3521,6 +3521,10 @@ function ClientHub({ employees, clients, saveClients }) {
   const [nC,setNC]=useState({name:"",region:"",email:"",notes:""});
   const [showNewAction,setShowNewAction]=useState(false);
   const [newAction,setNewAction]=useState({desc:"",type:"Invoice"});
+  const [actionsFilter,setActionsFilter]=useState("pending");
+  const [notesVal,setNotesVal]=useState("");
+  const notesTimer=useRef(null);
+  const [showAllProjects,setShowAllProjects]=useState(false);
   const [confirmDeleteId,setConfirmDeleteId]=useState(null);
 
   const save=c=>{ if(saveClients) saveClients(c); else { localStorage.setItem("fisheyeClients_v1",JSON.stringify(c)); } };
@@ -3534,8 +3538,9 @@ function ClientHub({ employees, clients, saveClients }) {
   const archive=id=>save(clients.map(c=>c.id===id?{...c,status:"archived"}:c));
   const unarchive=id=>save(clients.map(c=>c.id===id?{...c,status:"active"}:c));
   const deleteC=id=>{ save(clients.filter(c=>c.id!==id)); setConfirmDeleteId(null); if(openId===id) setOpenId(null); };
-  const addContact=cid=>save(clients.map(c=>c.id===cid?{...c,contacts:[...c.contacts,{name:"New Contact",role:"",phone:""}]}:c));
+  const addContact=cid=>save(clients.map(c=>c.id===cid?{...c,contacts:[...(c.contacts||[]),{name:"New Contact",role:"",phone:""}]}:c));
   const updContact=(cid,ci,f,v)=>save(clients.map(c=>c.id===cid?{...c,contacts:c.contacts.map((co,i)=>i===ci?{...co,[f]:v}:co)}:c));
+  const delContact=(cid,ci)=>save(clients.map(c=>c.id===cid?{...c,contacts:c.contacts.filter((_,i)=>i!==ci)}:c));
   const addRequest=(cid,req)=>save(clients.map(c=>c.id===cid?{...c,requestLog:[...c.requestLog,req]}:c));
   const updReqStatus=(cid,ri,st)=>save(clients.map(c=>c.id===cid?{...c,requestLog:c.requestLog.map((r,i)=>i===ri?{...r,status:st}:r)}:c));
   // Pre-compute health + headcount for ALL clients once — avoids re-computing inside map()
@@ -3581,6 +3586,17 @@ function ClientHub({ employees, clients, saveClients }) {
   const hasPO=selEmpsForPO.filter(hasValidPO);
   const byProject=useMemo(()=>{const m={};selEmps.forEach(e=>{const p=e.project||"Unassigned";if(!m[p])m[p]=[];m[p].push(e);});return Object.entries(m).sort((a,b)=>b[1].length-a[1].length);},[selEmps]);
   const pendingActions=safeClient?safeClient.requestLog.map((r,i)=>({...r,i,dw:Math.floor((Date.now()-new Date(r.ts))/864e5)})).filter(r=>r.status==="Pending").sort((a,b)=>b.dw-a.dw):[];
+
+  // Sync local notes value when selected client changes
+  useEffect(() => { setNotesVal(safeClient?.notes || ""); }, [openId]);
+
+  const handleNotesChange = (val) => {
+    setNotesVal(val);
+    clearTimeout(notesTimer.current);
+    notesTimer.current = setTimeout(() => {
+      save(clients.map(c => c.id === openId ? { ...c, notes: val } : c));
+    }, 500);
+  };
 
   const TABS=[
     {k:"overview", l:"Overview"},
@@ -3778,7 +3794,7 @@ function ClientHub({ employees, clients, saveClients }) {
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", borderBottom:"1px solid #f3f4f6", flexShrink:0, backgroundColor:"white" }}>
             {[
               { l:"Employees",    v:selEmps.length,                                                               c:"#374151" },
-              { l:"Expiring ≤14d",v:selEmps.filter(e=>{const d=daysUntil(e.endDate);return d>=0&&d<=14;}).length, c:"#d97706" },
+              { l:"Expiring ≤30d",v:selEmps.filter(e=>{const d=daysUntil(e.endDate);return d>=0&&d<=30;}).length, c:"#d97706" },
               { l:"WF Pending",   v:selEmps.filter(e=>{ const wf=(e.workflowStatus||"").trim(); return wf && !isWFDone(wf); }).length, c:"#7c3aed" },
               { l:isSela?"Missing PO":"Projects", v:isSela?missingPO.length:byProject.length,                     c:isSela&&missingPO.length>0?"#dc2626":"#374151" },
             ].map(({l,v,c})=>(
@@ -3812,14 +3828,14 @@ function ClientHub({ employees, clients, saveClients }) {
                 <div style={{ padding:"10px 14px", borderRadius:10, backgroundColor:"#fefce8", border:"1px solid #fef9c3" }}>
                   <div style={{ fontSize:10, fontWeight:700, color:"#854d0e", marginBottom:6 }}>NOTES</div>
                   <textarea
-                    value={safeClient.notes||""}
-                    onChange={e=>save(clients.map(c=>c.id===openId?{...c,notes:e.target.value}:c))}
+                    value={notesVal}
+                    onChange={e=>handleNotesChange(e.target.value)}
                     placeholder="Add notes about this client…"
                     rows={3}
                     style={{ width:"100%", border:"none", backgroundColor:"transparent", fontSize:12, color:"#374151", lineHeight:1.6, resize:"vertical", outline:"none", fontFamily:"inherit", padding:0, margin:0 }}
                   />
                 </div>
-                {byProject.slice(0,4).map(([prj,emps])=>(
+                {(showAllProjects ? byProject : byProject.slice(0,4)).map(([prj,emps])=>(
                   <div key={prj} style={{ padding:"10px 14px", borderRadius:10, border:"1px solid #f3f4f6", backgroundColor:"#fafafa" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
                       <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{prj}</span>
@@ -3836,48 +3852,58 @@ function ClientHub({ employees, clients, saveClients }) {
                   </div>
                 ))}
                 {byProject.length===0 && <p style={{ textAlign:"center", color:"#9ca3af", padding:"32px 0", fontSize:13 }}>No employees assigned.</p>}
+                {byProject.length>4 && (
+                  <button onClick={()=>setShowAllProjects(v=>!v)} style={{ fontSize:11, fontWeight:700, color:M, background:"none", border:"none", cursor:"pointer", padding:"4px 0" }}>
+                    {showAllProjects ? "▲ Show less" : `▼ Show all ${byProject.length} projects`}
+                  </button>
+                )}
               </div>
             )}
 
             {/* ACTIONS */}
             {detailTab==="actions" && (
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                {pendingActions.length===0 && (
-                  <div style={{ textAlign:"center", padding:"32px 0" }}>
-                    <CheckCircle size={28} style={{ margin:"0 auto 8px", display:"block", color:"#16a34a", opacity:0.4 }}/>
-                    <p style={{ fontWeight:600, fontSize:13, color:"#374151", margin:"0 0 4px" }}>No pending actions</p>
-                    <p style={{ fontSize:11, color:"#9ca3af", margin:0 }}>All client actions are resolved.</p>
-                  </div>
-                )}
-                {pendingActions.map(r=>(
-                  <div key={r.i} style={{ padding:"12px 14px", borderRadius:12, border:`1px solid ${r.dw>5?"#fecaca":"#f3f4f6"}`, backgroundColor:r.dw>5?"#fef2f2":"#fafafa", display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:4 }}>
-                        <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#e0f2fe", color:"#0369a1" }}>{r.type}</span>
-                        {r.dw>5 && <span style={{ fontSize:10, fontWeight:700, color:"#dc2626" }}>⚠ Delayed {r.dw}d</span>}
+                {/* Filter pills */}
+                {(() => {
+                  const allActions = safeClient.requestLog.map((r,i)=>({...r,i,dw:Math.floor((Date.now()-new Date(r.ts))/864e5)}));
+                  const pendingCnt = allActions.filter(r=>r.status==="Pending").length;
+                  const completedCnt = allActions.filter(r=>r.status==="Completed").length;
+                  const shown = actionsFilter==="all" ? allActions : allActions.filter(r=>r.status===(actionsFilter==="pending"?"Pending":"Completed"));
+                  return (
+                    <>
+                      <div style={{ display:"flex", gap:5, marginBottom:2 }}>
+                        {[["pending",`Pending · ${pendingCnt}`],["completed",`Completed · ${completedCnt}`],["all","All"]].map(([k,l])=>(
+                          <button key={k} onClick={()=>setActionsFilter(k)} style={{ padding:"4px 11px", borderRadius:20, fontSize:10, fontWeight:700, cursor:"pointer", border:`1.5px solid ${actionsFilter===k?M:"#e5e7eb"}`, backgroundColor:actionsFilter===k?`${M}10`:"white", color:actionsFilter===k?M:"#6b7280" }}>{l}</button>
+                        ))}
                       </div>
-                      <p style={{ fontWeight:600, fontSize:13, margin:"0 0 2px", color:"#1f2937" }}>{r.employee}</p>
-                      <p style={{ fontSize:11, color:"#9ca3af", margin:0 }}>
-                        {new Date(r.ts).toLocaleDateString("en-GB")}
-                        {r.dw>0 && <span style={{ marginLeft:6, fontWeight:700, color:r.dw>5?"#dc2626":"#d97706" }}>· {r.dw}d waiting</span>}
-                      </p>
-                    </div>
-                    <button onClick={()=>updReqStatus(safeClient.id,r.i,"Completed")} style={{ fontSize:11, fontWeight:700, padding:"5px 10px", borderRadius:8, border:"1px solid #bbf7d0", backgroundColor:"#f0fdf4", color:"#16a34a", cursor:"pointer", whiteSpace:"nowrap" }}>✓ Done</button>
-                  </div>
-                ))}
-                {(safeClient.requestLog||[]).filter(r=>r.status==="Completed").length>0 && (
-                  <details style={{ marginTop:4 }}>
-                    <summary style={{ fontSize:11, color:"#9ca3af", cursor:"pointer", fontWeight:600 }}>{(safeClient.requestLog||[]).filter(r=>r.status==="Completed").length} completed actions</summary>
-                    <div style={{ display:"flex", flexDirection:"column", gap:5, marginTop:8 }}>
-                      {(safeClient.requestLog||[]).filter(r=>r.status==="Completed").map((r,ri)=>(
-                        <div key={ri} style={{ display:"flex", justifyContent:"space-between", padding:"8px 12px", borderRadius:9, backgroundColor:"#f9fafb", border:"1px solid #f3f4f6" }}>
-                          <span style={{ fontSize:12, fontWeight:600, color:"#374151" }}>{r.employee}<span style={{ fontWeight:400, color:"#9ca3af", marginLeft:6 }}>{r.type}</span></span>
-                          <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#dcfce7", color:"#166534" }}>✓</span>
+                      {shown.length===0 && (
+                        <div style={{ textAlign:"center", padding:"32px 0" }}>
+                          <CheckCircle size={28} style={{ margin:"0 auto 8px", display:"block", color:"#16a34a", opacity:0.4 }}/>
+                          <p style={{ fontWeight:600, fontSize:13, color:"#374151", margin:"0 0 4px" }}>No {actionsFilter==="all"?"":actionsFilter} actions</p>
+                        </div>
+                      )}
+                      {shown.map(r=>(
+                        <div key={r.i} style={{ padding:"12px 14px", borderRadius:12, border:`1px solid ${r.status==="Completed"?"#bbf7d0":r.dw>5?"#fecaca":"#f3f4f6"}`, backgroundColor:r.status==="Completed"?"#f0fdf4":r.dw>5?"#fef2f2":"#fafafa", display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:4 }}>
+                              <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#e0f2fe", color:"#0369a1" }}>{r.type}</span>
+                              {r.status==="Pending" && r.dw>5 && <span style={{ fontSize:10, fontWeight:700, color:"#dc2626" }}>⚠ Delayed {r.dw}d</span>}
+                              {r.status==="Completed" && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#dcfce7", color:"#166534" }}>✓ Done</span>}
+                            </div>
+                            <p style={{ fontWeight:600, fontSize:13, margin:"0 0 2px", color:"#1f2937" }}>{r.employee}</p>
+                            <p style={{ fontSize:11, color:"#9ca3af", margin:0 }}>
+                              {new Date(r.ts).toLocaleDateString("en-GB")}
+                              {r.status==="Pending" && r.dw>0 && <span style={{ marginLeft:6, fontWeight:700, color:r.dw>5?"#dc2626":"#d97706" }}>· {r.dw}d waiting</span>}
+                            </p>
+                          </div>
+                          {r.status==="Pending" && (
+                            <button onClick={()=>updReqStatus(safeClient.id,r.i,"Completed")} style={{ fontSize:11, fontWeight:700, padding:"5px 10px", borderRadius:8, border:"1px solid #bbf7d0", backgroundColor:"#f0fdf4", color:"#16a34a", cursor:"pointer", whiteSpace:"nowrap" }}>✓ Done</button>
+                          )}
                         </div>
                       ))}
-                    </div>
-                  </details>
-                )}
+                    </>
+                  );
+                })()}
               </div>
             )}
 
@@ -3971,6 +3997,9 @@ function ClientHub({ employees, clients, saveClients }) {
                         <MessageCircle size={13}/>
                       </button>
                     )}
+                    <button onClick={()=>delContact(safeClient.id,ci)} title="Remove contact" style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:26, height:26, borderRadius:7, border:"1px solid #fecaca", backgroundColor:"#fff5f5", color:"#ef4444", cursor:"pointer", flexShrink:0 }}>
+                      <X size={11}/>
+                    </button>
                   </div>
                 ))}
               </div>
