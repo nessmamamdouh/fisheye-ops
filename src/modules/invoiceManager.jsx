@@ -968,16 +968,30 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
     return null;
   };
 
+  // ── Robust year extractor — handles YYYY-MM-DD, DD/MM/YYYY, DD-Mon-YYYY, etc. ──
+  const extractYear = (d) => {
+    if (!d) return null;
+    const s = String(d).trim();
+    // Standard ISO: starts with 4-digit year
+    if (/^\d{4}/.test(s)) return s.slice(0, 4);
+    // Any format ending in 4-digit year (e.g. "05-May-2025", "28/05/2025")
+    const m = s.match(/(\d{4})\s*$/);
+    if (m) return m[1];
+    // 2-digit year suffix e.g. "15-Jan-26" → "2026"
+    const m2 = s.match(/(\d{2})\s*$/);
+    if (m2) return `20${m2[1]}`;
+    return null;
+  };
+
   // ── Dynamic year list ────────────────────────────────────────────────────────
   // Priority: explicit soaYear field → paidDate year → invoiceDate year
   const availableYears = useMemo(() => {
     const yrs = new Set();
     invoices.forEach(inv => {
       if (inv.soaYear) { yrs.add(inv.soaYear); return; }
-      const d = (inv.status === 'paid' || inv.status === 'credit_note')
-        ? (inv.paidDate || inv.invoiceDate || '')
-        : (inv.invoiceDate || '');
-      if (d.length >= 4) yrs.add(d.slice(0, 4));
+      const isPaidType = inv.status === 'paid' || inv.status === 'credit_note';
+      const yr = extractYear(isPaidType ? (inv.paidDate || inv.invoiceDate) : inv.invoiceDate);
+      if (yr) yrs.add(yr);
     });
     return [...yrs].sort();
   }, [invoices]);
@@ -990,13 +1004,12 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
   const inYearFilter = (inv, year) => {
     if (year === 'all') return true;
     if (inv.status === 'paid' || inv.status === 'credit_note') {
-      // soaYear is the authoritative tag set by migration or manually
-      const y = inv.soaYear || (inv.paidDate || inv.invoiceDate || '').slice(0, 4);
+      const y = inv.soaYear || extractYear(inv.paidDate || inv.invoiceDate);
       return y === year;
     }
     // sent / overdue
-    const d = inv.invoiceDate || '';
-    if (d) return d.startsWith(year);
+    const y = extractYear(inv.invoiceDate);
+    if (y) return y === year;
     return year === latestYear;
   };
 
