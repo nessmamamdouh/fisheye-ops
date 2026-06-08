@@ -2449,7 +2449,7 @@ function POReconciliationTab({ employees, initialFilter = "" }) {
         )}
         {noBudget > 0 && (
           <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 14px', fontSize: 12 }}>
-            <span style={{ color: '#92400e' }}>💡 {noBudget} PO{noBudget > 1 ? 's' : ''} without invoices yet</span>
+            <span style={{ color: '#92400e' }}>💡 {noBudget} PO{noBudget > 1 ? 's' : ''} without budget set</span>
           </div>
         )}
         <button onClick={exportToExcel} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, background: '#059669', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
