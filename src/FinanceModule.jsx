@@ -2380,7 +2380,7 @@ function POReconciliationTab({ employees, initialFilter = "" }) {
     localStorage.setItem(PO_BUDGET_KEY, JSON.stringify(nextStored));
     // Save to Supabase (sync across devices/Vercel)
     supabase.from('fisheye_app_data').upsert({ key: PO_BUDGET_KEY, data: nextStored }, { onConflict: 'key' })
-      .then(({ error }) => { if (error) console.warn('PO budget save error:', error.message); });
+      .then(() => {});
     setBudgets(prev => ({ ...prev, [po]: num }));
     setEditing(prev => { const n = { ...prev }; delete n[po]; return n; });
   };
