@@ -2651,8 +2651,12 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
       totalVat    += line.vat;
     });
 
-    // Prorated = active full-month + joiners + leavers (all movements this month)
+    // Prorated = deduplicated union of active + joiners + leavers
+    // (joiner+leaver same month appears in all 3 arrays — deduplicate by _id to avoid triple-count)
+    const seenIds = new Set();
     [...activeThisMonth, ...joiners, ...leavers].forEach(emp => {
+      if (seenIds.has(emp._id)) return;
+      seenIds.add(emp._id);
       proratedPayroll += emp._pro?.proratedPkg ?? Number(emp.totalPackage || 0);
     });
 
