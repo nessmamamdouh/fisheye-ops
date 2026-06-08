@@ -300,6 +300,24 @@ function PayrollTab({ employees, setEmployees, flows, onSaveFlows }) {
   const [selectedRowIds, setSelectedRowIds] = useState(new Set());
   const [editingPODateId, setEditingPODateId] = useState(null);
   const [showEditPODates, setShowEditPODates] = useState(false);
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [approveSuccess, setApproveSuccess] = useState(false);
+  const [poDateValues, setPODateValues] = useState({}); // { [empId]: dateString }
+  const [finToast, setFinToast] = useState(null);
+  // User-configurable cutoff: hide employees whose endDate is before this date
+  // Stored in localStorage so it persists across sessions
+  const [poNeedsCutoff, setPONeedsCutoff] = useState(
+    () => localStorage.getItem('fisheye_po_needs_cutoff') || ''
+  );
+  const savePONeedsCutoff = (date) => {
+    setPONeedsCutoff(date);
+    if (date) localStorage.setItem('fisheye_po_needs_cutoff', date);
+    else localStorage.removeItem('fisheye_po_needs_cutoff');
+  };
+  const showFinToast = (msg, color = "#16a34a") => {
+    setFinToast({ msg, color });
+    setTimeout(() => setFinToast(null), 3000);
+  };
  
   // ── Stable employee key (name-based, same as PayrollFlowTracker) ────────────
   const empStableKey = e => (e.name || '').trim().toLowerCase().replace(/\s+/g, '_') || String(e._id);
@@ -417,23 +435,11 @@ function PayrollTab({ employees, setEmployees, flows, onSaveFlows }) {
       const hasPO = e.poNumbers && String(e.poNumbers).trim() !== '';
       if (!hasPO) return false;          // no PO → belongs to no-PO view
       if (e.poAddedDate) return false;   // has date → handled by normal flow
-      // Exclude employees whose contract ended before March 2026 (end of Feb 2026)
-      if (e.endDate) {
-        const raw = String(e.endDate).trim();
-        let endDt = null;
-        if (raw.includes('-')) {
-          // ISO format: YYYY-MM-DD or YYYY-M-D
-          endDt = new Date(raw);
-        } else if (raw.includes('/')) {
-          // Spreadsheet format: MM/DD/YY or MM/DD/YYYY
-          const parts = raw.split('/');
-          if (parts.length === 3) {
-            let m = parseInt(parts[0]), d = parseInt(parts[1]), y = parseInt(parts[2]);
-            if (y < 100) y += 2000;
-            endDt = new Date(y, m - 1, d);
-          }
-        }
-        if (endDt && !isNaN(endDt) && endDt < new Date(2026, 2, 1)) return false;
+      // Apply user-set cutoff — hide employees whose contract ended before that date
+      if (poNeedsCutoff && e.endDate) {
+        const endDt = parseDate(e.endDate);
+        const cutoffDt = parseDate(poNeedsCutoff);
+        if (endDt && cutoffDt && endDt < cutoffDt) return false;
       }
       return true; // PO exists but no date → needs manual resolution
     }).map(e => ({ ...e, _accumulated: calcAccumulatedSalary(e, year, month) }));
@@ -596,6 +602,19 @@ function PayrollTab({ employees, setEmployees, flows, onSaveFlows }) {
             <span style={{ fontSize: 12, fontWeight: 800, color: "#92400e", flex: 1 }}>
               {expiredNeedsPODate.length} موظف expired عندهم PO بس تاريخ استلامه مش مسجّل — تم الإضافة عبر import
             </span>
+            {/* Cutoff control — hide employees processed before a certain date */}
+            <div style={{ display: "flex", alignItems: "center", gap: 5, backgroundColor: "white", borderRadius: 7, padding: "4px 8px", border: "1px solid #fde68a" }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#92400e", whiteSpace: "nowrap" }}>إخفاء ما قبل:</span>
+              <input
+                type="date"
+                value={poNeedsCutoff}
+                onChange={e => savePONeedsCutoff(e.target.value)}
+                style={{ fontSize: 11, padding: "2px 6px", border: "1px solid #d1d5db", borderRadius: 5, width: 120 }}
+              />
+              {poNeedsCutoff && (
+                <button onClick={() => savePONeedsCutoff('')} style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", background: "none", border: "none", cursor: "pointer", padding: 0 }}>✕</button>
+              )}
+            </div>
             {selectedPOIds.size > 0 && (
               <div style={{ display: "flex", alignItems: "center", gap: 6, backgroundColor: "#fef3c7", borderRadius: 8, padding: "6px 10px", border: "1px solid #fde68a" }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: "#92400e" }}>
@@ -686,19 +705,19 @@ function PayrollTab({ employees, setEmployees, flows, onSaveFlows }) {
                     <>
                       <input
                         type="date"
-                        defaultValue={new Date().toISOString().split("T")[0]}
+                        value={poDateValues[e._id] ?? new Date().toISOString().split("T")[0]}
+                        onChange={ev => { ev.stopPropagation(); setPODateValues(prev => ({ ...prev, [e._id]: ev.target.value })); }}
                         style={{ fontSize: 11, padding: "3px 8px", border: "1px solid #d1d5db", borderRadius: 6, marginLeft: "auto" }}
-                        id={`po-date-${e._id}`}
                         onClick={ev => ev.stopPropagation()}
                       />
                       <button
                         onClick={async ev => {
                           ev.stopPropagation();
-                          const dateInput = document.getElementById(`po-date-${e._id}`);
-                          const poDate = dateInput?.value;
+                          const poDate = poDateValues[e._id] ?? new Date().toISOString().split("T")[0];
                           if (!poDate) return;
                           setEmployees(prev => prev.map(emp => emp._id === e._id ? { ...emp, poAddedDate: poDate } : emp));
                           try { await supabase.from('employees_master').update({ poAddedDate: poDate }).eq('_id', e._id); } catch {}
+                          showFinToast(`✅ تم حفظ تاريخ PO لـ ${e.name}`);
                         }}
                         style={{ fontSize: 11, fontWeight: 700, padding: "4px 12px", backgroundColor: "#d97706", color: "white", border: "none", borderRadius: 6, cursor: "pointer", flexShrink: 0 }}
                       >
@@ -741,19 +760,19 @@ function PayrollTab({ employees, setEmployees, flows, onSaveFlows }) {
                     <>
                       <input
                         type="date"
-                        defaultValue={e.poAddedDate ? e.poAddedDate.slice(0, 10) : ''}
+                        value={poDateValues[`edit_${e._id}`] ?? (e.poAddedDate ? e.poAddedDate.slice(0, 10) : '')}
+                        onChange={ev => setPODateValues(prev => ({ ...prev, [`edit_${e._id}`]: ev.target.value }))}
                         style={{ fontSize: 11, padding: "3px 8px", border: "1.5px solid #0284c7", borderRadius: 6, marginLeft: "auto" }}
-                        id={`edit-po-date-${e._id}`}
                         autoFocus
                       />
                       <button
                         onClick={async () => {
-                          const input = document.getElementById(`edit-po-date-${e._id}`);
-                          const newDate = input?.value;
+                          const newDate = poDateValues[`edit_${e._id}`] ?? (e.poAddedDate ? e.poAddedDate.slice(0, 10) : '');
                           if (!newDate) return;
                           setEmployees(prev => prev.map(emp => emp._id === e._id ? { ...emp, poAddedDate: newDate } : emp));
                           setEditingPODateId(null);
                           try { await supabase.from('employees_master').update({ poAddedDate: newDate }).eq('_id', e._id); } catch {}
+                          showFinToast(`✅ تم تحديث تاريخ PO لـ ${e.name}`);
                         }}
                         style={{ fontSize: 11, fontWeight: 800, padding: "4px 12px", backgroundColor: "#0284c7", color: "white", border: "none", borderRadius: 6, cursor: "pointer" }}
                       >حفظ</button>
@@ -763,11 +782,10 @@ function PayrollTab({ employees, setEmployees, flows, onSaveFlows }) {
                       >إلغاء</button>
                       <button
                         onClick={async () => {
-                          const confirmed = window.confirm(`هتمسح تاريخ الـ PO لـ ${e.name}؟`);
-                          if (!confirmed) return;
                           setEmployees(prev => prev.map(emp => emp._id === e._id ? { ...emp, poAddedDate: null } : emp));
                           setEditingPODateId(null);
                           try { await supabase.from('employees_master').update({ poAddedDate: null }).eq('_id', e._id); } catch {}
+                          showFinToast(`🗑 تم مسح تاريخ PO لـ ${e.name}`, "#dc2626");
                         }}
                         style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", backgroundColor: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 6, cursor: "pointer" }}
                       >🗑 مسح</button>
@@ -1302,32 +1320,14 @@ function PayrollTab({ employees, setEmployees, flows, onSaveFlows }) {
             </button>
             {/* Send for Approval */}
             <button
-              onClick={() => alert(`📤 Payroll for ${months.find(m => m.key === selectedMonth)?.label} sent for approval.\n${totals.headcount} employees · Net SAR ${fmtPro(totals.netTotal)}`)}
+              onClick={() => showFinToast(`📤 Payroll for ${months.find(m => m.key === selectedMonth)?.label} sent for approval — ${totals.headcount} employees · Net SAR ${fmtPro(totals.netTotal)}`, "#f59e0b")}
               style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", backgroundColor: "#f59e0b", color: "white", transition: "all 0.15s" }}
             >
               <TrendingUp size={13} /> Send for Approval
             </button>
             {/* Approve & Process */}
             <button
-              onClick={() => {
-                const monthLabel = months.find(m => m.key === selectedMonth)?.label || selectedMonth;
-                const confirmed = window.confirm(`✅ Approve & process payroll?\n\nMonth: ${monthLabel}\nEmployees: ${totals.headcount}\nNet: SAR ${fmtPro(totals.netTotal)}\n\nThis will mark all listed employees as paid for this month.`);
-                if (!confirmed) return;
-                // Build updated flows: set salary=true using flat key "YYYY-MM_emp_slug"
-                const updated = { ...(flows || {}) };
-                selectedRows.forEach(emp => {
-                  const sk = empStableKey(emp);
-                  const fkey = `${selectedMonth}_${sk}`;
-                  updated[fkey] = {
-                    ...(updated[fkey] || {}),
-                    salary: true,
-                    approvedAt: new Date().toISOString(),
-                    net: emp._pro?.netProrated || emp._pro?.proratedPkg || 0,
-                  };
-                });
-                if (onSaveFlows) onSaveFlows(updated);
-                alert(`✅ تم الاعتماد والمعالجة بنجاح\n\nشهر: ${monthLabel}\nموظفين: ${totals.headcount}\nصافي: SAR ${fmtPro(totals.netTotal)}`);
-              }}
+              onClick={() => setShowApproveModal(true)}
               style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 800, cursor: "pointer", border: "none", backgroundColor: "#A02843", color: "white", boxShadow: "0 2px 8px rgba(160,40,67,0.35)", transition: "all 0.15s" }}
             >
               <CheckCircle size={13} /> Approve & Process
@@ -1335,6 +1335,60 @@ function PayrollTab({ employees, setEmployees, flows, onSaveFlows }) {
           </div>
         </div>
       )}
+
+      {/* ── Finance Toast ── */}
+      {finToast && (
+        <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)", zIndex:9999, backgroundColor:finToast.color, color:"white", padding:"10px 20px", borderRadius:10, fontSize:13, fontWeight:600, boxShadow:"0 4px 16px rgba(0,0,0,0.18)", pointerEvents:"none" }}>
+          {finToast.msg}
+        </div>
+      )}
+
+      {/* ── Approve & Process Modal ── */}
+      {showApproveModal && (() => {
+        const monthLabel = months.find(m => m.key === selectedMonth)?.label || selectedMonth;
+        return (
+          <div style={{ position:"fixed", inset:0, zIndex:9999, backgroundColor:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+            <div style={{ backgroundColor:"white", borderRadius:16, width:"100%", maxWidth:420, padding:28, boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
+              {approveSuccess ? (
+                <div style={{ textAlign:"center" }}>
+                  <CheckCircle size={44} style={{ color:"#16a34a", margin:"0 auto 12px", display:"block" }}/>
+                  <h3 style={{ margin:"0 0 8px", fontSize:17, fontWeight:800, color:"#111827" }}>تم الاعتماد بنجاح ✅</h3>
+                  <p style={{ margin:"0 0 16px", fontSize:13, color:"#6b7280" }}>
+                    شهر: <strong>{monthLabel}</strong> · {totals.headcount} موظف · صافي SAR {fmtPro(totals.netTotal)}
+                  </p>
+                  <button onClick={() => { setShowApproveModal(false); setApproveSuccess(false); }} style={{ padding:"9px 24px", borderRadius:8, border:"none", backgroundColor:M, color:"white", fontSize:13, fontWeight:700, cursor:"pointer" }}>إغلاق</button>
+                </div>
+              ) : (
+                <>
+                  <h3 style={{ margin:"0 0 6px", fontSize:17, fontWeight:800, color:"#111827" }}>✅ Approve & Process Payroll</h3>
+                  <p style={{ margin:"0 0 18px", fontSize:12, color:"#6b7280" }}>هتتم معالجة الرواتب وتسجيل الدفع في السيستم.</p>
+                  <div style={{ padding:"14px 16px", borderRadius:10, backgroundColor:"#f9fafb", border:"1px solid #e5e7eb", marginBottom:20, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                    <div><div style={{ fontSize:10, fontWeight:700, color:"#9ca3af", textTransform:"uppercase" }}>Month</div><div style={{ fontSize:14, fontWeight:800, color:"#111827" }}>{monthLabel}</div></div>
+                    <div><div style={{ fontSize:10, fontWeight:700, color:"#9ca3af", textTransform:"uppercase" }}>Employees</div><div style={{ fontSize:14, fontWeight:800, color:"#111827" }}>{totals.headcount}</div></div>
+                    <div><div style={{ fontSize:10, fontWeight:700, color:"#9ca3af", textTransform:"uppercase" }}>Gross</div><div style={{ fontSize:14, fontWeight:800, color:"#374151" }}>SAR {fmtPro(totals.payroll)}</div></div>
+                    <div><div style={{ fontSize:10, fontWeight:700, color:"#9ca3af", textTransform:"uppercase" }}>Net</div><div style={{ fontSize:14, fontWeight:800, color:M }}>SAR {fmtPro(totals.netTotal)}</div></div>
+                  </div>
+                  <div style={{ display:"flex", gap:10 }}>
+                    <button onClick={() => { setShowApproveModal(false); setApproveSuccess(false); }} style={{ flex:1, padding:"9px", borderRadius:8, border:"1px solid #e5e7eb", backgroundColor:"white", cursor:"pointer", fontSize:13, fontWeight:600, color:"#374151" }}>Cancel</button>
+                    <button onClick={() => {
+                      const updated = { ...(flows || {}) };
+                      selectedRows.forEach(emp => {
+                        const sk = empStableKey(emp);
+                        const fkey = `${selectedMonth}_${sk}`;
+                        updated[fkey] = { ...(updated[fkey] || {}), salary:true, approvedAt:new Date().toISOString(), net:emp._pro?.netProrated||emp._pro?.proratedPkg||0 };
+                      });
+                      if (onSaveFlows) onSaveFlows(updated);
+                      setApproveSuccess(true);
+                    }} style={{ flex:2, padding:"9px", borderRadius:8, border:"none", backgroundColor:M, color:"white", cursor:"pointer", fontSize:13, fontWeight:800 }}>
+                      ✅ Confirm & Process
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -2110,11 +2164,11 @@ function PayrollFlowTracker({ employees, sharedFlows, onSaveFlows }) {
           );
         })}
         <div style={{ width: 1, height: 20, backgroundColor: '#e5e7eb', flexShrink: 0 }} />
-        <button onClick={() => { if (window.confirm(`Mark ALL steps done for ${displayedEmps.length} employee(s)?`)) bulkMarkAll(displayedEmps, true); }}
+        <button onClick={() => { bulkMarkAll(displayedEmps, true); }}
           style={{ padding: '5px 11px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: '1.5px solid #16a34a', backgroundColor: '#16a34a', color: 'white', display: 'flex', alignItems: 'center', gap: 4 }}>
           <Check size={10} /> All Done
         </button>
-        <button onClick={() => { if (window.confirm(`Reset all steps for ${selectedClient}?`)) bulkMarkAll(displayedEmps, false); }}
+        <button onClick={() => { bulkMarkAll(displayedEmps, false); }}
           style={{ padding: '5px 11px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: '1px solid #e5e7eb', backgroundColor: 'white', color: '#9ca3af' }}>
           Reset
         </button>
@@ -2508,15 +2562,12 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
           .select('key, data')
           .eq('key', 'fisheye_payroll_flow_v1')
           .single();
-        if (error) { console.warn('[PayrollFlow] Supabase read error:', error.message); return; }
-        if (!data?.data) { console.warn('[PayrollFlow] No data in Supabase for fisheye_payroll_flow_v1'); return; }
-        console.log('[PayrollFlow] Supabase loaded keys:', Object.keys(data.data).length);
+        if (error || !data?.data) return;
         const local = (() => {
           try { return JSON.parse(localStorage.getItem('fisheye_payroll_flow_v1')) || {}; }
           catch { return {}; }
         })();
         const merged = { ...data.data, ...local }; // local wins
-        console.log('[PayrollFlow] merged keys:', Object.keys(merged).length);
         localStorage.setItem('fisheye_payroll_flow_v1', JSON.stringify(merged));
         setFlows(merged);
       } catch {}
@@ -2528,10 +2579,7 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
     try { localStorage.setItem('fisheye_payroll_flow_v1', JSON.stringify(f)); } catch {}
     supabase.from('fisheye_app_data')
       .upsert({ key: 'fisheye_payroll_flow_v1', data: f }, { onConflict: 'key' })
-      .then(({ error }) => {
-        if (error) console.error('[PayrollFlow] Supabase write FAILED:', error.message);
-        else console.log('[PayrollFlow] Supabase write OK, keys:', Object.keys(f).length);
-      });
+      .then(() => {});
   };
 
   const [poSearchFilter, setPOSearchFilter] = useState("");
