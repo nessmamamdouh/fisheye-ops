@@ -2583,6 +2583,18 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
     catch { return {}; }
   });
 
+  // ── Invoices state — loaded from Supabase for attentionItems overdue check ──
+  const [invoicesForAttention, setInvoicesForAttention] = useState([]);
+  useEffect(() => {
+    supabase.from('fisheye_invoices').select('*').then(({ data }) => {
+      if (data && data.length > 0) setInvoicesForAttention(data);
+      else {
+        try { setInvoicesForAttention(JSON.parse(localStorage.getItem('fisheye_invoices_v1') || '[]')); }
+        catch {}
+      }
+    });
+  }, []);
+
   // Load from Supabase on mount (merge: local wins), then update state so attentionItems re-renders
   useEffect(() => {
     (async () => {
@@ -2751,10 +2763,8 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
       }
     }
 
-    // 3. Overdue invoices >30 days
-    let invoices = [];
-    try { invoices = JSON.parse(localStorage.getItem('fisheye_invoices_v1') || '[]'); } catch {}
-    const overdue = invoices.filter(inv => {
+    // 3. Overdue invoices >30 days — uses Supabase-loaded state (not stale localStorage)
+    const overdue = invoicesForAttention.filter(inv => {
       const st = (inv.status || '').toLowerCase();
       if (['paid','cancelled','credit note','credit_note'].includes(st)) return false;
       const d = new Date(inv.invoiceDate);
@@ -2791,7 +2801,7 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
     }
 
     return items;
-  }, [active, flows, now]);
+  }, [active, flows, now, invoicesForAttention]);
 
   const [attOpen, setAttOpen] = useState(false);
 
