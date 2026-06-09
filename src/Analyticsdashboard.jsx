@@ -7,6 +7,8 @@ import { isExcluded } from "./utils/helpers";
 const M  = "#A02843";
 
 // ─── BILLING HELPERS (mirrors FinanceModule — no circular import) ─────────────
+// ⚠️  If you change calcLine / calcPartnerPayout / calcNetProfit in FinanceModule,
+//     update the copies here too to keep numbers consistent across modules.
 const calcLine = emp => {
   const totalPkg = Number(emp.totalPackage || 0);
   let marginAmount = 0;
@@ -27,7 +29,7 @@ const calcLine = emp => {
 const calcPartnerPayout = emp => {
   if (emp.profitMode !== "partner") return 0;
   const totalPkg = Number(emp.totalPackage || 0);
-  if (emp.partnerCostType === "percent") return (Number(emp.partnerCost || 0) / 100) * totalPkg;
+  if (emp.partnerCostType === "percent") return Math.round((Number(emp.partnerCost || 0) / 100) * totalPkg);
   return Number(emp.partnerCost || 0);
 };
 
@@ -118,12 +120,15 @@ function DonutChart({ data, size = 150, title, subtitle }) {
 
 // ─── EXPIRY TIMELINE ─────────────────────────────────────────────────────────
 function ExpiryTimeline({ items }) {
+  const [showAll, setShowAll] = React.useState(false);
   if (!items.length) return <div style={{ color: "#9ca3af", fontSize: 13, padding: 16 }}>No expiries in the next 90 days</div>;
   const col = d => d < 0 ? "#dc2626" : d <= 14 ? "#ef4444" : d <= 30 ? "#f97316" : "#f59e0b";
   const bg  = d => d < 0 ? "#fef2f2" : d <= 14 ? "#fef2f2" : d <= 30 ? "#fff7ed" : "#fffbeb";
+  const visible = showAll ? items : items.slice(0, 20);
   return (
+    <div>
     <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
-      {items.slice(0, 20).map((e, i) => {
+      {visible.map((e, i) => {
         const d = daysUntil(e.endDate);
         return (
           <div key={i} style={{ flexShrink: 0, width: 132, padding: "10px 12px", borderRadius: 10, backgroundColor: bg(d), border: `1px solid ${col(d)}44` }}>
@@ -136,6 +141,12 @@ function ExpiryTimeline({ items }) {
           </div>
         );
       })}
+    </div>
+    {items.length > 20 && (
+      <button onClick={() => setShowAll(v => !v)} style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: M, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+        {showAll ? "▲ Show less" : `▼ Show all ${items.length} employees`}
+      </button>
+    )}
     </div>
   );
 }
@@ -196,11 +207,12 @@ function OverviewTab({ active, billable, issues, allExpiring }) {
   const clientsList = [...new Set(active.map(e => e.client).filter(Boolean))];
 
   const funnel = [
-    { label: "Docs Requested",  n: active.filter(e => (e.workflowStatus||"").toLowerCase() === "docs requested").length },
-    { label: "Agreement Sent",  n: active.filter(e => (e.workflowStatus||"").toLowerCase().includes("agreement")).length },
-    { label: "Qiwa Submitted",  n: active.filter(e => (e.workflowStatus||"").toLowerCase().includes("qiwa submitted")).length },
-    { label: "Qiwa Approved",   n: active.filter(e => (e.workflowStatus||"").toLowerCase() === "qiwa approved").length },
-    { label: "Active / Done",   n: active.filter(e => ["active","complete"].includes((e.status||"").toLowerCase())).length },
+    { label: "Docs Requested",   n: active.filter(e => (e.workflowStatus||"").toLowerCase() === "docs requested").length },
+    { label: "Docs Received+",   n: active.filter(e => (e.workflowStatus||"").toLowerCase().includes("docs received")).length },
+    { label: "Agreement Sent",   n: active.filter(e => (e.workflowStatus||"").toLowerCase().includes("agreement")).length },
+    { label: "Qiwa Submitted",   n: active.filter(e => (e.workflowStatus||"").toLowerCase().includes("qiwa submitted")).length },
+    { label: "Qiwa Approved",    n: active.filter(e => (e.workflowStatus||"").toLowerCase() === "qiwa approved").length },
+    { label: "Active / Done",    n: active.filter(e => ["active","complete"].includes((e.status||"").toLowerCase())).length },
   ];
 
   const clientHC = clientsList.map((c, i) => ({
@@ -211,7 +223,7 @@ function OverviewTab({ active, billable, issues, allExpiring }) {
   const partnerCount = active.filter(e => e.profitMode === "partner").length;
 
   const natMap = {};
-  active.forEach(e => { const n = e.nationality || "Unknown"; natMap[n] = (natMap[n]||0)+1; });
+  active.forEach(e => { const n = e.nationalityType || "Unknown"; natMap[n] = (natMap[n]||0)+1; });
   const natData = Object.entries(natMap).sort((a,b)=>b[1]-a[1]).slice(0,7).map(([l,v],i) => ({ label: l, value: v, color: NAT_COLORS[i] }));
 
   return (
@@ -487,6 +499,7 @@ function PartnersTab({ active, billable }) {
 // 👥 TAB: WORKFORCE
 // ═══════════════════════════════════════════════════════════════════════════════
 function WorkforceTab({ active, allExpiring }) {
+  const [showAllExpiry, setShowAllExpiry] = React.useState(false);
   // Salary buckets
   const buckets = [
     {label:"< 5K",   min:0,     max:5000},
@@ -559,7 +572,7 @@ function WorkforceTab({ active, allExpiring }) {
               <TH>Employee</TH><TH>Client</TH><TH>Status</TH><TH align="right">End Date</TH><TH align="right">Days Left</TH>
             </tr></thead>
             <tbody>
-              {allExpiring.slice(0,30).map((e,i)=>{
+              {(showAllExpiry ? allExpiring : allExpiring.slice(0,30)).map((e,i)=>{
                 const d   = daysUntil(e.endDate);
                 const col = d<0?"#dc2626":d<=14?"#ef4444":d<=30?"#f97316":"#f59e0b";
                 const bg  = d<0||d<=14?"#fef2f2":undefined;
@@ -577,6 +590,13 @@ function WorkforceTab({ active, allExpiring }) {
               })}
             </tbody>
           </table>
+          {allExpiring.length > 30 && (
+            <div style={{ padding: "8px 20px", borderTop: "1px solid #f3f4f6" }}>
+              <button onClick={() => setShowAllExpiry(v => !v)} style={{ fontSize: 11, fontWeight: 700, color: M, background: "none", border: "none", cursor: "pointer" }}>
+                {showAllExpiry ? "▲ Show less" : `▼ Show all ${allExpiring.length} employees`}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -587,7 +607,8 @@ function WorkforceTab({ active, allExpiring }) {
 // 🏠 MAIN EXPORT
 // ═══════════════════════════════════════════════════════════════════════════════
 export function AnalyticsDashboard({ employees = [] }) {
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(() => localStorage.getItem("fisheye_analytics_tab") || "overview");
+  const setTabP = t => { setTab(t); localStorage.setItem("fisheye_analytics_tab", t); };
   const issues = useOperationalIssues(employees);
 
   const active = useMemo(() => employees.filter(e => !isExcluded(e)), [employees]);
@@ -643,7 +664,7 @@ export function AnalyticsDashboard({ employees = [] }) {
         ].map(t=>(
           <TabBtn key={t.key}
             label={<span style={{display:"flex",alignItems:"center",gap:5}}>{t.icon}{t.label}</span>}
-            active={tab===t.key} onClick={()=>setTab(t.key)} badge={t.badge} />
+            active={tab===t.key} onClick={()=>setTabP(t.key)} badge={t.badge} />
         ))}
       </div>
 
