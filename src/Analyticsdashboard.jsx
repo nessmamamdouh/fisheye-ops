@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { BarChart2, Users, Building2, Handshake, TrendingUp, AlertCircle, Clock, DollarSign, Briefcase, Globe } from "lucide-react";
-import { useOperationalIssues, daysUntil } from "./useOperationalIssues";
+import { BarChart2, Users, Building2, Handshake, TrendingUp, AlertCircle, Clock, DollarSign, Briefcase, Globe, Download } from "lucide-react";
+import { useOperationalIssues, daysUntil, isWFDone } from "./useOperationalIssues";
 import { isExcluded } from "./utils/helpers";
 
 // ─── BRAND ───────────────────────────────────────────────────────────────────
@@ -207,12 +207,14 @@ function OverviewTab({ active, billable, issues, allExpiring }) {
   const clientsList = [...new Set(active.map(e => e.client).filter(Boolean))];
 
   const funnel = [
+    { label: "Pending",          n: active.filter(e => (e.workflowStatus||"").toLowerCase() === "pending").length },
+    { label: "Onboarding",       n: active.filter(e => (e.workflowStatus||"").toLowerCase() === "onboarding").length },
     { label: "Docs Requested",   n: active.filter(e => (e.workflowStatus||"").toLowerCase() === "docs requested").length },
     { label: "Docs Received+",   n: active.filter(e => (e.workflowStatus||"").toLowerCase().includes("docs received")).length },
     { label: "Agreement Sent",   n: active.filter(e => (e.workflowStatus||"").toLowerCase().includes("agreement")).length },
     { label: "Qiwa Submitted",   n: active.filter(e => (e.workflowStatus||"").toLowerCase().includes("qiwa submitted")).length },
     { label: "Qiwa Approved",    n: active.filter(e => (e.workflowStatus||"").toLowerCase() === "qiwa approved").length },
-    { label: "Active / Done",    n: active.filter(e => ["active","complete"].includes((e.status||"").toLowerCase())).length },
+    { label: "Complete / Done",  n: active.filter(e => isWFDone(e.workflowStatus)).length },
   ];
 
   const clientHC = clientsList.map((c, i) => ({
@@ -632,26 +634,62 @@ export function AnalyticsDashboard({ employees = [] }) {
   const netProfit       = billable.reduce((s,e)=>s+calcNetProfit(e),0);
   const expiring60      = allExpiring.filter(e=>daysUntil(e.endDate)<=60).length;
 
+  // CSV Export — snapshot of active employees with key financial metrics
+  const exportCSV = () => {
+    const cols = ["Name","Client","Status","Workflow","Position","Package","Margin","Net Profit","End Date","Days Left","PO"];
+    const rows = active.map(e => {
+      const line = calcLine(e);
+      const net  = calcNetProfit(e);
+      const d    = e.endDate ? daysUntil(e.endDate) : "";
+      return [
+        e.name, e.client, e.status, e.workflowStatus, e.position||"",
+        Number(e.totalPackage||0).toFixed(2),
+        line.margin.toFixed(2), net.toFixed(2),
+        e.endDate||"", d, e.poNumbers||"",
+      ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(",");
+    });
+    const csv = [cols.join(","), ...rows].join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = `analytics_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+  };
+
   return (
     <div className="fe-page" style={{padding:"0",direction:"ltr"}}>
       {/* Header */}
-      <div style={{marginBottom:24}}>
+      <div style={{marginBottom:24, display:"flex", alignItems:"flex-start", justifyContent:"space-between"}}>
+        <div>
         <h1 style={{fontSize:20,fontWeight:700,color:"#111827",margin:"0 0 4px",fontFamily:"var(--font-sans)",letterSpacing:"-0.02em",display:"flex",alignItems:"center",gap:8}}>
           <BarChart2 size={20} style={{color:M}}/> Analytics
         </h1>
         <p style={{color:"#6b7280",fontSize:13,margin:0,fontFamily:"var(--font-sans)"}}>
           Headcount · Client Profitability · Partner Settlements · Workforce Trends
         </p>
+        </div>
+        <button onClick={exportCSV} style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 14px", borderRadius:8, border:"1px solid #e5e7eb", backgroundColor:"white", fontSize:12, fontWeight:700, color:"#374151", cursor:"pointer", flexShrink:0, marginTop:2 }}>
+          <Download size={13}/> Export CSV
+        </button>
       </div>
 
-      {/* Global KPI strip */}
+      {/* Global KPI strip — cards are clickable to navigate to relevant tab */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:14,marginBottom:24}}>
-        <KpiCard label="Headcount"       value={active.length}         sub={`${billable.length} billable`} />
-        <KpiCard label="Total Payroll"   value={fK(totalPayroll)}      sub="all active employees"          color="#374151" bg="#f9fafb" border="#e5e7eb" />
-        <KpiCard label="Billable Margin" value={fK(billableMargin)}    sub="excl. Sela no-PO"              color="#0369a1" bg="#f0f9ff" border="#bae6fd" />
-        <KpiCard label="Net Profit"      value={fK(netProfit)}         sub="after partner payouts"         color="#059669" bg="#f0fdf4" border="#bbf7d0" />
-        <KpiCard label="Expiring ≤60d"   value={expiring60}            sub={`${issues.counts.urgent} urgent`}
-          color={expiring60>0?"#dc2626":"#374151"} bg={expiring60>0?"#fef2f2":"#f9fafb"} border={expiring60>0?"#fecaca":"#e5e7eb"} />
+        <div onClick={()=>setTabP("workforce")} style={{cursor:"pointer"}}>
+          <KpiCard label="Headcount"       value={active.length}         sub={`${billable.length} billable`} />
+        </div>
+        <div onClick={()=>setTabP("workforce")} style={{cursor:"pointer"}}>
+          <KpiCard label="Total Payroll"   value={fK(totalPayroll)}      sub="all active employees"          color="#374151" bg="#f9fafb" border="#e5e7eb" />
+        </div>
+        <div onClick={()=>setTabP("clients")} style={{cursor:"pointer"}}>
+          <KpiCard label="Billable Margin" value={fK(billableMargin)}    sub="excl. Sela no-PO"              color="#0369a1" bg="#f0f9ff" border="#bae6fd" />
+        </div>
+        <div onClick={()=>setTabP("partners")} style={{cursor:"pointer"}}>
+          <KpiCard label="Net Profit"      value={fK(netProfit)}         sub="after partner payouts"         color="#059669" bg="#f0fdf4" border="#bbf7d0" />
+        </div>
+        <div onClick={()=>setTabP("workforce")} style={{cursor:"pointer"}}>
+          <KpiCard label="Expiring ≤60d"   value={expiring60}            sub={`${issues.counts.urgent} urgent`}
+            color={expiring60>0?"#dc2626":"#374151"} bg={expiring60>0?"#fef2f2":"#f9fafb"} border={expiring60>0?"#fecaca":"#e5e7eb"} />
+        </div>
       </div>
 
       {/* Tabs */}
