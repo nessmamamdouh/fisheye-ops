@@ -1,6 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { FileText, UserPlus, CheckCircle, Clock, AlertCircle, CalendarDays, RotateCcw } from 'lucide-react';
 import { supabase } from '../utils/supabase';
+import { isExcluded } from '../utils/helpers';
+
+// Safe date parser — avoids UTC midnight shift for ISO strings
+const parseLocalDate = str => {
+  if (!str) return null;
+  const s = String(str).trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return new Date(+iso[1], +iso[2] - 1, +iso[3]);
+  return new Date(s);
+};
 
 const M = "#A02843";
 
@@ -446,7 +456,7 @@ function EmployeesView({ employees, setEmployees, userRole, partners = [] }) {
     if (!getWorkflowBucket(e)) return false;
     // Exclude expired contracts — but keep if missing PO (still needs onboarding)
     const hasPO = e.poNumbers && String(e.poNumbers).trim() !== '';
-    if (e.endDate && new Date(e.endDate) < today && hasPO) return false;
+    if (e.endDate && parseLocalDate(e.endDate) < today && hasPO) return false;
     if (seen.has(e._id)) return false;
     seen.add(e._id);
     return true;
@@ -555,16 +565,20 @@ function EmployeesView({ employees, setEmployees, userRole, partners = [] }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function MonthlyChecklistView({ employees }) {
-  const [checks, setChecks] = useState(loadChecklist);
+  const [checks, setChecks]           = useState(loadChecklist);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const now        = new Date();
   const monthName  = now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 
-  const noPoSela      = employees.filter(e => (e.client || '').toLowerCase() === 'sela' && !(e.poNumbers && String(e.poNumbers).trim()));
-  const pendingCount  = employees.filter(e => (e.workflowStatus || '').toLowerCase() === 'pending').length;
-  const expiringCount = employees.filter(e => {
+  const activeEmps    = employees.filter(e => !isExcluded(e));
+  const noPoSela      = activeEmps.filter(e => (e.client || '').toLowerCase() === 'sela' && !(e.poNumbers && String(e.poNumbers).trim()));
+  const pendingCount  = activeEmps.filter(e => (e.workflowStatus || '').toLowerCase() === 'pending').length;
+  const expiringCount = activeEmps.filter(e => {
     if (!e.endDate) return false;
-    const days = Math.ceil((new Date(e.endDate) - now) / 86400000);
+    const d = parseLocalDate(e.endDate);
+    if (!d) return false;
+    const days = Math.ceil((d - now) / 86400000);
     return days >= 0 && days <= 30;
   }).length;
 
@@ -575,9 +589,9 @@ function MonthlyChecklistView({ employees }) {
   };
 
   const resetAll = () => {
-    if (!window.confirm('إعادة تعيين الـ checklist؟ سيتم حذف كل التيكات.')) return;
     setChecks({});
     saveChecklist({});
+    setConfirmReset(false);
   };
 
   const allIds  = MONTHLY_CHECKLIST.flatMap(s => s.steps.map(st => st.id));
@@ -608,14 +622,22 @@ function MonthlyChecklistView({ employees }) {
             }}>
               {doneAll}/{allIds.length} ({pctAll}%)
             </span>
-            <button onClick={resetAll} style={{
-              display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600,
-              padding: '5px 11px', borderRadius: 7, cursor: 'pointer',
-              backgroundColor: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
-              color: 'rgba(255,255,255,0.8)', fontFamily: 'var(--font-sans)',
-            }}>
-              <RotateCcw size={11} /> Reset
-            </button>
+            {!confirmReset ? (
+              <button onClick={() => setConfirmReset(true)} style={{
+                display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600,
+                padding: '5px 11px', borderRadius: 7, cursor: 'pointer',
+                backgroundColor: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
+                color: 'rgba(255,255,255,0.8)', fontFamily: 'var(--font-sans)',
+              }}>
+                <RotateCcw size={11} /> Reset
+              </button>
+            ) : (
+              <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>متأكد؟</span>
+                <button onClick={() => setConfirmReset(false)} style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5, border: '1px solid rgba(255,255,255,0.2)', backgroundColor: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer' }}>لا</button>
+                <button onClick={resetAll} style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 5, border: 'none', backgroundColor: 'rgba(220,38,38,0.7)', color: 'white', cursor: 'pointer' }}>نعم</button>
+              </div>
+            )}
           </div>
         </div>
         {/* Overall progress bar */}
@@ -704,8 +726,9 @@ function MonthlyChecklistView({ employees }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function EmployeeOnboardingDetail({ employee, employees, setEmployees, userRole, partners = [] }) {
-  const [activeTab, setActiveTab] = useState('onboarding');
-  const [toast, setToast]         = useState(null); // { msg, ok }
+  const [activeTab, setActiveTab]         = useState('onboarding');
+  const [toast, setToast]                 = useState(null); // { msg, ok }
+  const [confirmComplete, setConfirmComplete] = useState(false);
   const canEdit = ['admin', 'hr'].includes(userRole);
 
   const ONBOARDING_STEPS = getApplicableSteps(employee, partners);
@@ -737,8 +760,7 @@ function EmployeeOnboardingDetail({ employee, employees, setEmployees, userRole,
         .eq('_id', Number(employee._id));
       if (error) throw error;
       showToast(allDone ? 'Onboarding complete — moved to Agreement Signed' : 'Saved', true);
-    } catch (e) {
-      console.error(e);
+    } catch {
       showToast('Save failed', false);
     }
   };
@@ -831,23 +853,9 @@ function EmployeeOnboardingDetail({ employee, employees, setEmployees, userRole,
                 canEdit={canEdit} />
             ))}
 
-            {canEdit && (
+            {canEdit && !confirmComplete && (
               <button
-                onClick={async () => {
-                  if (!window.confirm(`تأكيد إتمام أونبوردينج ${employee.name}؟`)) return;
-                  const allDone = {};
-                  ONBOARDING_STEPS.forEach(s => { allDone[s.id] = true; });
-                  const payload = { onboardingSteps: allDone, workflowStatus: 'Agreement Signed' };
-                  setEmployees(prev => prev.map(e => e._id === employee._id ? { ...e, ...payload } : e));
-                  try {
-                    const { error } = await supabase.from('employees_master').update(payload).eq('_id', Number(employee._id));
-                    if (error) throw error;
-                    showToast('Onboarding complete — employee moved out of pipeline', true);
-                  } catch (e) {
-                    console.error(e);
-                    showToast('Save failed', false);
-                  }
-                }}
+                onClick={() => setConfirmComplete(true)}
                 style={{
                   marginTop: 10, width: '100%', padding: '13px', borderRadius: 10, cursor: 'pointer',
                   backgroundColor: '#16a34a', border: 'none', color: 'white',
@@ -859,6 +867,29 @@ function EmployeeOnboardingDetail({ employee, employees, setEmployees, userRole,
                 <svg width="16" height="16" viewBox="0 0 16 16"><polyline points="3,8 6.5,12 13,4" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 Complete Onboarding
               </button>
+            )}
+            {canEdit && confirmComplete && (
+              <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 10, backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: '#15803d' }}>تأكيد إتمام أونبوردينج {employee.name}؟</span>
+                <button onClick={() => setConfirmComplete(false)} style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6, border: '1px solid #d1d5db', backgroundColor: 'white', cursor: 'pointer', color: '#6b7280' }}>إلغاء</button>
+                <button
+                  onClick={async () => {
+                    setConfirmComplete(false);
+                    const allDone = {};
+                    ONBOARDING_STEPS.forEach(s => { allDone[s.id] = true; });
+                    const payload = { onboardingSteps: allDone, workflowStatus: 'Agreement Signed' };
+                    setEmployees(prev => prev.map(e => e._id === employee._id ? { ...e, ...payload } : e));
+                    try {
+                      const { error } = await supabase.from('employees_master').update(payload).eq('_id', Number(employee._id));
+                      if (error) throw error;
+                      showToast('Onboarding complete — employee moved out of pipeline', true);
+                    } catch {
+                      showToast('Save failed', false);
+                    }
+                  }}
+                  style={{ fontSize: 11, fontWeight: 800, padding: '4px 12px', borderRadius: 6, border: 'none', backgroundColor: '#16a34a', color: 'white', cursor: 'pointer' }}
+                >✓ تأكيد</button>
+              </div>
             )}
           </div>
         )}
