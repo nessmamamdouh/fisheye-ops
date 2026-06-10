@@ -435,6 +435,16 @@ body {
   color: var(--gray-400);
 }
 
+/* Badge pop — triggers on key change */
+@keyframes fe-badge-pop {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+.fe-badge-pop {
+  animation: fe-badge-pop 280ms var(--ease-spring) both;
+}
+
 /* ─── Numeric display values ─────────────────────────────────────────── */
 .fe-value {
   font-family: var(--font-mono);
@@ -518,3 +528,15 @@ body {
 
 /* ─── Value changed flash ─────────────────────────────────────────────── */
 .fe-flash { animation: fe-flash 600ms var(--ease-out) both; }
+
+@keyframes fe-flash-success {
+  0%   { background: rgba(22,163,74,0.15); border-radius: 6px; }
+  100% { background: transparent; }
+}
+.fe-flash-success { animation: fe-flash-success 800ms var(--ease-out) both; }
+
+@keyframes fe-flash-error {
+  0%   { background: rgba(220,38,38,0.12); border-radius: 6px; }
+  100% { background: transparent; }
+}
+.fe-flash-error { animation: fe-flash-error 800ms var(--ease-out) both; }

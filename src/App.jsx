@@ -5111,7 +5111,7 @@ function DashboardView({ employees, isOnline, syncStatus, syncMessage, syncProgr
             </div>
           )}
           {syncMessage && syncStatus !== 'syncing' && (
-            <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 700, color: syncStatus==='error'?'#dc2626':'#16a34a' }}>{syncMessage}</p>
+            <p key={syncMessage} className={syncStatus==='success'?'fe-flash-success':syncStatus==='error'?'fe-flash-error':''} style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 700, color: syncStatus==='error'?'#dc2626':'#16a34a', padding:'4px 6px' }}>{syncMessage}</p>
           )}
         </Card>
       )}
@@ -5483,7 +5483,7 @@ function SettingsView({
                 </div>
               )}
               {syncMessage && syncStatus!=='syncing' && (
-                <p style={{margin:'10px 0 0',fontSize:12,fontWeight:700,color:syncStatus==='error'?'#dc2626':'#16a34a'}}>{syncMessage}</p>
+                <p key={syncMessage} className={syncStatus==='success'?'fe-flash-success':syncStatus==='error'?'fe-flash-error':''} style={{margin:'10px 0 0',fontSize:12,fontWeight:700,color:syncStatus==='error'?'#dc2626':'#16a34a',padding:'4px 6px'}}>{syncMessage}</p>
               )}
             </Card>
           )}
@@ -6547,7 +6547,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
         {open && (
           <div style={s.sidebarBadge}>
             <div style={s.sidebarBadgeInner}>
-              <div style={s.sidebarDot}/>
+              <div style={s.sidebarDot} className="fe-pulse"/>
               <span style={{color:"white",fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                 {employees.length} contracts
               </span>
@@ -6642,8 +6642,8 @@ function FisheyeOpsPro({ employees, setEmployees }) {
                 >
                   <Icon size={15} style={{flexShrink:0, color: isA ? "#f9a8b8" : "rgba(160,210,230,0.45)"}}/>
                   {open && <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis"}}>{l}</span>}
-                  {open && badge > 0 && <span className="fe-notif-badge" style={s.navBadge}>{badge}</span>}
-                  {!open && badge > 0 && <span style={{...s.navBadge,position:"absolute",top:4,right:4,fontSize:8,padding:"1px 4px"}}>{badge}</span>}
+                  {open && badge > 0 && <span key={badge} className="fe-notif-badge fe-badge-pop" style={s.navBadge}>{badge}</span>}
+                  {!open && badge > 0 && <span key={badge} className="fe-badge-pop" style={{...s.navBadge,position:"absolute",top:4,right:4,fontSize:8,padding:"1px 4px"}}>{badge}</span>}
                 </button>
               </React.Fragment>
             );
@@ -6711,6 +6711,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
 
         {/* ── Content ── */}
         <div id="app-main-content" style={s.content} className="fe-scroll">
+          <div key={nav} className="fe-page">
 
           {/* ── ACTION CENTER ── */}
           {nav==="action" && <ActionCenter
@@ -6764,6 +6765,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
           {nav==="report"      && <MorningReportView employees={employees} morningReportChecks={morningReportChecks} setMorningReportChecks={setMorningReportChecks} reportSendTo={reportSendTo} setReportSendTo={setReportSendTo}/>}
           {nav==="tickets"     && <TicketingView/>}
           {nav==="dashboard"   && <DashboardView employees={employees} isOnline={isOnline} syncStatus={syncStatus} syncMessage={syncMessage} lastSync={lastSync} uploadToCloud={uploadToCloud} downloadFromCloud={downloadFromCloud} backup={backup} bidirectionalSync={bidirectionalSync}/>}
+          </div>
         </div>
       </div>
     </div>
