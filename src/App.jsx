@@ -5450,6 +5450,7 @@ function SettingsView({
   employees
 }) {
   const [tab,setTab]=useState("general");
+  const [confirmClear,setConfirmClear]=useState(false);
   const stabs=[{k:"general",l:"General"},{k:"notifications",l:"🔔 Notifications"},{k:"integration",l:"Integration Guide"},{k:"mapping",l:"Client Mapping"},{k:"logic",l:"Report Logic"}];
   return (
     <div style={{maxWidth:720,display:"flex",flexDirection:"column",gap:20}}>
@@ -5490,7 +5491,16 @@ function SettingsView({
           <Card style={{padding:20}}>
             <h3 style={{fontWeight:700,fontSize:14,margin:"0 0 12px"}}>Data Management</h3>
             <p style={{fontSize:13,color:"#6b7280",margin:"0 0 16px"}}>{empCount} contracts loaded.</p>
-            <Btn variant="danger" onClick={onClear}><Trash2 size={13}/> Clear & Re-upload</Btn>
+            {!confirmClear
+              ? <Btn variant="danger" onClick={()=>setConfirmClear(true)}><Trash2 size={13}/> Clear & Re-upload</Btn>
+              : <div style={{display:'flex',flexDirection:'column',gap:10,padding:'12px 16px',border:'2px solid #fca5a5',borderRadius:10,backgroundColor:'#fff1f2'}}>
+                  <p style={{margin:0,fontSize:13,fontWeight:600,color:'#b91c1c'}}>⚠️ هتتمسح كل البيانات المحلية. متعملش كده غير لو عندك backup أو Supabase sync.</p>
+                  <div style={{display:'flex',gap:8}}>
+                    <Btn variant="danger" onClick={()=>{setConfirmClear(false);onClear&&onClear();}}><Trash2 size={13}/> تأكيد المسح</Btn>
+                    <Btn onClick={()=>setConfirmClear(false)}>إلغاء</Btn>
+                  </div>
+                </div>
+            }
           </Card>
         </div>
       )}
@@ -5540,7 +5550,7 @@ function SettingsView({
       {tab==="logic"&&(
         <Card style={{padding:20}}>
           <h3 style={{fontWeight:700,fontSize:14,margin:"0 0 16px"}}>Report & Finance Logic</h3>
-          {["✅ Pending = workflow NOT in [Agreement Signed, Complete]","🚫 Morning report excludes: Expired, Resigned, Combuzz HR","⚠️ PO Alert: Sela only · Empty PO field","📅 Expiry: Rolling 30-day window","💰 Finance: Excludes resigned always. Excludes expired UNLESS Sela with no PO","💹 Profit Direct: Client Price − Total Package","💹 Profit Partner: Client Price − Partner Cost","🔴 SAR Discrepancy: Only shown after uploading partner invoice CSV"].map(r=>(
+          {["✅ Pending = workflow NOT in [Agreement Signed, Complete]","🚫 Morning report excludes: Expired, Resigned, Combuzz HR","⚠️ PO Alert: Sela only · Empty PO field","📅 Expiry: Rolling 30-day window","💰 Finance: Excludes resigned always. Excludes expired UNLESS Sela with no PO","💹 Profit Direct: fisheyeMargin% × Total Package","💹 Profit Partner — Gross: clientPrice% × Total Package · Net: Gross − partnerCost% × Total Package","🔴 SAR Discrepancy: Only shown after uploading partner invoice CSV"].map(r=>(
             <p key={r} style={{fontSize:12,color:"#4b5563",padding:"8px 0",borderBottom:"1px solid #f9fafb",margin:0}}>{r}</p>
           ))}
         </Card>
@@ -6462,6 +6472,11 @@ function FisheyeOpsPro({ employees, setEmployees }) {
     }}/>
   );
 
+  const handleClear = () => {
+    localStorage.removeItem("fisheyeData_v3");
+    setEmployees([]);
+  };
+
   const report      = buildReport(employees);
   const totalAlerts = employees.filter(e => { const d = daysUntil(e.endDate); return d >= 0 && d <= 30 && !isExcluded(e); }).length + report.pendingCount;
 
@@ -6728,6 +6743,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
 
           {/* ── SETTINGS ── */}
           {nav==="settings" && <SettingsView
+            onClear={handleClear}
             empCount={employees?.length || 0}
             syncStatus={syncStatus}
             syncMessage={syncMessage}
