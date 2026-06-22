@@ -2049,7 +2049,7 @@ const submitRenew = async () => {
                 style={{ ...s.btnSm, ...(activeFilterCount > 0 ? { backgroundColor: `${M}12`, color: M, border: `1px solid ${M}40` } : {}) }}>
                 <Filter size={13} /> Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
               </Btn>
-              <Btn variant="ghost" onClick={() => exportCSV(filtered)} style={s.btnSm}><Download size={13} /> Export</Btn>
+              <Btn variant="ghost" onClick={() => exportCSV(selected.length > 0 ? filtered.filter(e => selected.includes(e._id)) : filtered)} style={s.btnSm}><Download size={13} /> Export{selected.length > 0 ? ` (${selected.length})` : ""}</Btn>
               <Btn variant="ghost" onClick={() => setShowWAPanel(true)} style={{
                 ...s.btnSm,
                 backgroundColor: selected.length > 0 ? "#f0fdf4" : "white",
@@ -5550,7 +5550,7 @@ function SettingsView({
       {tab==="logic"&&(
         <Card style={{padding:20}}>
           <h3 style={{fontWeight:700,fontSize:14,margin:"0 0 16px"}}>Report & Finance Logic</h3>
-          {["✅ Pending = workflow NOT in [Agreement Signed, Complete]","🚫 Morning report excludes: Expired, Resigned, Combuzz HR","⚠️ PO Alert: Sela only · Empty PO field","📅 Expiry: Rolling 30-day window","💰 Finance: Excludes resigned always. Excludes expired UNLESS Sela with no PO","💹 Profit Direct: fisheyeMargin% × Total Package","💹 Profit Partner — Gross: clientPrice% × Total Package · Net: Gross − partnerCost% × Total Package","🔴 SAR Discrepancy: Only shown after uploading partner invoice CSV"].map(r=>(
+          {["✅ Pending = workflow NOT in [Agreement Signed, Complete]","🚫 Morning report excludes: Expired, Resigned, Combuzz HR","⚠️ PO Alert: Sela only · Empty PO field","📅 Expiry: Rolling 30-day window","💰 Finance: Excludes resigned always. Excludes expired UNLESS Sela with no PO","💹 Profit Direct: fisheyeMargin% × Total Package (or fixed SAR if type = fixed)","💹 Profit Partner: Net = Client Price − Partner Cost (each can be % of Total Package or fixed SAR)","🔴 SAR Discrepancy: Only shown after uploading partner invoice CSV"].map(r=>(
             <p key={r} style={{fontSize:12,color:"#4b5563",padding:"8px 0",borderBottom:"1px solid #f9fafb",margin:0}}>{r}</p>
           ))}
         </Card>
