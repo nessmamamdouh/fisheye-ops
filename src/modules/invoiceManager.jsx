@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, Plus, X, Search, AlertTriangle, Check, Clock, FileText, Users, Building2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Upload, Plus, X, Search, AlertTriangle, Check, Clock, FileText, Users, Building2, ChevronDown, ChevronRight, Send } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 
 // ─── SheetJS loader (CDN, lazy — only fetched when ImportModal opens) ──────────
@@ -176,6 +176,11 @@ const STORAGE_KEY = 'fisheye_invoices_v1';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtN = n => Number(n || 0).toLocaleString('en-SA', { minimumFractionDigits: 2 });
 const fmtSAR = n => `SAR ${fmtN(n)}`;
+// Tri-state commission status: 'unpaid' | 'sent' (sent for payment) | 'paid'
+// Falls back to the legacy boolean field for invoices written before this field existed.
+const getCommissionStatus = inv =>
+  inv.partnerCommissionStatus || (inv.partnerCommissionPaid ? 'paid' : 'unpaid');
+const NEXT_COMMISSION_STATUS = { unpaid: 'sent', sent: 'paid', paid: 'unpaid' };
 // Display formatter: YYYY-MM-DD → "28 Mar 2026"
 const DISP_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const fmtDate = (d) => {
@@ -862,10 +867,13 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
     }));
   };
 
+  // Cycles a single invoice's commission status: unpaid → sent for payment → paid → unpaid
   const togglePartnerCommission = (id) => {
-    persist(invoices.map(inv =>
-      inv.id === id ? { ...inv, partnerCommissionPaid: !inv.partnerCommissionPaid } : inv
-    ));
+    persist(invoices.map(inv => {
+      if (inv.id !== id) return inv;
+      const next = NEXT_COMMISSION_STATUS[getCommissionStatus(inv)];
+      return { ...inv, partnerCommissionStatus: next, partnerCommissionPaid: next === 'paid' };
+    }));
   };
 
   const deleteInvoice = (id) => {
@@ -1650,16 +1658,23 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
                         const commission = emp.partnerCostType === 'percent'
                           ? Math.round((emp.partnerCost / 100) * preVat * 100) / 100
                           : (emp.partnerCost || 0);
-                        return inv.partnerCommissionPaid
-                          ? (
-                            <button onClick={() => togglePartnerCommission(inv.id)} title="Click to unmark" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 12, border: '1.5px solid #86efac', backgroundColor: '#dcfce7', color: '#16a34a', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                              <Check size={9} /> Paid
-                            </button>
-                          ) : (
-                            <button onClick={() => togglePartnerCommission(inv.id)} title="Click to mark commission as paid" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 12, border: '1.5px solid #fca5a5', backgroundColor: '#fee2e2', color: '#dc2626', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                              <AlertTriangle size={9} /> {fmtN(commission)}
-                            </button>
-                          );
+                        const commStatus = getCommissionStatus(inv);
+                        // Click cycles: unpaid → sent for payment → paid → unpaid
+                        if (commStatus === 'paid') return (
+                          <button onClick={() => togglePartnerCommission(inv.id)} title="Paid — click to reset to unpaid" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 12, border: '1.5px solid #86efac', backgroundColor: '#dcfce7', color: '#16a34a', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            <Check size={9} /> Paid
+                          </button>
+                        );
+                        if (commStatus === 'sent') return (
+                          <button onClick={() => togglePartnerCommission(inv.id)} title="Sent for payment — click to confirm paid" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 12, border: '1.5px solid #fcd34d', backgroundColor: '#fef3c7', color: '#d97706', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            <Send size={9} /> Sent
+                          </button>
+                        );
+                        return (
+                          <button onClick={() => togglePartnerCommission(inv.id)} title="Click to mark as sent for payment" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 12, border: '1.5px solid #fca5a5', backgroundColor: '#fee2e2', color: '#dc2626', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            <AlertTriangle size={9} /> {fmtN(commission)}
+                          </button>
+                        );
                       })()}
                     </td>
                     <td style={{ ...td, textAlign: 'center' }}>

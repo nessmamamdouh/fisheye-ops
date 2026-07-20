@@ -2281,10 +2281,6 @@ function PayrollFlowTracker({ employees, sharedFlows, onSaveFlows }) {
     </div>
   );
 }
-// ─── PartnerFlowTab — wrapper so the render call matches ─────────────────────
-function PartnerFlowTab({ employees, sharedFlows, onSaveFlows }) {
-  return <PayrollFlowTracker employees={employees} sharedFlows={sharedFlows} onSaveFlows={onSaveFlows} />;
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PO RECONCILIATION TAB
@@ -2932,7 +2928,7 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
 
       {/* ── Tab Content ── */}
       {activeTab === "payroll"      && <PayrollTab          employees={employees} setEmployees={setEmployees} flows={flows} onSaveFlows={saveFlows} />}
-      {activeTab === "partner_flow" && <PartnerFlowTab       employees={employees} sharedFlows={flows} onSaveFlows={saveFlows} />}
+      {activeTab === "partner_flow" && <PayrollFlowTracker  employees={employees} sharedFlows={flows} onSaveFlows={saveFlows} />}
       {activeTab === "invoices"     && <InvoiceManager employees={employees} setEmployees={setEmployees} />}
       {activeTab === "po_recon"     && <POReconciliationTab  employees={employees} initialFilter={poSearchFilter} />}
       {activeTab === "profit"       && <ProfitPerClientTab   employees={employees} />}
