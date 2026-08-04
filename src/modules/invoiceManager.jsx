@@ -1006,11 +1006,18 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
     persist([...invoices, ...stamped]);
 
     const matched = await applyPOMatches(rows);
+    // Close whichever import modal triggered this (CSV/manual import or PDF import) —
+    // previously only the CSV modal was closed, so importing via PDF left the modal
+    // sitting open with no feedback, making it look like nothing had happened.
     setShowImport(false);
+    setShowPDFImport(false);
 
-    if (matched > 0) {
-      alert(`✅ Imported ${rows.length} invoices\n🔗 Invoice numbers added to ${matched} employee profile${matched !== 1 ? 's' : ''} via PO match`);
-    }
+    // Always confirm the import happened — this used to only fire when PO auto-matching
+    // found a hit, so a normal import (no matches) showed no confirmation at all.
+    alert(
+      `✅ Imported ${rows.length} invoice${rows.length !== 1 ? 's' : ''}` +
+      (matched > 0 ? `\n🔗 Invoice numbers added to ${matched} employee profile${matched !== 1 ? 's' : ''} via PO match` : '')
+    );
   };
 
   // Extract 4-digit year from any stored date string
