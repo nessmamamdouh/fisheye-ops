@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { supabase } from './utils/supabase';
+import { upsertInvoices } from './utils/invoiceSync';
 import {
   DollarSign, Users, Building2, TrendingUp, ChevronDown, ChevronRight,
   Copy, Check, MessageCircle, Mail, FileText, Download, FileDown, AlertCircle, Send, Undo2,
@@ -411,14 +412,10 @@ export default function PartnerSettlementReport({ employees = [] }) {
   // overwrite localStorage with the (unchanged) server copy, silently
   // reverting anything marked here. Every write path in this file now also
   // upserts to Supabase, mirroring the pattern already used in invoiceManager.jsx.
-  const persistInvoicesToSupabase = async (rows) => {
-    if (!rows || rows.length === 0) return;
-    const CHUNK = 50;
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      const { error } = await supabase.from('fisheye_invoices').upsert(rows.slice(i, i + CHUNK), { onConflict: 'id' });
-      if (error) { console.warn('commission sync error:', error.message); break; }
-    }
-  };
+  // Resilient upsert (see utils/invoiceSync.js) — if a field like
+  // partnerCommissionStatus doesn't exist as a column yet, it strips that
+  // field and retries instead of silently dropping the whole save.
+  const persistInvoicesToSupabase = (rows) => upsertInvoices(rows);
 
   // ── Apply the Blue Cube hardcoded-batch migration to a given invoice list ──
   const applyBcMigration = (invs) => {
@@ -443,19 +440,29 @@ export default function PartnerSettlementReport({ employees = [] }) {
   };
 
   // ── Load invoices from Supabase on mount, then re-apply BC migration ──────
+  // Merges in any local-only rows the server doesn't have yet (instead of
+  // blindly overwriting with server data) so a refresh can never wipe out a
+  // save whose background upsert hadn't finished — or had silently failed.
   useEffect(() => {
     const STORAGE_KEY = 'fisheye_invoices_v1';
     supabase.from('fisheye_invoices').select('*').then(({ data, error }) => {
-      // Use fresh server data when available, otherwise fall back to whatever's cached locally
-      const base = (!error && data && data.length > 0) ? data : JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      const serverList = (!error && data) ? data : [];
+      let localList = [];
+      try { localList = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch (_) {}
+
+      const serverIds = new Set(serverList.map(inv => inv.id));
+      const localOnly = localList.filter(inv => inv.id && !serverIds.has(inv.id));
+      const base = serverList.length > 0 || localOnly.length > 0 ? [...serverList, ...localOnly] : localList;
+
       const { updated, changed } = applyBcMigration(base);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       setInvoiceVersion(v => v + 1);
-      // Persist migration results (and anything else missing on the server) back to Supabase
-      if (changed) {
-        const changedIds = new Set(
-          updated.filter((inv, idx) => JSON.stringify(inv) !== JSON.stringify(base[idx])).map(inv => inv.id)
-        );
+      // Persist migration results + any unsynced local-only rows back to Supabase
+      if (changed || localOnly.length > 0) {
+        const changedIds = new Set([
+          ...updated.filter((inv, idx) => JSON.stringify(inv) !== JSON.stringify(base[idx])).map(inv => inv.id),
+          ...localOnly.map(inv => inv.id),
+        ]);
         persistInvoicesToSupabase(updated.filter(inv => changedIds.has(inv.id)));
       }
     });

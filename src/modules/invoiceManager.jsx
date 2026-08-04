@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Upload, Plus, X, Search, AlertTriangle, Check, Clock, FileText, Users, Building2, ChevronDown, ChevronRight, Send } from 'lucide-react';
 import { supabase } from '../utils/supabase';
+import { upsertInvoices } from '../utils/invoiceSync';
 
 // ─── SheetJS loader (CDN, lazy — only fetched when ImportModal opens) ──────────
 let xlsxPromise = null;
@@ -804,38 +805,41 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
   };
 
   // ── Load from Supabase on mount (prefer fisheye_invoices, fallback to app_data) ──
+  // IMPORTANT: this used to blindly overwrite localStorage with whatever Supabase
+  // returned. That's a race condition — if a save's background upsert (see persist()
+  // below) hadn't finished yet (or had silently failed) when the page was refreshed,
+  // this would wipe out the not-yet-synced local changes, making it look like the
+  // save "didn't stick". We now merge in any local-only records (by id) that the
+  // server doesn't have yet, and re-push them, instead of discarding them.
   useEffect(() => {
     supabase.from('fisheye_invoices').select('*').then(({ data, error }) => {
-      if (!error && data && data.length > 0) {
-        const { list, changed } = applySOAMigration(data);
-        saveInvoices(list);
-        setInvoices(list);
-        // Persist migration back to Supabase if anything changed
-        if (changed) {
-          const CHUNK = 50;
-          (async () => {
-            for (let i = 0; i < list.length; i += CHUNK) {
-              await supabase.from('fisheye_invoices').upsert(list.slice(i, i + CHUNK), { onConflict: 'id' });
-            }
-          })();
-        }
-      } else {
+      const serverList = (!error && data) ? data : [];
+      let localList = [];
+      try { localList = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch (_) {}
+
+      if (serverList.length === 0 && localList.length === 0) {
+        // Truly nothing yet — fall back to the legacy single-blob storage key
         supabase.from('fisheye_app_data').select('data').eq('key', 'fisheye_invoices_v1').single()
           .then(({ data: row }) => {
             if (row?.data?.length > 0) {
               const { list, changed } = applySOAMigration(row.data);
               saveInvoices(list);
               setInvoices(list);
-              if (changed) {
-                const CHUNK = 50;
-                (async () => {
-                  for (let i = 0; i < list.length; i += CHUNK) {
-                    await supabase.from('fisheye_invoices').upsert(list.slice(i, i + CHUNK), { onConflict: 'id' });
-                  }
-                })();
-              }
+              if (changed) upsertInvoices(list);
             }
           });
+        return;
+      }
+
+      const serverIds = new Set(serverList.map(inv => inv.id));
+      const localOnly = localList.filter(inv => inv.id && !serverIds.has(inv.id));
+      const { list, changed } = applySOAMigration([...serverList, ...localOnly]);
+      saveInvoices(list);
+      setInvoices(list);
+      // Re-push anything the server was missing (unsynced local rows + migration changes)
+      if (localOnly.length > 0 || changed) {
+        const idsToRepush = new Set([...localOnly.map(i => i.id), ...(changed ? list.map(i => i.id) : [])]);
+        upsertInvoices(list.filter(inv => idsToRepush.has(inv.id)));
       }
     });
   }, []);
@@ -843,14 +847,8 @@ export function InvoiceManager({ employees = [], setEmployees = () => {} }) {
   const persist = (list) => {
     setInvoices(list);
     saveInvoices(list);
-    // sync to Supabase in background
-    const CHUNK = 50;
-    (async () => {
-      for (let i = 0; i < list.length; i += CHUNK) {
-        const { error } = await supabase.from('fisheye_invoices').upsert(list.slice(i, i + CHUNK), { onConflict: 'id' });
-        if (error) { console.warn('invoices sync error:', error.message); break; }
-      }
-    })();
+    // sync to Supabase in background (resilient to schema drift — see invoiceSync.js)
+    upsertInvoices(list);
   };
 
   const updateStatus = (id, status) => {
