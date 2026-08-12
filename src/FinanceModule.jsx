@@ -2524,11 +2524,55 @@ function ForecastTab({ employees = [] }) {
 
   const fCount = n => String(Math.round(Number(n) || 0));
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+  // ── Export to Excel (CSV — opens natively in Excel, no extra library needed) ──
+  const handleExportExcel = () => {
+    const esc = v => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = [];
+    rows.push([`Fisheye Forecast — ${selectedClient}`, `Generated ${new Date().toLocaleString('en-GB')}`]);
+    rows.push([]);
+    rows.push(['Next month KPI', 'Value']);
+    rows.push(['Headcount (confirmed + pipeline)', `${nextMonth.headcountConfirmed + nextMonth.headcountPipeline} (${nextMonth.headcountConfirmed} confirmed, ${nextMonth.headcountPipeline} pipeline)`]);
+    rows.push(['Payroll (SAR)', fC(nextMonth.payrollConfirmed + nextMonth.payrollPipeline)]);
+    rows.push(['Revenue (SAR)', fC(nextMonth.revenueConfirmed + nextMonth.revenuePipeline)]);
+    rows.push(['Gross Margin (SAR)', fC(nextMonth.gmConfirmed + nextMonth.gmPipeline)]);
+    rows.push(['Net Margin (SAR)', fC(nextMonth.netMarginConfirmed + nextMonth.netMarginPipeline)]);
+    rows.push([`Rest of ${currentYear} net margin (SAR)`, fC(remainingNetMargin)]);
+    rows.push([]);
+    rows.push(['Month', 'Type', 'Actual Revenue — invoices (SAR)', 'Headcount Confirmed', 'Headcount Pipeline', 'Payroll Confirmed (SAR)', 'Payroll Pipeline (SAR)', 'Gross Margin Confirmed (SAR)', 'Gross Margin Pipeline (SAR)', 'Net Margin Confirmed (SAR)', 'Net Margin Pipeline (SAR)']);
+    monthlySeries.past.forEach(m => rows.push([m.label, 'Past', Math.round(revenueByMonth[m.key] || 0), m.headcountConfirmed, m.headcountPipeline, Math.round(m.payrollConfirmed), Math.round(m.payrollPipeline), Math.round(m.gmConfirmed), Math.round(m.gmPipeline), Math.round(m.netMarginConfirmed), Math.round(m.netMarginPipeline)]));
+    monthlySeries.future.forEach(m => rows.push([m.label, 'Future', '', m.headcountConfirmed, m.headcountPipeline, Math.round(m.payrollConfirmed), Math.round(m.payrollPipeline), Math.round(m.gmConfirmed), Math.round(m.gmPipeline), Math.round(m.netMarginConfirmed), Math.round(m.netMarginPipeline)]));
+    rows.push([]);
+    rows.push(['Pipeline employees driving next month', 'Monthly Payroll (SAR)', 'Est. Revenue (SAR)', 'Pricing']);
+    nextMonthPipelineBreakdown.forEach(e => rows.push([e.name, Math.round(e.totalPackage), Math.round(e.revenue), e.priced ? 'set' : 'estimated (client avg margin)']));
 
-      {/* Client selector */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, backgroundColor: '#f9fafb', borderRadius: 10, padding: '10px 14px', border: '1px solid #f3f4f6' }}>
+    const csv = rows.map(r => r.map(esc).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Fisheye_Forecast_${selectedClient}_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="forecast-print-area" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .forecast-print-area, .forecast-print-area * { visibility: visible; }
+          .forecast-print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 16px; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+
+      {/* Client selector + export toolbar */}
+      <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 10, backgroundColor: '#f9fafb', borderRadius: 10, padding: '10px 14px', border: '1px solid #f3f4f6', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Client</span>
         <select value={selectedClient} onChange={e => setSelectedClient(e.target.value)}
           style={{ padding: '6px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 12, fontWeight: 700, color: '#374151', cursor: 'pointer' }}>
@@ -2537,6 +2581,14 @@ function ForecastTab({ employees = [] }) {
         <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>
           Historical bars = actual invoices · future bars = Confirmed + Pipeline payroll &amp; margin from employee contracts
         </span>
+        <button onClick={() => window.print()}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', background: 'white', fontSize: 12, fontWeight: 700, color: '#374151', cursor: 'pointer' }}>
+          🖨️ Print / Save as PDF
+        </button>
+        <button onClick={handleExportExcel}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: `1.5px solid ${M}55`, background: 'white', fontSize: 12, fontWeight: 700, color: M, cursor: 'pointer' }}>
+          📊 Export Excel
+        </button>
       </div>
 
       {/* KPI strip — next month's full snapshot + year-end profit outlook */}
@@ -2556,51 +2608,41 @@ function ForecastTab({ employees = [] }) {
         <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
           Monthly Revenue (from invoices) — {selectedClient} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>(solid = actual invoice · solid blue/purple = Confirmed · dashed = Pipeline · sanity-check avg last 3mo = SAR {fC(actualBaseline.avgLast3)})</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 160, borderBottom: '1px solid #f3f4f6', paddingBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 190, borderBottom: '1px solid #f3f4f6', paddingBottom: 6 }}>
           {months.map(m => (
-            <div key={m} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <div key={m} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
               {revenueByMonth[m] > 0 && (
-                <span style={{
-                  fontSize: 8, fontWeight: 700, color: M, whiteSpace: 'nowrap',
-                  writingMode: 'vertical-rl', transform: 'rotate(180deg)', marginBottom: 2,
-                }}>{fK(revenueByMonth[m])}</span>
+                <span style={{ fontSize: 10, fontWeight: 800, color: M, whiteSpace: 'nowrap' }}>{fK(revenueByMonth[m])}</span>
               )}
               <div title={`${monthLabel(m)}: SAR ${fC(revenueByMonth[m])} invoiced`}
-                style={{ width: '100%', maxWidth: 26, height: `${Math.max(2, (revenueByMonth[m] / maxBar) * 140)}px`, backgroundColor: M, borderRadius: '3px 3px 0 0', opacity: 0.85 }} />
+                style={{ width: '100%', maxWidth: 30, height: `${Math.max(2, (revenueByMonth[m] / maxBar) * 140)}px`, backgroundColor: M, borderRadius: '3px 3px 0 0', opacity: 0.85 }} />
             </div>
           ))}
-          {monthlySeries.future.map(p => {
-            const total = p.revenueConfirmed + p.revenuePipeline;
-            return (
-              <div key={p.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                {total > 0 && (
-                  <span style={{
-                    fontSize: 8, fontWeight: 700, color: p.isNextMonth ? '#0369a1' : '#7c3aed', whiteSpace: 'nowrap',
-                    writingMode: 'vertical-rl', transform: 'rotate(180deg)', marginBottom: 2,
-                  }}>{fK(total)}</span>
-                )}
-                <div style={{ width: '100%', maxWidth: 26, display: 'flex', flexDirection: 'column' }}>
-                  {p.revenuePipeline > 0 && (
-                    <div title={`${p.label} — Pipeline (awaiting PO): SAR ${fC(p.revenuePipeline)}`}
-                      style={{
-                        width: '100%', height: `${Math.max(2, (p.revenuePipeline / maxBar) * 140)}px`,
-                        border: `1.5px dashed ${p.isNextMonth ? '#0369a1' : '#7c3aed'}`,
-                        backgroundColor: p.isNextMonth ? '#bae6fd55' : '#ddd6fe55',
-                        borderRadius: '3px 3px 0 0',
-                      }} />
-                  )}
-                  <div title={`${p.label} — Confirmed (has PO): SAR ${fC(p.revenueConfirmed)}`}
-                    style={{
-                      width: '100%', height: `${Math.max(2, (p.revenueConfirmed / maxBar) * 140)}px`,
-                      backgroundColor: p.isNextMonth ? '#0369a1' : '#7c3aed', opacity: 0.85,
-                      borderRadius: p.revenuePipeline > 0 ? '0' : '3px 3px 0 0',
-                    }} />
-                </div>
-              </div>
-            );
-          })}
+          {monthlySeries.future.map(p => (
+            <div key={p.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              {p.revenuePipeline > 0 && (
+                <span style={{ fontSize: 10, fontWeight: 800, color: p.isNextMonth ? '#0369a1' : '#7c3aed', whiteSpace: 'nowrap' }}>{fK(p.revenuePipeline)}</span>
+              )}
+              {p.revenuePipeline > 0 && (
+                <div title={`${p.label} — Pipeline (awaiting PO): SAR ${fC(p.revenuePipeline)}`}
+                  style={{
+                    width: '100%', maxWidth: 30, height: `${Math.max(2, (p.revenuePipeline / maxBar) * 140)}px`,
+                    border: `1.5px dashed ${p.isNextMonth ? '#0369a1' : '#7c3aed'}`,
+                    backgroundColor: p.isNextMonth ? '#bae6fd55' : '#ddd6fe55',
+                    borderRadius: '3px 3px 0 0',
+                  }} />
+              )}
+              <span style={{ fontSize: 10, fontWeight: 800, color: p.isNextMonth ? '#0369a1' : '#7c3aed', whiteSpace: 'nowrap', marginTop: p.revenuePipeline > 0 ? 1 : 0 }}>{fK(p.revenueConfirmed)}</span>
+              <div title={`${p.label} — Confirmed (has PO): SAR ${fC(p.revenueConfirmed)}`}
+                style={{
+                  width: '100%', maxWidth: 30, height: `${Math.max(2, (p.revenueConfirmed / maxBar) * 140)}px`,
+                  backgroundColor: p.isNextMonth ? '#0369a1' : '#7c3aed', opacity: 0.85,
+                  borderRadius: p.revenuePipeline > 0 ? '0' : '3px 3px 0 0',
+                }} />
+            </div>
+          ))}
         </div>
-        <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
           {months.map(m => (
             <div key={m} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: '#9ca3af' }}>{monthLabel(m)}</div>
           ))}
@@ -2733,46 +2775,41 @@ function MonthlyBarChart({ title, note, pastMonths, futureMonths, maxVal, fmtK, 
       <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
         {title} {note && <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>{note}</span>}
       </div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 140, borderBottom: '1px solid #f3f4f6', paddingBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 170, borderBottom: '1px solid #f3f4f6', paddingBottom: 6 }}>
         {pastMonths.map(m => (
-          <div key={m.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          <div key={m.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
             {m.total > 0 && (
-              <span style={{ fontSize: 8, fontWeight: 700, color: M, whiteSpace: 'nowrap', writingMode: 'vertical-rl', transform: 'rotate(180deg)', marginBottom: 2 }}>
-                {fmtK(m.total)}
-              </span>
+              <span style={{ fontSize: 10, fontWeight: 800, color: M, whiteSpace: 'nowrap' }}>{fmtK(m.total)}</span>
             )}
             <div title={`${m.label}: ${fmtFull(m.total)}`}
-              style={{ width: '100%', maxWidth: 24, height: `${Math.max(2, (m.total / maxVal) * 120)}px`, backgroundColor: M, borderRadius: '3px 3px 0 0', opacity: 0.85 }} />
+              style={{ width: '100%', maxWidth: 28, height: `${Math.max(2, (m.total / maxVal) * 130)}px`, backgroundColor: M, borderRadius: '3px 3px 0 0', opacity: 0.85 }} />
           </div>
         ))}
         {futureMonths.map(m => (
-          <div key={m.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-            {m.total > 0 && (
-              <span style={{ fontSize: 8, fontWeight: 700, color: m.isNextMonth ? '#0369a1' : '#7c3aed', whiteSpace: 'nowrap', writingMode: 'vertical-rl', transform: 'rotate(180deg)', marginBottom: 2 }}>
-                {fmtK(m.total)}
-              </span>
+          <div key={m.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+            {m.pipeline > 0 && (
+              <span style={{ fontSize: 10, fontWeight: 800, color: m.isNextMonth ? '#0369a1' : '#7c3aed', whiteSpace: 'nowrap' }}>{fmtK(m.pipeline)}</span>
             )}
-            <div style={{ width: '100%', maxWidth: 24, display: 'flex', flexDirection: 'column' }}>
-              {m.pipeline > 0 && (
-                <div title={`${m.label} — Pipeline: ${fmtFull(m.pipeline)}`}
-                  style={{
-                    width: '100%', height: `${Math.max(2, (m.pipeline / maxVal) * 120)}px`,
-                    border: `1.5px dashed ${m.isNextMonth ? '#0369a1' : '#7c3aed'}`,
-                    backgroundColor: m.isNextMonth ? '#bae6fd55' : '#ddd6fe55',
-                    borderRadius: '3px 3px 0 0',
-                  }} />
-              )}
-              <div title={`${m.label} — Confirmed: ${fmtFull(m.confirmed)}`}
+            {m.pipeline > 0 && (
+              <div title={`${m.label} — Pipeline: ${fmtFull(m.pipeline)}`}
                 style={{
-                  width: '100%', height: `${Math.max(2, (m.confirmed / maxVal) * 120)}px`,
-                  backgroundColor: m.isNextMonth ? '#0369a1' : '#7c3aed', opacity: 0.85,
-                  borderRadius: m.pipeline > 0 ? '0' : '3px 3px 0 0',
+                  width: '100%', maxWidth: 28, height: `${Math.max(2, (m.pipeline / maxVal) * 130)}px`,
+                  border: `1.5px dashed ${m.isNextMonth ? '#0369a1' : '#7c3aed'}`,
+                  backgroundColor: m.isNextMonth ? '#bae6fd55' : '#ddd6fe55',
+                  borderRadius: '3px 3px 0 0',
                 }} />
-            </div>
+            )}
+            <span style={{ fontSize: 10, fontWeight: 800, color: m.isNextMonth ? '#0369a1' : '#7c3aed', whiteSpace: 'nowrap', marginTop: m.pipeline > 0 ? 1 : 0 }}>{fmtK(m.confirmed)}</span>
+            <div title={`${m.label} — Confirmed: ${fmtFull(m.confirmed)}`}
+              style={{
+                width: '100%', maxWidth: 28, height: `${Math.max(2, (m.confirmed / maxVal) * 130)}px`,
+                backgroundColor: m.isNextMonth ? '#0369a1' : '#7c3aed', opacity: 0.85,
+                borderRadius: m.pipeline > 0 ? '0' : '3px 3px 0 0',
+              }} />
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
         {pastMonths.map(m => (
           <div key={m.key} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: '#9ca3af' }}>{m.label}</div>
         ))}
