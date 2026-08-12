@@ -2304,6 +2304,7 @@ function ForecastTab({ employees = [] }) {
   const fK = n => {
     const v = Number(n || 0);
     if (v === 0) return '0';
+    if (v >= 1000000) return `${(v / 1000000).toLocaleString('en-SA', { maximumFractionDigits: v >= 10000000 ? 0 : 1 })}M`;
     if (v >= 1000) return `${(v / 1000).toLocaleString('en-SA', { maximumFractionDigits: v >= 100000 ? 0 : 1 })}K`;
     return v.toLocaleString('en-SA', { maximumFractionDigits: 0 });
   };
