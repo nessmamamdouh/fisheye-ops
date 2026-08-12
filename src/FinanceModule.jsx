@@ -2384,7 +2384,7 @@ function ForecastTab({ employees = [] }) {
     return counts;
   }, [employees, selectedClient, months]);
 
-  // ── Contract-based projection helpers ──────────────────────────────────────
+  // ── Contract-based helpers ──────────────────────────────────────────────────
   const hasPO = e => !!(e.poNumbers && String(e.poNumbers).trim() !== '');
   const hasPricing = e => (e.profitMode === 'partner' ? Number(e.clientPrice || 0) > 0 : Number(e.fisheyeMargin || 0) > 0);
   const isActiveInMonth = (e, year, month) => {
@@ -2410,53 +2410,75 @@ function ForecastTab({ employees = [] }) {
     return ratios.reduce((s, r) => s + r, 0) / ratios.length;
   }, [clientEmployees]);
 
-  const revenueForEmp = e =>
-    hasPricing(e) ? calcLine(e).total : Number(e.totalPackage || 0) * (1 + fallbackMarginRatio);
+  // Per-employee financial lines — all derived from the contract, not invoices.
+  // grossMargin = what Fisheye charges on top of payroll (before VAT, before partner payout).
+  // revenue     = full client invoice (payroll + margin + 15% VAT on margin) — same formula calcLine() uses.
+  // netMargin   = grossMargin − partner payout (what Fisheye actually keeps; partner-mode only, 0 payout for direct-mode).
+  const grossMarginForEmp = e => (hasPricing(e) ? calcLine(e).margin : Number(e.totalPackage || 0) * fallbackMarginRatio);
+  const revenueForEmp = e => Number(e.totalPackage || 0) + grossMarginForEmp(e) * 1.15;
+  const netMarginForEmp = e => grossMarginForEmp(e) - calcPartnerPayout(e);
 
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonthIdx = now.getMonth(); // 0-based
   const monthsLeftInYear = 11 - currentMonthIdx; // e.g. Aug (idx 7) → 4 months left (Sep–Dec)
 
-  // For each future month: split this client's active employees (by contract
-  // startDate/endDate) into Confirmed (has PO) vs Pipeline (quotation sent, PO
-  // pending). Payroll = totalPackage (fully known); revenue = calcLine() where
-  // pricing is set, else the learned fallback margin. Contracts that end before
-  // a given month drop out of it automatically — deterministic, not a trend guess.
-  const projection = useMemo(() => {
-    const out = [];
-    let pipelineBreakdown = [];
+  // Every month we chart (12 historical + remaining months of the year), with year/month
+  // integers so headcount/payroll/margin can be computed the same way for all of them.
+  const allMonthDefs = useMemo(() => {
+    const past = months.map(ym => {
+      const [y, mo] = ym.split('-').map(Number);
+      return { key: ym, y, mo, isFuture: false, label: monthLabel(ym) };
+    });
+    const future = [];
     for (let i = 1; i <= Math.max(monthsLeftInYear, 1); i++) {
       const d = new Date(currentYear, currentMonthIdx + i, 1);
-      const y = d.getFullYear(), mo = d.getMonth() + 1;
-      const active = clientEmployees.filter(e => isActiveInMonth(e, y, mo));
-      const confirmed = active.filter(hasPO);
-      const pipeline = active.filter(e => !hasPO(e));
-      const confirmedPayroll = confirmed.reduce((s, e) => s + Number(e.totalPackage || 0), 0);
-      const pipelinePayroll = pipeline.reduce((s, e) => s + Number(e.totalPackage || 0), 0);
-      const confirmedRevenue = confirmed.reduce((s, e) => s + revenueForEmp(e), 0);
-      const pipelineRevenue = pipeline.reduce((s, e) => s + revenueForEmp(e), 0);
-      if (i === 1) {
-        pipelineBreakdown = pipeline
-          .map(e => ({
-            name: e.name || e.employeeName || '—',
-            totalPackage: Number(e.totalPackage || 0),
-            revenue: revenueForEmp(e),
-            priced: hasPricing(e),
-          }))
-          .sort((a, b) => b.revenue - a.revenue);
-      }
-      out.push({
+      future.push({
+        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+        y: d.getFullYear(), mo: d.getMonth() + 1, isFuture: true, isNextMonth: i === 1,
         label: d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }),
-        isNextMonth: i === 1,
-        confirmedPayroll, pipelinePayroll, confirmedRevenue, pipelineRevenue,
-        totalPayroll: confirmedPayroll + pipelinePayroll,
-        totalRevenue: confirmedRevenue + pipelineRevenue,
-        confirmedCount: confirmed.length, pipelineCount: pipeline.length,
       });
     }
-    return { months: out, pipelineBreakdown };
-  }, [clientEmployees, fallbackMarginRatio, currentYear, currentMonthIdx, monthsLeftInYear]);
+    return { past, future };
+  }, [months, currentYear, currentMonthIdx, monthsLeftInYear]);
+
+  // Headcount / payroll / gross margin / net margin / revenue per month — computed purely
+  // from each employee's contract (startDate/endDate/totalPackage/pricing), split into
+  // Confirmed (has PO) vs Pipeline (awaiting PO). Unlike the invoice-based revenue bars,
+  // this works identically for past AND future months — so a month with real payroll but
+  // no invoices entered yet still shows real headcount/payroll instead of a misleading zero.
+  const monthlySeries = useMemo(() => {
+    const build = def => {
+      const active = clientEmployees.filter(e => isActiveInMonth(e, def.y, def.mo));
+      const confirmed = active.filter(hasPO);
+      const pipeline = active.filter(e => !hasPO(e));
+      const sum = (arr, fn) => arr.reduce((s, e) => s + fn(e), 0);
+      return {
+        ...def,
+        headcountConfirmed: confirmed.length, headcountPipeline: pipeline.length,
+        payrollConfirmed: sum(confirmed, e => Number(e.totalPackage || 0)), payrollPipeline: sum(pipeline, e => Number(e.totalPackage || 0)),
+        gmConfirmed: sum(confirmed, grossMarginForEmp), gmPipeline: sum(pipeline, grossMarginForEmp),
+        revenueConfirmed: sum(confirmed, revenueForEmp), revenuePipeline: sum(pipeline, revenueForEmp),
+        netMarginConfirmed: sum(confirmed, netMarginForEmp), netMarginPipeline: sum(pipeline, netMarginForEmp),
+      };
+    };
+    return { past: allMonthDefs.past.map(build), future: allMonthDefs.future.map(build) };
+  }, [allMonthDefs, clientEmployees, fallbackMarginRatio]);
+
+  // Who's driving next month's Pipeline number, for the breakdown table
+  const nextMonthPipelineBreakdown = useMemo(() => {
+    const def = allMonthDefs.future[0];
+    if (!def) return [];
+    return clientEmployees
+      .filter(e => isActiveInMonth(e, def.y, def.mo) && !hasPO(e))
+      .map(e => ({
+        name: e.name || e.employeeName || '—',
+        totalPackage: Number(e.totalPackage || 0),
+        revenue: revenueForEmp(e),
+        priced: hasPricing(e),
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [allMonthDefs, clientEmployees, fallbackMarginRatio]);
 
   // Actual historical run-rate — kept only as an on-screen sanity-check reference
   const actualBaseline = useMemo(() => {
@@ -2468,11 +2490,20 @@ function ForecastTab({ employees = [] }) {
     return { avgLast3, skippedMonths };
   }, [months, revenueByMonth]);
 
-  const nextMonth = projection.months[0] || { confirmedRevenue: 0, pipelineRevenue: 0, totalPayroll: 0, confirmedCount: 0, pipelineCount: 0 };
-  const remainingTotal = projection.months.reduce((s, p) => s + p.totalRevenue, 0);
+  const nextMonth = monthlySeries.future[0] || {
+    headcountConfirmed: 0, headcountPipeline: 0, payrollConfirmed: 0, payrollPipeline: 0,
+    gmConfirmed: 0, gmPipeline: 0, revenueConfirmed: 0, revenuePipeline: 0, netMarginConfirmed: 0, netMarginPipeline: 0,
+  };
+  const remainingNetMargin = monthlySeries.future.reduce((s, m) => s + m.netMarginConfirmed + m.netMarginPipeline, 0);
 
-  const maxBar = Math.max(...months.map(m => revenueByMonth[m]), ...projection.months.map(p => p.totalRevenue), 1);
+  const maxBar = Math.max(...months.map(m => revenueByMonth[m]), ...monthlySeries.future.map(m => m.revenueConfirmed + m.revenuePipeline), 1);
   const maxPOBar = Math.max(...months.map(m => newPOsByMonth[m]), 1);
+  const maxHeadcount = Math.max(...monthlySeries.past.map(m => m.headcountConfirmed + m.headcountPipeline), ...monthlySeries.future.map(m => m.headcountConfirmed + m.headcountPipeline), 1);
+  const maxPayroll = Math.max(...monthlySeries.past.map(m => m.payrollConfirmed + m.payrollPipeline), ...monthlySeries.future.map(m => m.payrollConfirmed + m.payrollPipeline), 1);
+  const maxGM = Math.max(...monthlySeries.past.map(m => m.gmConfirmed + m.gmPipeline), ...monthlySeries.future.map(m => m.gmConfirmed + m.gmPipeline), 1);
+  const maxNetMargin = Math.max(...monthlySeries.past.map(m => m.netMarginConfirmed + m.netMarginPipeline), ...monthlySeries.future.map(m => m.netMarginConfirmed + m.netMarginPipeline), 1);
+
+  const fCount = n => String(Math.round(Number(n) || 0));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -2489,21 +2520,22 @@ function ForecastTab({ employees = [] }) {
         </span>
       </div>
 
-      {/* KPI strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
-        <Kpi label="Actual avg / month (last 3)" value={`SAR ${fC(actualBaseline.avgLast3)}`} sub="sanity-check reference" color="#374151" bg="#f9fafb" border="#e5e7eb" />
-        <Kpi label="Next month — Confirmed" value={`SAR ${fC(nextMonth.confirmedRevenue)}`}
-          sub={`${nextMonth.confirmedCount} employee${nextMonth.confirmedCount !== 1 ? 's' : ''} w/ PO`} color="#0369a1" bg="#f0f9ff" border="#bae6fd" />
-        <Kpi label="Next month — Pipeline" value={`SAR ${fC(nextMonth.pipelineRevenue)}`}
-          sub={`${nextMonth.pipelineCount} awaiting PO`} color="#7c3aed" bg="#faf5ff" border="#ddd6fe" />
-        <Kpi label="Next month — Payroll" value={`SAR ${fC(nextMonth.totalPayroll)}`} sub="Confirmed + Pipeline" color="#374151" bg="#f9fafb" border="#e5e7eb" />
-        <Kpi label={`Rest of ${currentYear} (${monthsLeftInYear}mo)`} value={`SAR ${fC(remainingTotal)}`} sub="revenue, confirmed + pipeline" color={M} bg="#fff5f5" border={`${M}33`} />
+      {/* KPI strip — next month's full snapshot + year-end profit outlook */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+        <Kpi label="Next month — Headcount" value={fCount(nextMonth.headcountConfirmed + nextMonth.headcountPipeline)}
+          sub={`${nextMonth.headcountConfirmed} confirmed · ${nextMonth.headcountPipeline} pipeline`} color="#374151" bg="#f9fafb" border="#e5e7eb" />
+        <Kpi label="Next month — Payroll" value={`SAR ${fC(nextMonth.payrollConfirmed + nextMonth.payrollPipeline)}`} sub="cost, confirmed + pipeline" color="#374151" bg="#f9fafb" border="#e5e7eb" />
+        <Kpi label="Next month — Revenue" value={`SAR ${fC(nextMonth.revenueConfirmed + nextMonth.revenuePipeline)}`}
+          sub={`SAR ${fC(nextMonth.revenuePipeline)} from pipeline`} color="#0369a1" bg="#f0f9ff" border="#bae6fd" />
+        <Kpi label="Next month — Gross Margin" value={`SAR ${fC(nextMonth.gmConfirmed + nextMonth.gmPipeline)}`} sub="before partner payout" color="#7c3aed" bg="#faf5ff" border="#ddd6fe" />
+        <Kpi label="Next month — Net Margin" value={`SAR ${fC(nextMonth.netMarginConfirmed + nextMonth.netMarginPipeline)}`} sub="after partner payout" color="#059669" bg="#f0fdf4" border="#bbf7d0" />
+        <Kpi label={`Rest of ${currentYear} (${monthsLeftInYear}mo)`} value={`SAR ${fC(remainingNetMargin)}`} sub="net margin" color={M} bg="#fff5f5" border={`${M}33`} />
       </div>
 
-      {/* Revenue chart: actual (last 12mo) + contract-based Confirmed/Pipeline projection */}
+      {/* Revenue chart: actual invoices (last 12mo) + contract-based Confirmed/Pipeline projection */}
       <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
-          Monthly Revenue — {selectedClient} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>(solid = actual · solid blue/purple = Confirmed · dashed = Pipeline)</span>
+          Monthly Revenue (from invoices) — {selectedClient} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>(solid = actual invoice · solid blue/purple = Confirmed · dashed = Pipeline · sanity-check avg last 3mo = SAR {fC(actualBaseline.avgLast3)})</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 160, borderBottom: '1px solid #f3f4f6', paddingBottom: 6 }}>
           {months.map(m => (
@@ -2514,47 +2546,77 @@ function ForecastTab({ employees = [] }) {
                   writingMode: 'vertical-rl', transform: 'rotate(180deg)', marginBottom: 2,
                 }}>{fK(revenueByMonth[m])}</span>
               )}
-              <div title={`${monthLabel(m)}: SAR ${fC(revenueByMonth[m])}`}
+              <div title={`${monthLabel(m)}: SAR ${fC(revenueByMonth[m])} invoiced`}
                 style={{ width: '100%', maxWidth: 26, height: `${Math.max(2, (revenueByMonth[m] / maxBar) * 140)}px`, backgroundColor: M, borderRadius: '3px 3px 0 0', opacity: 0.85 }} />
             </div>
           ))}
-          {projection.months.map(p => (
-            <div key={p.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-              {p.totalRevenue > 0 && (
-                <span style={{
-                  fontSize: 8, fontWeight: 700, color: p.isNextMonth ? '#0369a1' : '#7c3aed', whiteSpace: 'nowrap',
-                  writingMode: 'vertical-rl', transform: 'rotate(180deg)', marginBottom: 2,
-                }}>{fK(p.totalRevenue)}</span>
-              )}
-              <div style={{ width: '100%', maxWidth: 26, display: 'flex', flexDirection: 'column' }}>
-                {p.pipelineRevenue > 0 && (
-                  <div title={`${p.label} — Pipeline (awaiting PO): SAR ${fC(p.pipelineRevenue)}`}
-                    style={{
-                      width: '100%', height: `${Math.max(2, (p.pipelineRevenue / maxBar) * 140)}px`,
-                      border: `1.5px dashed ${p.isNextMonth ? '#0369a1' : '#7c3aed'}`,
-                      backgroundColor: p.isNextMonth ? '#bae6fd55' : '#ddd6fe55',
-                      borderRadius: '3px 3px 0 0',
-                    }} />
+          {monthlySeries.future.map(p => {
+            const total = p.revenueConfirmed + p.revenuePipeline;
+            return (
+              <div key={p.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                {total > 0 && (
+                  <span style={{
+                    fontSize: 8, fontWeight: 700, color: p.isNextMonth ? '#0369a1' : '#7c3aed', whiteSpace: 'nowrap',
+                    writingMode: 'vertical-rl', transform: 'rotate(180deg)', marginBottom: 2,
+                  }}>{fK(total)}</span>
                 )}
-                <div title={`${p.label} — Confirmed (has PO): SAR ${fC(p.confirmedRevenue)}`}
-                  style={{
-                    width: '100%', height: `${Math.max(2, (p.confirmedRevenue / maxBar) * 140)}px`,
-                    backgroundColor: p.isNextMonth ? '#0369a1' : '#7c3aed', opacity: 0.85,
-                    borderRadius: p.pipelineRevenue > 0 ? '0' : '3px 3px 0 0',
-                  }} />
+                <div style={{ width: '100%', maxWidth: 26, display: 'flex', flexDirection: 'column' }}>
+                  {p.revenuePipeline > 0 && (
+                    <div title={`${p.label} — Pipeline (awaiting PO): SAR ${fC(p.revenuePipeline)}`}
+                      style={{
+                        width: '100%', height: `${Math.max(2, (p.revenuePipeline / maxBar) * 140)}px`,
+                        border: `1.5px dashed ${p.isNextMonth ? '#0369a1' : '#7c3aed'}`,
+                        backgroundColor: p.isNextMonth ? '#bae6fd55' : '#ddd6fe55',
+                        borderRadius: '3px 3px 0 0',
+                      }} />
+                  )}
+                  <div title={`${p.label} — Confirmed (has PO): SAR ${fC(p.revenueConfirmed)}`}
+                    style={{
+                      width: '100%', height: `${Math.max(2, (p.revenueConfirmed / maxBar) * 140)}px`,
+                      backgroundColor: p.isNextMonth ? '#0369a1' : '#7c3aed', opacity: 0.85,
+                      borderRadius: p.revenuePipeline > 0 ? '0' : '3px 3px 0 0',
+                    }} />
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
           {months.map(m => (
             <div key={m} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: '#9ca3af' }}>{monthLabel(m)}</div>
           ))}
-          {projection.months.map(p => (
-            <div key={p.label} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: p.isNextMonth ? '#0369a1' : '#7c3aed', fontWeight: 700 }}>{p.label}</div>
+          {monthlySeries.future.map(p => (
+            <div key={p.key} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: p.isNextMonth ? '#0369a1' : '#7c3aed', fontWeight: 700 }}>{p.label}</div>
           ))}
         </div>
       </div>
+
+      {/* Headcount, Payroll, Gross Margin, Net Margin — all computed directly from employee
+          contracts (not invoices), so they show real numbers for every month even when
+          invoices for that period haven't been entered into the system yet. */}
+      <MonthlyBarChart
+        title={`Headcount — ${selectedClient}`} note="(people, not SAR — solid past = actual · blue/purple future = Confirmed · dashed = Pipeline)"
+        pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: m.headcountConfirmed + m.headcountPipeline }))}
+        futureMonths={monthlySeries.future.map(m => ({ key: m.key, label: m.label, isNextMonth: m.isNextMonth, confirmed: m.headcountConfirmed, pipeline: m.headcountPipeline, total: m.headcountConfirmed + m.headcountPipeline }))}
+        maxVal={maxHeadcount} fmtK={fCount} fmtFull={fCount} />
+
+      <MonthlyBarChart
+        title={`Monthly Payroll (Cost) — ${selectedClient}`} note="(from contracts — real cost even if invoices aren't entered yet)"
+        pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: m.payrollConfirmed + m.payrollPipeline }))}
+        futureMonths={monthlySeries.future.map(m => ({ key: m.key, label: m.label, isNextMonth: m.isNextMonth, confirmed: m.payrollConfirmed, pipeline: m.payrollPipeline, total: m.payrollConfirmed + m.payrollPipeline }))}
+        maxVal={maxPayroll} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
+
+      <MonthlyBarChart
+        title={`Gross Margin — ${selectedClient}`} note="(client markup on top of payroll, before VAT and before partner payout)"
+        pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: m.gmConfirmed + m.gmPipeline }))}
+        futureMonths={monthlySeries.future.map(m => ({ key: m.key, label: m.label, isNextMonth: m.isNextMonth, confirmed: m.gmConfirmed, pipeline: m.gmPipeline, total: m.gmConfirmed + m.gmPipeline }))}
+        maxVal={maxGM} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
+
+      <MonthlyBarChart
+        title={`Net Margin — ${selectedClient}`} note="(gross margin minus partner payout — what Fisheye actually keeps)"
+        pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: m.netMarginConfirmed + m.netMarginPipeline }))}
+        futureMonths={monthlySeries.future.map(m => ({ key: m.key, label: m.label, isNextMonth: m.isNextMonth, confirmed: m.netMarginConfirmed, pipeline: m.netMarginPipeline, total: m.netMarginConfirmed + m.netMarginPipeline }))}
+        maxVal={maxNetMargin} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
 
       {/* New POs / requests per month — the pipeline/demand signal */}
       <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
@@ -2578,10 +2640,10 @@ function ForecastTab({ employees = [] }) {
       </div>
 
       {/* Pipeline breakdown — who's driving next month's Pipeline number */}
-      {projection.pipelineBreakdown.length > 0 && (
+      {nextMonthPipelineBreakdown.length > 0 && (
         <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-            Pipeline Employees Driving Next Month — {selectedClient} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>({projection.pipelineBreakdown.length} awaiting PO)</span>
+            Pipeline Employees Driving Next Month — {selectedClient} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>({nextMonthPipelineBreakdown.length} awaiting PO)</span>
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
@@ -2593,7 +2655,7 @@ function ForecastTab({ employees = [] }) {
               </tr>
             </thead>
             <tbody>
-              {projection.pipelineBreakdown.map((e, idx) => (
+              {nextMonthPipelineBreakdown.map((e, idx) => (
                 <tr key={idx} style={{ borderBottom: '1px solid #f9fafb' }}>
                   <td style={{ padding: '6px 8px', color: '#374151' }}>{e.name}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', color: '#374151' }}>SAR {fC(e.totalPackage)}</td>
@@ -2612,14 +2674,20 @@ function ForecastTab({ employees = [] }) {
 
       {/* Methodology note — keep the forecast auditable */}
       <div style={{ fontSize: 11, color: '#6b7280', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', lineHeight: 1.6 }}>
-        <strong style={{ color: '#92400e' }}>How this is calculated:</strong> for each future month, every {selectedClient} employee whose
+        <strong style={{ color: '#92400e' }}>How this is calculated:</strong> for every month shown, every {selectedClient} employee whose
         contract is active that month (by start/end date) is split into <strong>Confirmed</strong> (has a PO number) or <strong>Pipeline</strong> (quotation
-        sent, PO still pending). Payroll = each employee's totalPackage; revenue = their own client price/margin where it's set,
-        or this client's average margin (~{(fallbackMarginRatio * 100).toFixed(1)}%) for the rare employee still missing pricing. Employees
-        whose contract ends before a given month drop out of it automatically. This is computed directly from known contracts, not a
-        trend guess — the actual-invoice bars (solid, left) are shown alongside purely as a sanity check.
+        sent, PO still pending). Payroll = each employee's totalPackage. Gross Margin = the client price/margin set on their profile,
+        or this client's average margin (~{(fallbackMarginRatio * 100).toFixed(1)}%) for the rare employee still missing pricing. Net Margin = Gross Margin
+        minus what Fisheye pays the partner (partner-mode employees only — 0 for direct-mode). Revenue = payroll + Gross Margin + 15% VAT
+        on the margin, matching how invoices are actually calculated. Employees whose contract ends before a given month drop out of it
+        automatically. Headcount/Payroll/Gross Margin/Net Margin are computed the same way for past AND future months, since they come
+        straight from contracts — not from invoices — so a month can show real payroll even if no invoice has been entered for it yet.
+        <br/><strong style={{ color: '#92400e' }}>Why the Revenue chart can differ from Payroll/Margin in the same month:</strong> the
+        Revenue chart above (and the KPI "Rest of year") is the only view still tied to actual invoices for past months — it's your ground-truth
+        cash reality. If a past month shows SAR 0 revenue but nonzero payroll/margin below, it means people were paid and margin was earned,
+        but the invoice for that period simply hasn't been entered into the system yet — not that there was no business.
         {actualBaseline.skippedMonths.length > 0 && (
-          <><br/><strong style={{ color: '#b45309' }}>⚠ Heads up:</strong> {actualBaseline.skippedMonths.length} recent month{actualBaseline.skippedMonths.length !== 1 ? 's' : ''} ({actualBaseline.skippedMonths.map(monthLabel).join(', ')}) show SAR 0 in actual invoices — that almost always means invoices for that period haven't been entered into the system yet.</>
+          <><br/><strong style={{ color: '#b45309' }}>⚠ Heads up:</strong> {actualBaseline.skippedMonths.length} recent month{actualBaseline.skippedMonths.length !== 1 ? 's' : ''} ({actualBaseline.skippedMonths.map(monthLabel).join(', ')}) show SAR 0 in actual invoices — check the Payroll/Gross Margin charts below for those months to see the real activity that's still awaiting an invoice.</>
         )}
       </div>
     </div>
@@ -2632,6 +2700,67 @@ function Kpi({ label, value, sub, color, bg, border }) {
       <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 16, fontWeight: 900, color, fontFamily: 'monospace', letterSpacing: '-0.5px' }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color, fontWeight: 700, marginTop: 2, opacity: 0.75 }}>{sub}</div>}
+    </div>
+  );
+}
+
+/** Reusable monthly bar chart used across the Forecast tab: solid bars for past
+ *  (actual/contract) months, Confirmed(solid)+Pipeline(dashed) stacked bars for
+ *  future months. pastMonths: [{key,label,total}]. futureMonths: [{key,label,
+ *  isNextMonth,confirmed,pipeline,total}]. */
+function MonthlyBarChart({ title, note, pastMonths, futureMonths, maxVal, fmtK, fmtFull }) {
+  return (
+    <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
+        {title} {note && <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>{note}</span>}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 140, borderBottom: '1px solid #f3f4f6', paddingBottom: 6 }}>
+        {pastMonths.map(m => (
+          <div key={m.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            {m.total > 0 && (
+              <span style={{ fontSize: 8, fontWeight: 700, color: M, whiteSpace: 'nowrap', writingMode: 'vertical-rl', transform: 'rotate(180deg)', marginBottom: 2 }}>
+                {fmtK(m.total)}
+              </span>
+            )}
+            <div title={`${m.label}: ${fmtFull(m.total)}`}
+              style={{ width: '100%', maxWidth: 24, height: `${Math.max(2, (m.total / maxVal) * 120)}px`, backgroundColor: M, borderRadius: '3px 3px 0 0', opacity: 0.85 }} />
+          </div>
+        ))}
+        {futureMonths.map(m => (
+          <div key={m.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            {m.total > 0 && (
+              <span style={{ fontSize: 8, fontWeight: 700, color: m.isNextMonth ? '#0369a1' : '#7c3aed', whiteSpace: 'nowrap', writingMode: 'vertical-rl', transform: 'rotate(180deg)', marginBottom: 2 }}>
+                {fmtK(m.total)}
+              </span>
+            )}
+            <div style={{ width: '100%', maxWidth: 24, display: 'flex', flexDirection: 'column' }}>
+              {m.pipeline > 0 && (
+                <div title={`${m.label} — Pipeline: ${fmtFull(m.pipeline)}`}
+                  style={{
+                    width: '100%', height: `${Math.max(2, (m.pipeline / maxVal) * 120)}px`,
+                    border: `1.5px dashed ${m.isNextMonth ? '#0369a1' : '#7c3aed'}`,
+                    backgroundColor: m.isNextMonth ? '#bae6fd55' : '#ddd6fe55',
+                    borderRadius: '3px 3px 0 0',
+                  }} />
+              )}
+              <div title={`${m.label} — Confirmed: ${fmtFull(m.confirmed)}`}
+                style={{
+                  width: '100%', height: `${Math.max(2, (m.confirmed / maxVal) * 120)}px`,
+                  backgroundColor: m.isNextMonth ? '#0369a1' : '#7c3aed', opacity: 0.85,
+                  borderRadius: m.pipeline > 0 ? '0' : '3px 3px 0 0',
+                }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+        {pastMonths.map(m => (
+          <div key={m.key} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: '#9ca3af' }}>{m.label}</div>
+        ))}
+        {futureMonths.map(m => (
+          <div key={m.key} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: m.isNextMonth ? '#0369a1' : '#7c3aed', fontWeight: 700 }}>{m.label}</div>
+        ))}
+      </div>
     </div>
   );
 }
