@@ -2301,6 +2301,12 @@ function ForecastTab({ employees = [] }) {
   const [invoices, setInvoices] = useState([]);
   const [selectedClient, setSelectedClient] = useState('');
   const fC = n => Number(n || 0).toLocaleString('en-SA', { maximumFractionDigits: 0 });
+  const fK = n => {
+    const v = Number(n || 0);
+    if (v === 0) return '0';
+    if (v >= 1000) return `${(v / 1000).toLocaleString('en-SA', { maximumFractionDigits: v >= 100000 ? 0 : 1 })}K`;
+    return v.toLocaleString('en-SA', { maximumFractionDigits: 0 });
+  };
 
   useEffect(() => {
     supabase.from('fisheye_invoices').select('*').then(({ data }) => {
@@ -2459,12 +2465,22 @@ function ForecastTab({ employees = [] }) {
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 160, borderBottom: '1px solid #f3f4f6', paddingBottom: 6 }}>
           {months.map(m => (
             <div key={m} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              {revenueByMonth[m] > 0 && (
+                <span style={{
+                  fontSize: 8, fontWeight: 700, color: M, whiteSpace: 'nowrap',
+                  writingMode: 'vertical-rl', transform: 'rotate(180deg)', marginBottom: 2,
+                }}>{fK(revenueByMonth[m])}</span>
+              )}
               <div title={`${monthLabel(m)}: SAR ${fC(revenueByMonth[m])}`}
                 style={{ width: '100%', maxWidth: 26, height: `${Math.max(2, (revenueByMonth[m] / maxBar) * 140)}px`, backgroundColor: M, borderRadius: '3px 3px 0 0', opacity: 0.85 }} />
             </div>
           ))}
           {forecast.projection.map(p => (
             <div key={p.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <span style={{
+                fontSize: 8, fontWeight: 700, color: p.isNextMonth ? '#0369a1' : '#7c3aed', whiteSpace: 'nowrap',
+                writingMode: 'vertical-rl', transform: 'rotate(180deg)', marginBottom: 2,
+              }}>{fK(p.value)}</span>
               <div title={`${p.label} (projected): SAR ${fC(p.value)}`}
                 style={{
                   width: '100%', maxWidth: 26, height: `${Math.max(2, (p.value / maxBar) * 140)}px`,
