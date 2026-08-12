@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import PartnerSettlementReport from './Partnersettlementreport';
 import { InvoiceManager, normalizeDate } from './modules/invoiceManager';
 import {
@@ -2523,6 +2523,7 @@ function ForecastTab({ employees = [] }) {
   const maxNetMargin = Math.max(...monthlySeries.past.map(m => m.netMarginConfirmed + m.netMarginPipeline), ...monthlySeries.future.map(m => m.netMarginConfirmed + m.netMarginPipeline), 1);
 
   const fCount = n => String(Math.round(Number(n) || 0));
+  const printAreaRef = useRef(null);
 
   // ── Export to Excel (CSV — opens natively in Excel, no extra library needed) ──
   const handleExportExcel = () => {
@@ -2560,19 +2561,40 @@ function ForecastTab({ employees = [] }) {
     URL.revokeObjectURL(url);
   };
 
-  return (
-    <div className="forecast-print-area" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          .forecast-print-area, .forecast-print-area * { visibility: visible; }
-          .forecast-print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 16px; }
-          .no-print { display: none !important; }
-        }
-      `}</style>
+  // ── Print / Save as PDF ──────────────────────────────────────────────────
+  // Clones the report content (KPIs + all charts + tables — everything is inline-
+  // styled, so it survives cloning as-is) into a fresh popup window with normal
+  // document flow and multi-page print CSS. Printing the main app in place doesn't
+  // work reliably here: the app's own layout (sidebar, fixed-height scroll panels)
+  // clips/absolute-positions content, which cuts the report off after page 1
+  // instead of flowing the rest of the charts onto page 2+.
+  const handlePrint = () => {
+    const el = printAreaRef.current;
+    if (!el) { window.print(); return; }
+    const w = window.open('', '_blank', 'width=1150,height=850');
+    if (!w) { window.print(); return; }
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8" />
+      <title>Fisheye Forecast — ${selectedClient}</title>
+      <style>
+        @page { size: A4 landscape; margin: 12mm; }
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 18px; background: #fff; color: #111827; }
+        .print-card { break-inside: avoid-page; page-break-inside: avoid; margin-bottom: 14px; }
+        table { break-inside: avoid-page; }
+      </style>
+    </head><body>
+      <h2 style="margin:0 0 2px;font-size:18px;">Fisheye Forecast — ${selectedClient}</h2>
+      <div style="font-size:11px;color:#6b7280;margin-bottom:16px;">Generated ${new Date().toLocaleString('en-GB')}</div>
+      ${el.innerHTML}
+    </body></html>`);
+    w.document.close();
+    setTimeout(() => { w.focus(); w.print(); }, 350);
+  };
 
-      {/* Client selector + export toolbar */}
-      <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 10, backgroundColor: '#f9fafb', borderRadius: 10, padding: '10px 14px', border: '1px solid #f3f4f6', flexWrap: 'wrap' }}>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Client selector + export toolbar — excluded from the printed/exported report */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, backgroundColor: '#f9fafb', borderRadius: 10, padding: '10px 14px', border: '1px solid #f3f4f6', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Client</span>
         <select value={selectedClient} onChange={e => setSelectedClient(e.target.value)}
           style={{ padding: '6px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 12, fontWeight: 700, color: '#374151', cursor: 'pointer' }}>
@@ -2581,7 +2603,7 @@ function ForecastTab({ employees = [] }) {
         <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>
           Historical bars = actual invoices · future bars = Confirmed + Pipeline payroll &amp; margin from employee contracts
         </span>
-        <button onClick={() => window.print()}
+        <button onClick={handlePrint}
           style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', background: 'white', fontSize: 12, fontWeight: 700, color: '#374151', cursor: 'pointer' }}>
           🖨️ Print / Save as PDF
         </button>
@@ -2591,8 +2613,11 @@ function ForecastTab({ employees = [] }) {
         </button>
       </div>
 
+      {/* Everything below is what gets printed/exported — wrapped so handlePrint can clone it whole */}
+      <div ref={printAreaRef} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
       {/* KPI strip — next month's full snapshot + year-end profit outlook */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+      <div className="print-card" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
         <Kpi label="Next month — Headcount" value={fCount(nextMonth.headcountConfirmed + nextMonth.headcountPipeline)}
           sub={`${nextMonth.headcountConfirmed} confirmed · ${nextMonth.headcountPipeline} pipeline`} color="#374151" bg="#f9fafb" border="#e5e7eb" />
         <Kpi label="Next month — Payroll" value={`SAR ${fC(nextMonth.payrollConfirmed + nextMonth.payrollPipeline)}`} sub="cost, confirmed + pipeline" color="#374151" bg="#f9fafb" border="#e5e7eb" />
@@ -2604,7 +2629,7 @@ function ForecastTab({ employees = [] }) {
       </div>
 
       {/* Revenue chart: actual invoices (last 12mo) + contract-based Confirmed/Pipeline projection */}
-      <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
+      <div className="print-card" style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
           Monthly Revenue (from invoices) — {selectedClient} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>(solid = actual invoice · solid blue/purple = Confirmed · dashed = Pipeline · sanity-check avg last 3mo = SAR {fC(actualBaseline.avgLast3)})</span>
         </div>
@@ -2681,7 +2706,7 @@ function ForecastTab({ employees = [] }) {
         maxVal={maxNetMargin} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
 
       {/* New POs / requests per month — the pipeline/demand signal */}
-      <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
+      <div className="print-card" style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
           New POs / Requests per Month — {selectedClient}
         </div>
@@ -2703,7 +2728,7 @@ function ForecastTab({ employees = [] }) {
 
       {/* Pipeline breakdown — who's driving next month's Pipeline number */}
       {nextMonthPipelineBreakdown.length > 0 && (
-        <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
+        <div className="print-card" style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
             Pipeline Employees Driving Next Month — {selectedClient} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>({nextMonthPipelineBreakdown.length} awaiting PO)</span>
           </div>
@@ -2735,7 +2760,7 @@ function ForecastTab({ employees = [] }) {
       )}
 
       {/* Methodology note — keep the forecast auditable */}
-      <div style={{ fontSize: 11, color: '#6b7280', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', lineHeight: 1.6 }}>
+      <div className="print-card" style={{ fontSize: 11, color: '#6b7280', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', lineHeight: 1.6 }}>
         <strong style={{ color: '#92400e' }}>How this is calculated:</strong> for every month shown, every {selectedClient} employee
         whose contract is active that month (by start/end date) is split into <strong>Confirmed</strong> (has a PO number) or <strong>Pipeline</strong> (quotation
         sent, PO still pending). Payroll = each employee's totalPackage. Gross Margin = the client price/margin set on their profile,
@@ -2750,6 +2775,8 @@ function ForecastTab({ employees = [] }) {
         {actualBaseline.skippedMonths.length > 0 && (
           <><br/><strong style={{ color: '#b45309' }}>⚠ Heads up:</strong> {actualBaseline.skippedMonths.length} recent month{actualBaseline.skippedMonths.length !== 1 ? 's' : ''} ({actualBaseline.skippedMonths.map(monthLabel).join(', ')}) show SAR 0 in actual invoices — check the Payroll/Gross Margin charts below for those months to see the real activity that's still awaiting an invoice.</>
         )}
+      </div>
+
       </div>
     </div>
   );
@@ -2771,7 +2798,7 @@ function Kpi({ label, value, sub, color, bg, border }) {
  *  isNextMonth,confirmed,pipeline,total}]. */
 function MonthlyBarChart({ title, note, pastMonths, futureMonths, maxVal, fmtK, fmtFull }) {
   return (
-    <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
+    <div className="print-card" style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
         {title} {note && <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>{note}</span>}
       </div>
