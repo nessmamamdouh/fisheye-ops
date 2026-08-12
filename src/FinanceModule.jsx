@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import PartnerSettlementReport from './Partnersettlementreport';
-import { InvoiceManager } from './modules/invoiceManager';
+import { InvoiceManager, normalizeDate } from './modules/invoiceManager';
 import {
   DollarSign, Search, Users, AlertTriangle,
   TrendingUp, FileText, Layers, Download, CheckCircle, Plus, Trash2, Save, Check
@@ -2283,6 +2283,256 @@ function PayrollFlowTracker({ employees, sharedFlows, onSaveFlows }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// FORECAST TAB
+// ═══════════════════════════════════════════════════════════════════════════════
+// Method (kept simple & transparent so it's trustworthy in a manager conversation):
+//   1. Baseline run-rate = average monthly revenue over the last 3 months (from actual invoices).
+//   2. Growth rate = % change between the last 3 months and the 3 months before that.
+//   3. Pipeline signal = new POs/employees added THIS month for the client (poAddedDate,
+//      falling back to startDate), valued at the average revenue-per-new-PO seen over the
+//      last 6 months. Only half of that value is added to next month (new hires typically
+//      start billing partway through their first cycle), and it fades out after month 1.
+//   4. Each future month = previous projected month × (1 + growth rate), compounding forward
+//      to the end of the calendar year.
+// This is a projection from historical trend + known pipeline, not a guarantee — the numbers
+// and assumptions are shown on-screen so they can be sanity-checked or overridden manually.
+
+function ForecastTab({ employees = [] }) {
+  const [invoices, setInvoices] = useState([]);
+  const [selectedClient, setSelectedClient] = useState('');
+  const fC = n => Number(n || 0).toLocaleString('en-SA', { maximumFractionDigits: 0 });
+
+  useEffect(() => {
+    supabase.from('fisheye_invoices').select('*').then(({ data }) => {
+      if (data && data.length) setInvoices(data);
+      else {
+        try { setInvoices(JSON.parse(localStorage.getItem('fisheye_invoices_v1') || '[]')); }
+        catch { setInvoices([]); }
+      }
+    });
+  }, []);
+
+  const monthKey = dateStr => {
+    if (!dateStr) return null;
+    const n = normalizeDate(dateStr);
+    const m = /^(\d{4})-(\d{2})/.exec(n || '');
+    return m ? `${m[1]}-${m[2]}` : null;
+  };
+
+  const clients = useMemo(() => {
+    const set = new Set();
+    invoices.forEach(i => { if (i.clientName) set.add(String(i.clientName).trim()); });
+    employees.forEach(e => { if (e.client) set.add(String(e.client).trim()); });
+    return [...set].filter(Boolean).sort();
+  }, [invoices, employees]);
+
+  useEffect(() => {
+    if (!selectedClient && clients.length) {
+      setSelectedClient(clients.includes('Sela') ? 'Sela' : clients[0]);
+    }
+  }, [clients, selectedClient]);
+
+  // Last 12 calendar months ending this month, oldest first
+  const months = useMemo(() => {
+    const arr = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      arr.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    return arr;
+  }, []);
+
+  const monthLabel = ym => {
+    const [y, m] = ym.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+  };
+
+  // Actual monthly revenue for the selected client (invoiceDate, excludes credit notes)
+  const revenueByMonth = useMemo(() => {
+    const map = {}; months.forEach(m => { map[m] = 0; });
+    invoices
+      .filter(i => String(i.clientName || '').trim() === selectedClient && !String(i.status || '').toLowerCase().includes('credit'))
+      .forEach(i => {
+        const mk = monthKey(i.invoiceDate) || monthKey(i.paidDate);
+        if (mk && mk in map) map[mk] += Number(i.totalDue || 0);
+      });
+    return map;
+  }, [invoices, selectedClient, months]);
+
+  // New POs/requests added per month for the selected client (pipeline signal)
+  const newPOsByMonth = useMemo(() => {
+    const sets = {}; months.forEach(m => { sets[m] = new Set(); });
+    employees
+      .filter(e => String(e.client || '').trim() === selectedClient)
+      .forEach(e => {
+        const mk = monthKey(e.poAddedDate) || monthKey(e.startDate);
+        if (!mk || !(mk in sets)) return;
+        const pos = String(e.poNumbers || '').split(/[,;\n]/).map(p => p.trim()).filter(Boolean);
+        if (pos.length) pos.forEach(po => sets[mk].add(po));
+        else sets[mk].add(e._id); // no PO tracked — still counts as a new request/headcount
+      });
+    const counts = {};
+    months.forEach(m => { counts[m] = sets[m].size; });
+    return counts;
+  }, [employees, selectedClient, months]);
+
+  const forecast = useMemo(() => {
+    // Exclude the current (in-progress) month — it's always partial and would
+    // drag the baseline down. Also skip any completed month with SAR 0: in this
+    // system that almost always means invoices for that period haven't been
+    // entered yet, not that there was genuinely no revenue (confirmed while
+    // reconciling — several recent months were missing invoice records).
+    const completedMonths = months.slice(0, -1);
+    const nonZeroMonths = completedMonths.filter(m => revenueByMonth[m] > 0);
+    const skippedMonths = completedMonths.filter(m => revenueByMonth[m] === 0);
+
+    const last3 = nonZeroMonths.slice(-3);
+    const prev3 = nonZeroMonths.slice(-6, -3);
+    const avgLast3 = last3.length ? last3.reduce((s, m) => s + revenueByMonth[m], 0) / last3.length : 0;
+    const avgPrev3 = prev3.length ? prev3.reduce((s, m) => s + revenueByMonth[m], 0) / prev3.length : 0;
+    const growthRate = avgPrev3 > 0 ? (avgLast3 - avgPrev3) / avgPrev3 : 0;
+    const clampedGrowth = Math.max(-0.5, Math.min(0.5, growthRate)); // avoid runaway compounding
+
+    const last6 = nonZeroMonths.slice(-6);
+    const totalNewPOs6mo = last6.reduce((s, m) => s + newPOsByMonth[m], 0);
+    const totalRevenue6mo = last6.reduce((s, m) => s + revenueByMonth[m], 0);
+    const avgRevenuePerPO = totalNewPOs6mo > 0 ? totalRevenue6mo / totalNewPOs6mo : 0;
+
+    const thisMonthNewPOs = newPOsByMonth[months[months.length - 1]] || 0;
+    const pipelineBoost = thisMonthNewPOs * avgRevenuePerPO * 0.5;
+
+    const now = new Date();
+    const monthsLeftInYear = 11 - now.getMonth(); // e.g. Aug (idx 7) → 4 months left (Sep–Dec)
+    let running = avgLast3;
+    let remainingTotal = 0;
+    const projection = [];
+    for (let i = 1; i <= Math.max(monthsLeftInYear, 1); i++) {
+      running = running * (1 + clampedGrowth);
+      const boost = i === 1 ? pipelineBoost : 0;
+      const val = Math.max(0, running + boost);
+      remainingTotal += val;
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      projection.push({ label: d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }), value: val, isNextMonth: i === 1 });
+    }
+
+    return {
+      avgLast3, avgPrev3, growthRate: clampedGrowth, avgRevenuePerPO, thisMonthNewPOs,
+      pipelineBoost, nextMonthForecast: projection[0]?.value || 0, monthsLeftInYear,
+      remainingTotal, projection, skippedMonths,
+    };
+  }, [months, revenueByMonth, newPOsByMonth]);
+
+  const maxBar = Math.max(...months.map(m => revenueByMonth[m]), ...forecast.projection.map(p => p.value), 1);
+  const maxPOBar = Math.max(...months.map(m => newPOsByMonth[m]), 1);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+      {/* Client selector */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, backgroundColor: '#f9fafb', borderRadius: 10, padding: '10px 14px', border: '1px solid #f3f4f6' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Client</span>
+        <select value={selectedClient} onChange={e => setSelectedClient(e.target.value)}
+          style={{ padding: '6px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 12, fontWeight: 700, color: '#374151', cursor: 'pointer' }}>
+          {clients.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>
+          Forecast based on the last 12 months of invoices + new PO activity
+        </span>
+      </div>
+
+      {/* KPI strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+        <Kpi label="Avg / month (last 3)" value={`SAR ${fC(forecast.avgLast3)}`} color="#374151" bg="#f9fafb" border="#e5e7eb" />
+        <Kpi label="Growth trend" value={`${forecast.growthRate >= 0 ? '+' : ''}${(forecast.growthRate * 100).toFixed(1)}%`}
+          sub="vs. prior 3 months" color={forecast.growthRate >= 0 ? '#059669' : '#dc2626'} bg={forecast.growthRate >= 0 ? '#f0fdf4' : '#fef2f2'} border={forecast.growthRate >= 0 ? '#bbf7d0' : '#fca5a5'} />
+        <Kpi label="New POs this month" value={forecast.thisMonthNewPOs} sub={`~SAR ${fC(forecast.avgRevenuePerPO)}/PO avg`} color="#7c3aed" bg="#faf5ff" border="#ddd6fe" />
+        <Kpi label="Next month forecast" value={`SAR ${fC(forecast.nextMonthForecast)}`} color="#0369a1" bg="#f0f9ff" border="#bae6fd" />
+        <Kpi label={`Rest of ${new Date().getFullYear()} (${forecast.monthsLeftInYear}mo)`} value={`SAR ${fC(forecast.remainingTotal)}`} color={M} bg="#fff5f5" border={`${M}33`} />
+      </div>
+
+      {/* Revenue chart: actual (last 12mo) + projected (remaining months) */}
+      <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
+          Monthly Revenue — {selectedClient} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>(solid = actual · hatched = projected)</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 160, borderBottom: '1px solid #f3f4f6', paddingBottom: 6 }}>
+          {months.map(m => (
+            <div key={m} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <div title={`${monthLabel(m)}: SAR ${fC(revenueByMonth[m])}`}
+                style={{ width: '100%', maxWidth: 26, height: `${Math.max(2, (revenueByMonth[m] / maxBar) * 140)}px`, backgroundColor: M, borderRadius: '3px 3px 0 0', opacity: 0.85 }} />
+            </div>
+          ))}
+          {forecast.projection.map(p => (
+            <div key={p.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <div title={`${p.label} (projected): SAR ${fC(p.value)}`}
+                style={{
+                  width: '100%', maxWidth: 26, height: `${Math.max(2, (p.value / maxBar) * 140)}px`,
+                  borderRadius: '3px 3px 0 0', border: `1.5px dashed ${p.isNextMonth ? '#0369a1' : '#7c3aed'}`,
+                  backgroundColor: p.isNextMonth ? '#bae6fd55' : '#ddd6fe55',
+                }} />
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+          {months.map(m => (
+            <div key={m} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: '#9ca3af' }}>{monthLabel(m)}</div>
+          ))}
+          {forecast.projection.map(p => (
+            <div key={p.label} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: p.isNextMonth ? '#0369a1' : '#7c3aed', fontWeight: 700 }}>{p.label}</div>
+          ))}
+        </div>
+      </div>
+
+      {/* New POs / requests per month — the pipeline/demand signal */}
+      <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
+          New POs / Requests per Month — {selectedClient}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 90, borderBottom: '1px solid #f3f4f6', paddingBottom: 6 }}>
+          {months.map(m => (
+            <div key={m} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontSize: 9, color: '#7c3aed', fontWeight: 700 }}>{newPOsByMonth[m] || ''}</span>
+              <div title={`${monthLabel(m)}: ${newPOsByMonth[m]} new PO(s)`}
+                style={{ width: '100%', maxWidth: 26, height: `${Math.max(2, (newPOsByMonth[m] / maxPOBar) * 60)}px`, backgroundColor: '#7c3aed', borderRadius: '3px 3px 0 0', opacity: 0.8 }} />
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+          {months.map(m => (
+            <div key={m} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: '#9ca3af' }}>{monthLabel(m)}</div>
+          ))}
+        </div>
+      </div>
+
+      {/* Methodology note — keep the forecast auditable */}
+      <div style={{ fontSize: 11, color: '#6b7280', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', lineHeight: 1.6 }}>
+        <strong style={{ color: '#92400e' }}>How this is calculated:</strong> baseline = average revenue over the last 3 months
+        with invoice data (SAR {fC(forecast.avgLast3)}); growth trend compares that to the 3 months before that
+        ({forecast.growthRate >= 0 ? '+' : ''}{(forecast.growthRate * 100).toFixed(1)}%); each future month compounds the baseline
+        by that trend. New POs added this month ({forecast.thisMonthNewPOs}) are valued at the average revenue-per-new-PO over the
+        last 6 months (~SAR {fC(forecast.avgRevenuePerPO)}) and added at 50% weight to next month only, since new hires typically
+        bill partway through their first cycle. Treat this as a starting point for the conversation with your manager, not a
+        guarantee — sanity-check it against known deals in the pipeline.
+        {forecast.skippedMonths.length > 0 && (
+          <><br/><strong style={{ color: '#b45309' }}>⚠ Heads up:</strong> {forecast.skippedMonths.length} recent month{forecast.skippedMonths.length!==1?'s':''} ({forecast.skippedMonths.map(monthLabel).join(', ')}) show SAR 0 and were excluded from the baseline — that almost always means invoices for that period haven't been entered into the system yet, not that there was no revenue. Worth checking before relying on this forecast.</>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Kpi({ label, value, sub, color, bg, border }) {
+  return (
+    <div style={{ backgroundColor: bg, borderRadius: 10, border: `1px solid ${border}`, borderLeft: `4px solid ${color}`, padding: '12px 14px' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 16, fontWeight: 900, color, fontFamily: 'monospace', letterSpacing: '-0.5px' }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color, fontWeight: 700, marginTop: 2, opacity: 0.75 }}>{sub}</div>}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // PO RECONCILIATION TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -2805,6 +3055,7 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
     { k: "po_recon",     l: "PO Reconciliation",    emoji: "🔗", color: "#0369a1" },
     { k: "profit",       l: "Profit per Client",    emoji: "📊", color: "#059669" },
     { k: "settlement",   l: "Settlements",          emoji: "🤝", color: "#16a34a" },
+    { k: "forecast",     l: "Forecast",             emoji: "🔮", color: "#7c3aed" },
   ];
 
   const kpis = [
@@ -2933,6 +3184,7 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
       {activeTab === "po_recon"     && <POReconciliationTab  employees={employees} initialFilter={poSearchFilter} />}
       {activeTab === "profit"       && <ProfitPerClientTab   employees={employees} />}
       {activeTab === "settlement"   && <PartnerSettlementReport employees={employees}/>}
+      {activeTab === "forecast"     && <ForecastTab employees={employees} />}
     </div>
   );
 }
