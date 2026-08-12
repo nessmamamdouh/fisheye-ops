@@ -2383,53 +2383,94 @@ function ForecastTab({ employees = [] }) {
     return counts;
   }, [employees, selectedClient, months]);
 
-  const forecast = useMemo(() => {
-    // Exclude the current (in-progress) month — it's always partial and would
-    // drag the baseline down. Also skip any completed month with SAR 0: in this
-    // system that almost always means invoices for that period haven't been
-    // entered yet, not that there was genuinely no revenue (confirmed while
-    // reconciling — several recent months were missing invoice records).
+  // ── Contract-based projection helpers ──────────────────────────────────────
+  const hasPO = e => !!(e.poNumbers && String(e.poNumbers).trim() !== '');
+  const hasPricing = e => (e.profitMode === 'partner' ? Number(e.clientPrice || 0) > 0 : Number(e.fisheyeMargin || 0) > 0);
+  const isActiveInMonth = (e, year, month) => {
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd = new Date(year, month, 0);
+    const start = parseDate(e.startDate);
+    const end = parseDate(e.endDate);
+    return (!start || start <= monthEnd) && (!end || end >= monthStart);
+  };
+
+  // Employees belonging to the selected client (excludes resigned/terminated)
+  const clientEmployees = useMemo(
+    () => employees.filter(e => String(e.client || '').trim() === selectedClient && !isExcluded(e)),
+    [employees, selectedClient]
+  );
+
+  // For the rare employee still missing client pricing: learn a margin ratio from
+  // this client's own Confirmed (PO in hand), fully-priced employees instead of guessing.
+  const fallbackMarginRatio = useMemo(() => {
+    const priced = clientEmployees.filter(e => hasPO(e) && hasPricing(e) && Number(e.totalPackage || 0) > 0);
+    if (!priced.length) return 0.15;
+    const ratios = priced.map(e => calcLine(e).total / Number(e.totalPackage) - 1);
+    return ratios.reduce((s, r) => s + r, 0) / ratios.length;
+  }, [clientEmployees]);
+
+  const revenueForEmp = e =>
+    hasPricing(e) ? calcLine(e).total : Number(e.totalPackage || 0) * (1 + fallbackMarginRatio);
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonthIdx = now.getMonth(); // 0-based
+  const monthsLeftInYear = 11 - currentMonthIdx; // e.g. Aug (idx 7) → 4 months left (Sep–Dec)
+
+  // For each future month: split this client's active employees (by contract
+  // startDate/endDate) into Confirmed (has PO) vs Pipeline (quotation sent, PO
+  // pending). Payroll = totalPackage (fully known); revenue = calcLine() where
+  // pricing is set, else the learned fallback margin. Contracts that end before
+  // a given month drop out of it automatically — deterministic, not a trend guess.
+  const projection = useMemo(() => {
+    const out = [];
+    let pipelineBreakdown = [];
+    for (let i = 1; i <= Math.max(monthsLeftInYear, 1); i++) {
+      const d = new Date(currentYear, currentMonthIdx + i, 1);
+      const y = d.getFullYear(), mo = d.getMonth() + 1;
+      const active = clientEmployees.filter(e => isActiveInMonth(e, y, mo));
+      const confirmed = active.filter(hasPO);
+      const pipeline = active.filter(e => !hasPO(e));
+      const confirmedPayroll = confirmed.reduce((s, e) => s + Number(e.totalPackage || 0), 0);
+      const pipelinePayroll = pipeline.reduce((s, e) => s + Number(e.totalPackage || 0), 0);
+      const confirmedRevenue = confirmed.reduce((s, e) => s + revenueForEmp(e), 0);
+      const pipelineRevenue = pipeline.reduce((s, e) => s + revenueForEmp(e), 0);
+      if (i === 1) {
+        pipelineBreakdown = pipeline
+          .map(e => ({
+            name: e.name || e.employeeName || '—',
+            totalPackage: Number(e.totalPackage || 0),
+            revenue: revenueForEmp(e),
+            priced: hasPricing(e),
+          }))
+          .sort((a, b) => b.revenue - a.revenue);
+      }
+      out.push({
+        label: d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }),
+        isNextMonth: i === 1,
+        confirmedPayroll, pipelinePayroll, confirmedRevenue, pipelineRevenue,
+        totalPayroll: confirmedPayroll + pipelinePayroll,
+        totalRevenue: confirmedRevenue + pipelineRevenue,
+        confirmedCount: confirmed.length, pipelineCount: pipeline.length,
+      });
+    }
+    return { months: out, pipelineBreakdown };
+  }, [clientEmployees, fallbackMarginRatio, currentYear, currentMonthIdx, monthsLeftInYear]);
+
+  // Actual historical run-rate — kept only as an on-screen sanity-check reference
+  const actualBaseline = useMemo(() => {
     const completedMonths = months.slice(0, -1);
     const nonZeroMonths = completedMonths.filter(m => revenueByMonth[m] > 0);
     const skippedMonths = completedMonths.filter(m => revenueByMonth[m] === 0);
-
     const last3 = nonZeroMonths.slice(-3);
-    const prev3 = nonZeroMonths.slice(-6, -3);
     const avgLast3 = last3.length ? last3.reduce((s, m) => s + revenueByMonth[m], 0) / last3.length : 0;
-    const avgPrev3 = prev3.length ? prev3.reduce((s, m) => s + revenueByMonth[m], 0) / prev3.length : 0;
-    const growthRate = avgPrev3 > 0 ? (avgLast3 - avgPrev3) / avgPrev3 : 0;
-    const clampedGrowth = Math.max(-0.5, Math.min(0.5, growthRate)); // avoid runaway compounding
+    return { avgLast3, skippedMonths };
+  }, [months, revenueByMonth]);
 
-    const last6 = nonZeroMonths.slice(-6);
-    const totalNewPOs6mo = last6.reduce((s, m) => s + newPOsByMonth[m], 0);
-    const totalRevenue6mo = last6.reduce((s, m) => s + revenueByMonth[m], 0);
-    const avgRevenuePerPO = totalNewPOs6mo > 0 ? totalRevenue6mo / totalNewPOs6mo : 0;
+  const nextMonth = projection.months[0] || { confirmedRevenue: 0, pipelineRevenue: 0, totalPayroll: 0, confirmedCount: 0, pipelineCount: 0 };
+  const remainingTotal = projection.months.reduce((s, p) => s + p.totalRevenue, 0);
 
-    const thisMonthNewPOs = newPOsByMonth[months[months.length - 1]] || 0;
-    const pipelineBoost = thisMonthNewPOs * avgRevenuePerPO * 0.5;
-
-    const now = new Date();
-    const monthsLeftInYear = 11 - now.getMonth(); // e.g. Aug (idx 7) → 4 months left (Sep–Dec)
-    let running = avgLast3;
-    let remainingTotal = 0;
-    const projection = [];
-    for (let i = 1; i <= Math.max(monthsLeftInYear, 1); i++) {
-      running = running * (1 + clampedGrowth);
-      const boost = i === 1 ? pipelineBoost : 0;
-      const val = Math.max(0, running + boost);
-      remainingTotal += val;
-      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-      projection.push({ label: d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }), value: val, isNextMonth: i === 1 });
-    }
-
-    return {
-      avgLast3, avgPrev3, growthRate: clampedGrowth, avgRevenuePerPO, thisMonthNewPOs,
-      pipelineBoost, nextMonthForecast: projection[0]?.value || 0, monthsLeftInYear,
-      remainingTotal, projection, skippedMonths,
-    };
-  }, [months, revenueByMonth, newPOsByMonth]);
-
-  const maxBar = Math.max(...months.map(m => revenueByMonth[m]), ...forecast.projection.map(p => p.value), 1);
+  const maxBar = Math.max(...months.map(m => revenueByMonth[m]), ...projection.months.map(p => p.totalRevenue), 1);
   const maxPOBar = Math.max(...months.map(m => newPOsByMonth[m]), 1);
 
   return (
@@ -2443,24 +2484,25 @@ function ForecastTab({ employees = [] }) {
           {clients.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>
-          Forecast based on the last 12 months of invoices + new PO activity
+          Historical bars = actual invoices · future bars = Confirmed + Pipeline payroll &amp; margin from employee contracts
         </span>
       </div>
 
       {/* KPI strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
-        <Kpi label="Avg / month (last 3)" value={`SAR ${fC(forecast.avgLast3)}`} color="#374151" bg="#f9fafb" border="#e5e7eb" />
-        <Kpi label="Growth trend" value={`${forecast.growthRate >= 0 ? '+' : ''}${(forecast.growthRate * 100).toFixed(1)}%`}
-          sub="vs. prior 3 months" color={forecast.growthRate >= 0 ? '#059669' : '#dc2626'} bg={forecast.growthRate >= 0 ? '#f0fdf4' : '#fef2f2'} border={forecast.growthRate >= 0 ? '#bbf7d0' : '#fca5a5'} />
-        <Kpi label="New POs this month" value={forecast.thisMonthNewPOs} sub={`~SAR ${fC(forecast.avgRevenuePerPO)}/PO avg`} color="#7c3aed" bg="#faf5ff" border="#ddd6fe" />
-        <Kpi label="Next month forecast" value={`SAR ${fC(forecast.nextMonthForecast)}`} color="#0369a1" bg="#f0f9ff" border="#bae6fd" />
-        <Kpi label={`Rest of ${new Date().getFullYear()} (${forecast.monthsLeftInYear}mo)`} value={`SAR ${fC(forecast.remainingTotal)}`} color={M} bg="#fff5f5" border={`${M}33`} />
+        <Kpi label="Actual avg / month (last 3)" value={`SAR ${fC(actualBaseline.avgLast3)}`} sub="sanity-check reference" color="#374151" bg="#f9fafb" border="#e5e7eb" />
+        <Kpi label="Next month — Confirmed" value={`SAR ${fC(nextMonth.confirmedRevenue)}`}
+          sub={`${nextMonth.confirmedCount} employee${nextMonth.confirmedCount !== 1 ? 's' : ''} w/ PO`} color="#0369a1" bg="#f0f9ff" border="#bae6fd" />
+        <Kpi label="Next month — Pipeline" value={`SAR ${fC(nextMonth.pipelineRevenue)}`}
+          sub={`${nextMonth.pipelineCount} awaiting PO`} color="#7c3aed" bg="#faf5ff" border="#ddd6fe" />
+        <Kpi label="Next month — Payroll" value={`SAR ${fC(nextMonth.totalPayroll)}`} sub="Confirmed + Pipeline" color="#374151" bg="#f9fafb" border="#e5e7eb" />
+        <Kpi label={`Rest of ${currentYear} (${monthsLeftInYear}mo)`} value={`SAR ${fC(remainingTotal)}`} sub="revenue, confirmed + pipeline" color={M} bg="#fff5f5" border={`${M}33`} />
       </div>
 
-      {/* Revenue chart: actual (last 12mo) + projected (remaining months) */}
+      {/* Revenue chart: actual (last 12mo) + contract-based Confirmed/Pipeline projection */}
       <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
-          Monthly Revenue — {selectedClient} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>(solid = actual · hatched = projected)</span>
+          Monthly Revenue — {selectedClient} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>(solid = actual · solid blue/purple = Confirmed · dashed = Pipeline)</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 160, borderBottom: '1px solid #f3f4f6', paddingBottom: 6 }}>
           {months.map(m => (
@@ -2475,18 +2517,31 @@ function ForecastTab({ employees = [] }) {
                 style={{ width: '100%', maxWidth: 26, height: `${Math.max(2, (revenueByMonth[m] / maxBar) * 140)}px`, backgroundColor: M, borderRadius: '3px 3px 0 0', opacity: 0.85 }} />
             </div>
           ))}
-          {forecast.projection.map(p => (
+          {projection.months.map(p => (
             <div key={p.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-              <span style={{
-                fontSize: 8, fontWeight: 700, color: p.isNextMonth ? '#0369a1' : '#7c3aed', whiteSpace: 'nowrap',
-                writingMode: 'vertical-rl', transform: 'rotate(180deg)', marginBottom: 2,
-              }}>{fK(p.value)}</span>
-              <div title={`${p.label} (projected): SAR ${fC(p.value)}`}
-                style={{
-                  width: '100%', maxWidth: 26, height: `${Math.max(2, (p.value / maxBar) * 140)}px`,
-                  borderRadius: '3px 3px 0 0', border: `1.5px dashed ${p.isNextMonth ? '#0369a1' : '#7c3aed'}`,
-                  backgroundColor: p.isNextMonth ? '#bae6fd55' : '#ddd6fe55',
-                }} />
+              {p.totalRevenue > 0 && (
+                <span style={{
+                  fontSize: 8, fontWeight: 700, color: p.isNextMonth ? '#0369a1' : '#7c3aed', whiteSpace: 'nowrap',
+                  writingMode: 'vertical-rl', transform: 'rotate(180deg)', marginBottom: 2,
+                }}>{fK(p.totalRevenue)}</span>
+              )}
+              <div style={{ width: '100%', maxWidth: 26, display: 'flex', flexDirection: 'column' }}>
+                {p.pipelineRevenue > 0 && (
+                  <div title={`${p.label} — Pipeline (awaiting PO): SAR ${fC(p.pipelineRevenue)}`}
+                    style={{
+                      width: '100%', height: `${Math.max(2, (p.pipelineRevenue / maxBar) * 140)}px`,
+                      border: `1.5px dashed ${p.isNextMonth ? '#0369a1' : '#7c3aed'}`,
+                      backgroundColor: p.isNextMonth ? '#bae6fd55' : '#ddd6fe55',
+                      borderRadius: '3px 3px 0 0',
+                    }} />
+                )}
+                <div title={`${p.label} — Confirmed (has PO): SAR ${fC(p.confirmedRevenue)}`}
+                  style={{
+                    width: '100%', height: `${Math.max(2, (p.confirmedRevenue / maxBar) * 140)}px`,
+                    backgroundColor: p.isNextMonth ? '#0369a1' : '#7c3aed', opacity: 0.85,
+                    borderRadius: p.pipelineRevenue > 0 ? '0' : '3px 3px 0 0',
+                  }} />
+              </div>
             </div>
           ))}
         </div>
@@ -2494,7 +2549,7 @@ function ForecastTab({ employees = [] }) {
           {months.map(m => (
             <div key={m} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: '#9ca3af' }}>{monthLabel(m)}</div>
           ))}
-          {forecast.projection.map(p => (
+          {projection.months.map(p => (
             <div key={p.label} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: p.isNextMonth ? '#0369a1' : '#7c3aed', fontWeight: 700 }}>{p.label}</div>
           ))}
         </div>
@@ -2521,17 +2576,49 @@ function ForecastTab({ employees = [] }) {
         </div>
       </div>
 
+      {/* Pipeline breakdown — who's driving next month's Pipeline number */}
+      {projection.pipelineBreakdown.length > 0 && (
+        <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+            Pipeline Employees Driving Next Month — {selectedClient} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>({projection.pipelineBreakdown.length} awaiting PO)</span>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ borderBottom: '1.5px solid #f3f4f6' }}>
+                <th style={{ textAlign: 'left', padding: '6px 8px', color: '#9ca3af', fontWeight: 700, fontSize: 10, textTransform: 'uppercase' }}>Employee</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px', color: '#9ca3af', fontWeight: 700, fontSize: 10, textTransform: 'uppercase' }}>Monthly Payroll</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px', color: '#9ca3af', fontWeight: 700, fontSize: 10, textTransform: 'uppercase' }}>Est. Revenue</th>
+                <th style={{ textAlign: 'center', padding: '6px 8px', color: '#9ca3af', fontWeight: 700, fontSize: 10, textTransform: 'uppercase' }}>Pricing</th>
+              </tr>
+            </thead>
+            <tbody>
+              {projection.pipelineBreakdown.map((e, idx) => (
+                <tr key={idx} style={{ borderBottom: '1px solid #f9fafb' }}>
+                  <td style={{ padding: '6px 8px', color: '#374151' }}>{e.name}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', color: '#374151' }}>SAR {fC(e.totalPackage)}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#7c3aed' }}>SAR {fC(e.revenue)}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                    {e.priced
+                      ? <span style={{ fontSize: 10, fontWeight: 700, color: '#059669' }}>✓ set</span>
+                      : <span title="No client margin set yet — using this client's average margin from Confirmed employees" style={{ fontSize: 10, fontWeight: 700, color: '#b45309' }}>~ est.</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* Methodology note — keep the forecast auditable */}
       <div style={{ fontSize: 11, color: '#6b7280', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', lineHeight: 1.6 }}>
-        <strong style={{ color: '#92400e' }}>How this is calculated:</strong> baseline = average revenue over the last 3 months
-        with invoice data (SAR {fC(forecast.avgLast3)}); growth trend compares that to the 3 months before that
-        ({forecast.growthRate >= 0 ? '+' : ''}{(forecast.growthRate * 100).toFixed(1)}%); each future month compounds the baseline
-        by that trend. New POs added this month ({forecast.thisMonthNewPOs}) are valued at the average revenue-per-new-PO over the
-        last 6 months (~SAR {fC(forecast.avgRevenuePerPO)}) and added at 50% weight to next month only, since new hires typically
-        bill partway through their first cycle. Treat this as a starting point for the conversation with your manager, not a
-        guarantee — sanity-check it against known deals in the pipeline.
-        {forecast.skippedMonths.length > 0 && (
-          <><br/><strong style={{ color: '#b45309' }}>⚠ Heads up:</strong> {forecast.skippedMonths.length} recent month{forecast.skippedMonths.length!==1?'s':''} ({forecast.skippedMonths.map(monthLabel).join(', ')}) show SAR 0 and were excluded from the baseline — that almost always means invoices for that period haven't been entered into the system yet, not that there was no revenue. Worth checking before relying on this forecast.</>
+        <strong style={{ color: '#92400e' }}>How this is calculated:</strong> for each future month, every {selectedClient} employee whose
+        contract is active that month (by start/end date) is split into <strong>Confirmed</strong> (has a PO number) or <strong>Pipeline</strong> (quotation
+        sent, PO still pending). Payroll = each employee's totalPackage; revenue = their own client price/margin where it's set,
+        or this client's average margin (~{(fallbackMarginRatio * 100).toFixed(1)}%) for the rare employee still missing pricing. Employees
+        whose contract ends before a given month drop out of it automatically. This is computed directly from known contracts, not a
+        trend guess — the actual-invoice bars (solid, left) are shown alongside purely as a sanity check.
+        {actualBaseline.skippedMonths.length > 0 && (
+          <><br/><strong style={{ color: '#b45309' }}>⚠ Heads up:</strong> {actualBaseline.skippedMonths.length} recent month{actualBaseline.skippedMonths.length !== 1 ? 's' : ''} ({actualBaseline.skippedMonths.map(monthLabel).join(', ')}) show SAR 0 in actual invoices — that almost always means invoices for that period haven't been entered into the system yet.</>
         )}
       </div>
     </div>
