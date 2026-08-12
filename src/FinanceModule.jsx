@@ -2423,13 +2423,24 @@ function ForecastTab({ employees = [] }) {
   const currentMonthIdx = now.getMonth(); // 0-based
   const monthsLeftInYear = 11 - currentMonthIdx; // e.g. Aug (idx 7) → 4 months left (Sep–Dec)
 
-  // Every month we chart (12 historical + remaining months of the year), with year/month
-  // integers so headcount/payroll/margin can be computed the same way for all of them.
+  // Month definitions used for the contract-based charts: the CURRENT month only
+  // (not the full 12-month history) plus the remaining months of the year.
+  //
+  // Why not go back further: employee startDate in this system reflects the
+  // *current* contract cycle — it gets reset on renewal/PO changes — so it does
+  // NOT reliably represent when someone actually started working for the client.
+  // Checked live: every currently-active Sela employee has a startDate no earlier
+  // than Feb 2026, even though Sela invoices go back to Sept 2025 — reconstructing
+  // "headcount 6 months ago" from today's startDate field would just be wrong
+  // (it undercounts, making it look like almost nobody worked here a year ago).
+  // The current month IS reliable (it's just "who's active right now"), so we
+  // anchor the contract-based charts there instead of faking a historical trend.
   const allMonthDefs = useMemo(() => {
-    const past = months.map(ym => {
-      const [y, mo] = ym.split('-').map(Number);
-      return { key: ym, y, mo, isFuture: false, label: monthLabel(ym) };
-    });
+    const current = {
+      key: `${currentYear}-${String(currentMonthIdx + 1).padStart(2, '0')}`,
+      y: currentYear, mo: currentMonthIdx + 1, isFuture: false, isCurrent: true,
+      label: now.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }),
+    };
     const future = [];
     for (let i = 1; i <= Math.max(monthsLeftInYear, 1); i++) {
       const d = new Date(currentYear, currentMonthIdx + i, 1);
@@ -2439,14 +2450,14 @@ function ForecastTab({ employees = [] }) {
         label: d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }),
       });
     }
-    return { past, future };
-  }, [months, currentYear, currentMonthIdx, monthsLeftInYear]);
+    return { current, future };
+  }, [currentYear, currentMonthIdx, monthsLeftInYear]);
 
-  // Headcount / payroll / gross margin / net margin / revenue per month — computed purely
-  // from each employee's contract (startDate/endDate/totalPackage/pricing), split into
-  // Confirmed (has PO) vs Pipeline (awaiting PO). Unlike the invoice-based revenue bars,
-  // this works identically for past AND future months — so a month with real payroll but
-  // no invoices entered yet still shows real headcount/payroll instead of a misleading zero.
+  // Headcount / payroll / gross margin / net margin / revenue for the current month and
+  // each remaining month of the year — computed purely from each employee's contract
+  // (startDate/endDate/totalPackage/pricing), split into Confirmed (has PO) vs Pipeline
+  // (awaiting PO). This is reliable going forward (we know who's active today and what's
+  // contracted); it is NOT used for past months — see note above.
   const monthlySeries = useMemo(() => {
     const build = def => {
       const active = clientEmployees.filter(e => isActiveInMonth(e, def.y, def.mo));
@@ -2462,7 +2473,7 @@ function ForecastTab({ employees = [] }) {
         netMarginConfirmed: sum(confirmed, netMarginForEmp), netMarginPipeline: sum(pipeline, netMarginForEmp),
       };
     };
-    return { past: allMonthDefs.past.map(build), future: allMonthDefs.future.map(build) };
+    return { current: build(allMonthDefs.current), future: allMonthDefs.future.map(build) };
   }, [allMonthDefs, clientEmployees, fallbackMarginRatio]);
 
   // Who's driving next month's Pipeline number, for the breakdown table
@@ -2498,10 +2509,11 @@ function ForecastTab({ employees = [] }) {
 
   const maxBar = Math.max(...months.map(m => revenueByMonth[m]), ...monthlySeries.future.map(m => m.revenueConfirmed + m.revenuePipeline), 1);
   const maxPOBar = Math.max(...months.map(m => newPOsByMonth[m]), 1);
-  const maxHeadcount = Math.max(...monthlySeries.past.map(m => m.headcountConfirmed + m.headcountPipeline), ...monthlySeries.future.map(m => m.headcountConfirmed + m.headcountPipeline), 1);
-  const maxPayroll = Math.max(...monthlySeries.past.map(m => m.payrollConfirmed + m.payrollPipeline), ...monthlySeries.future.map(m => m.payrollConfirmed + m.payrollPipeline), 1);
-  const maxGM = Math.max(...monthlySeries.past.map(m => m.gmConfirmed + m.gmPipeline), ...monthlySeries.future.map(m => m.gmConfirmed + m.gmPipeline), 1);
-  const maxNetMargin = Math.max(...monthlySeries.past.map(m => m.netMarginConfirmed + m.netMarginPipeline), ...monthlySeries.future.map(m => m.netMarginConfirmed + m.netMarginPipeline), 1);
+  const currentTotal = f => (monthlySeries.current[`${f}Confirmed`] || 0) + (monthlySeries.current[`${f}Pipeline`] || 0);
+  const maxHeadcount = Math.max(currentTotal('headcount'), ...monthlySeries.future.map(m => m.headcountConfirmed + m.headcountPipeline), 1);
+  const maxPayroll = Math.max(currentTotal('payroll'), ...monthlySeries.future.map(m => m.payrollConfirmed + m.payrollPipeline), 1);
+  const maxGM = Math.max(currentTotal('gm'), ...monthlySeries.future.map(m => m.gmConfirmed + m.gmPipeline), 1);
+  const maxNetMargin = Math.max(currentTotal('netMargin'), ...monthlySeries.future.map(m => m.netMarginConfirmed + m.netMarginPipeline), 1);
 
   const fCount = n => String(Math.round(Number(n) || 0));
 
@@ -2591,30 +2603,32 @@ function ForecastTab({ employees = [] }) {
         </div>
       </div>
 
-      {/* Headcount, Payroll, Gross Margin, Net Margin — all computed directly from employee
-          contracts (not invoices), so they show real numbers for every month even when
-          invoices for that period haven't been entered into the system yet. */}
+      {/* Headcount, Payroll, Gross Margin, Net Margin — computed directly from employee
+          contracts (not invoices). Only shown from the CURRENT month onward: employee
+          startDate reflects the current contract cycle (it resets on renewal), so it
+          can't reliably reconstruct headcount from further in the past — see the
+          methodology note below for why. */}
       <MonthlyBarChart
-        title={`Headcount — ${selectedClient}`} note="(people, not SAR — solid past = actual · blue/purple future = Confirmed · dashed = Pipeline)"
-        pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: m.headcountConfirmed + m.headcountPipeline }))}
+        title={`Headcount — ${selectedClient}`} note="(people, not SAR — solid = current month · blue/purple future = Confirmed · dashed = Pipeline)"
+        pastMonths={[{ key: monthlySeries.current.key, label: monthlySeries.current.label + ' (now)', total: monthlySeries.current.headcountConfirmed + monthlySeries.current.headcountPipeline }]}
         futureMonths={monthlySeries.future.map(m => ({ key: m.key, label: m.label, isNextMonth: m.isNextMonth, confirmed: m.headcountConfirmed, pipeline: m.headcountPipeline, total: m.headcountConfirmed + m.headcountPipeline }))}
         maxVal={maxHeadcount} fmtK={fCount} fmtFull={fCount} />
 
       <MonthlyBarChart
-        title={`Monthly Payroll (Cost) — ${selectedClient}`} note="(from contracts — real cost even if invoices aren't entered yet)"
-        pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: m.payrollConfirmed + m.payrollPipeline }))}
+        title={`Monthly Payroll (Cost) — ${selectedClient}`} note="(from contracts, current month onward — real cost even if invoices aren't entered yet)"
+        pastMonths={[{ key: monthlySeries.current.key, label: monthlySeries.current.label + ' (now)', total: monthlySeries.current.payrollConfirmed + monthlySeries.current.payrollPipeline }]}
         futureMonths={monthlySeries.future.map(m => ({ key: m.key, label: m.label, isNextMonth: m.isNextMonth, confirmed: m.payrollConfirmed, pipeline: m.payrollPipeline, total: m.payrollConfirmed + m.payrollPipeline }))}
         maxVal={maxPayroll} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
 
       <MonthlyBarChart
         title={`Gross Margin — ${selectedClient}`} note="(client markup on top of payroll, before VAT and before partner payout)"
-        pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: m.gmConfirmed + m.gmPipeline }))}
+        pastMonths={[{ key: monthlySeries.current.key, label: monthlySeries.current.label + ' (now)', total: monthlySeries.current.gmConfirmed + monthlySeries.current.gmPipeline }]}
         futureMonths={monthlySeries.future.map(m => ({ key: m.key, label: m.label, isNextMonth: m.isNextMonth, confirmed: m.gmConfirmed, pipeline: m.gmPipeline, total: m.gmConfirmed + m.gmPipeline }))}
         maxVal={maxGM} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
 
       <MonthlyBarChart
         title={`Net Margin — ${selectedClient}`} note="(gross margin minus partner payout — what Fisheye actually keeps)"
-        pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: m.netMarginConfirmed + m.netMarginPipeline }))}
+        pastMonths={[{ key: monthlySeries.current.key, label: monthlySeries.current.label + ' (now)', total: monthlySeries.current.netMarginConfirmed + monthlySeries.current.netMarginPipeline }]}
         futureMonths={monthlySeries.future.map(m => ({ key: m.key, label: m.label, isNextMonth: m.isNextMonth, confirmed: m.netMarginConfirmed, pipeline: m.netMarginPipeline, total: m.netMarginConfirmed + m.netMarginPipeline }))}
         maxVal={maxNetMargin} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
 
@@ -2674,20 +2688,20 @@ function ForecastTab({ employees = [] }) {
 
       {/* Methodology note — keep the forecast auditable */}
       <div style={{ fontSize: 11, color: '#6b7280', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', lineHeight: 1.6 }}>
-        <strong style={{ color: '#92400e' }}>How this is calculated:</strong> for every month shown, every {selectedClient} employee whose
-        contract is active that month (by start/end date) is split into <strong>Confirmed</strong> (has a PO number) or <strong>Pipeline</strong> (quotation
+        <strong style={{ color: '#92400e' }}>How this is calculated:</strong> for the current month and every future month, every {selectedClient} employee
+        whose contract is active that month (by start/end date) is split into <strong>Confirmed</strong> (has a PO number) or <strong>Pipeline</strong> (quotation
         sent, PO still pending). Payroll = each employee's totalPackage. Gross Margin = the client price/margin set on their profile,
         or this client's average margin (~{(fallbackMarginRatio * 100).toFixed(1)}%) for the rare employee still missing pricing. Net Margin = Gross Margin
         minus what Fisheye pays the partner (partner-mode employees only — 0 for direct-mode). Revenue = payroll + Gross Margin + 15% VAT
-        on the margin, matching how invoices are actually calculated. Employees whose contract ends before a given month drop out of it
-        automatically. Headcount/Payroll/Gross Margin/Net Margin are computed the same way for past AND future months, since they come
-        straight from contracts — not from invoices — so a month can show real payroll even if no invoice has been entered for it yet.
-        <br/><strong style={{ color: '#92400e' }}>Why the Revenue chart can differ from Payroll/Margin in the same month:</strong> the
-        Revenue chart above (and the KPI "Rest of year") is the only view still tied to actual invoices for past months — it's your ground-truth
-        cash reality. If a past month shows SAR 0 revenue but nonzero payroll/margin below, it means people were paid and margin was earned,
-        but the invoice for that period simply hasn't been entered into the system yet — not that there was no business.
+        on the margin, matching how invoices are actually calculated. Employees whose contract ends before a given month drop out of it automatically.
+        <br/><strong style={{ color: '#92400e' }}>Why Headcount/Payroll/Margin only start from the current month, not 12 months back:</strong> those
+        numbers come from each employee's startDate field, which reflects their <em>current contract cycle</em> — it resets whenever a contract is renewed
+        or a new PO is added. Checked against live data: every {selectedClient} employee active today has a startDate no earlier than a few months ago, even
+        though invoices go back over a year — so reconstructing "headcount 6 months ago" from today's records would understate it, not describe reality.
+        The current month is reliable (it's just who's active right now), so the charts start there. For real historical trends, use the
+        Monthly Revenue chart above, which is built from actual invoices, not reconstructed from today's contracts.
         {actualBaseline.skippedMonths.length > 0 && (
-          <><br/><strong style={{ color: '#b45309' }}>⚠ Heads up:</strong> {actualBaseline.skippedMonths.length} recent month{actualBaseline.skippedMonths.length !== 1 ? 's' : ''} ({actualBaseline.skippedMonths.map(monthLabel).join(', ')}) show SAR 0 in actual invoices — check the Payroll/Gross Margin charts below for those months to see the real activity that's still awaiting an invoice.</>
+          <><br/><strong style={{ color: '#b45309' }}>⚠ Heads up:</strong> {actualBaseline.skippedMonths.length} recent month{actualBaseline.skippedMonths.length !== 1 ? 's' : ''} ({actualBaseline.skippedMonths.map(monthLabel).join(', ')}) show SAR 0 in actual invoices — that almost always means invoices for that period haven't been entered into the system yet.</>
         )}
       </div>
     </div>
