@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getClientsList } from './utils/helpers';
 import { supabase } from './utils/supabase';
-import { calcLine, parseDate } from './FinanceModule';
+import { calcLine, calcPartnerPayout, parseDate } from './FinanceModule';
 
 // Implements the SIP Outsourcing Policy (Ref. FE-2026-010) incentive calculator:
 // Gross Margin achievement vs. annual target → CAT 1-3 incentive tiers, year-end
@@ -83,13 +83,15 @@ export default function BonusSIP({ employees = [], embedded = false }) {
   const now = new Date();
   const currentYear = now.getFullYear();
 
-  // ── Achieved GM across selected clients, split H1 (Jan-Jun) / H2 (Jul-Dec) ─
-  // Same methodology as the Forecast tab: Gross Margin is always the employee's
-  // real contracted margin rate (never Revenue minus Payroll), summed across
-  // every month each contract was active this year — including contracts that
-  // have since ended, since that GM was still genuinely earned during the year.
+  // ── Achieved GM & Net Margin across selected clients, split H1 (Jan-Jun) /
+  // H2 (Jul-Dec) ─ Same methodology as the Forecast tab: Gross Margin is always
+  // the employee's real contracted margin rate (never Revenue minus Payroll),
+  // Net Margin = Gross Margin minus partner payout (0 for direct-mode employees).
+  // Summed across every month each contract was active this year — including
+  // contracts that have since ended, since that margin was still genuinely
+  // earned during the year.
   const gmBreakdown = useMemo(() => {
-    let gmH1 = 0, gmH2 = 0;
+    let gmH1 = 0, gmH2 = 0, nmH1 = 0, nmH2 = 0;
     const perClient = [];
     selectedClients.forEach(clientName => {
       const clientEmployeesAll = employees.filter(e => String(e.client || '').trim() === clientName);
@@ -98,28 +100,32 @@ export default function BonusSIP({ employees = [], embedded = false }) {
         ? priced.reduce((s, e) => s + calcLine(e).margin / Number(e.totalPackage), 0) / priced.length
         : 0.15;
       const gmForEmp = e => (hasPricing(e) ? calcLine(e).margin : Number(e.totalPackage || 0) * fallbackRatio);
-      let clientGM = 0;
+      let clientGM = 0, clientNM = 0;
       for (let month = 1; month <= 12; month++) {
         clientEmployeesAll.forEach(e => {
           if (isActiveInMonth(e, currentYear, month)) {
             const gm = gmForEmp(e);
+            const nm = gm - calcPartnerPayout(e);
             clientGM += gm;
-            if (month <= 6) gmH1 += gm; else gmH2 += gm;
+            clientNM += nm;
+            if (month <= 6) { gmH1 += gm; nmH1 += nm; } else { gmH2 += gm; nmH2 += nm; }
           }
         });
       }
-      perClient.push({ client: clientName, gm: clientGM, headcount: clientEmployeesAll.length });
+      perClient.push({ client: clientName, gm: clientGM, netMargin: clientNM, headcount: clientEmployeesAll.length });
     });
-    return { gmH1, gmH2, gmAnnual: gmH1 + gmH2, perClient };
+    return { gmH1, gmH2, gmAnnual: gmH1 + gmH2, nmH1, nmH2, nmAnnual: nmH1 + nmH2, perClient };
   }, [employees, selectedClients, currentYear]);
 
   // ── Policy math (§5 Incentives, §6 Margin Sharing) ──────────────────────────
-  const annualPct = annualTarget > 0 ? gmBreakdown.gmAnnual / annualTarget : 0;
+  // Target, achievement %, category, and over-achievement all run on Net Margin
+  // (Gross Margin minus partner payout) rather than raw Gross Margin.
+  const annualPct = annualTarget > 0 ? gmBreakdown.nmAnnual / annualTarget : 0;
   const annualCategory = categoryFor(annualPct);
-  const categoryIncentive = annualCategory.rate * gmBreakdown.gmAnnual;
+  const categoryIncentive = annualCategory.rate * gmBreakdown.nmAnnual;
 
   const overAchievementRate = role === 'Sales Hunter' ? 0.10 : 0.05;
-  const overAchievementBase = Math.max(0, gmBreakdown.gmAnnual - annualTarget);
+  const overAchievementBase = Math.max(0, gmBreakdown.nmAnnual - annualTarget);
   const overAchievementIncentive = annualPct > 1 ? overAchievementRate * overAchievementBase : 0;
 
   const marginSharingTotal = role === 'Account Management'
@@ -136,9 +142,9 @@ export default function BonusSIP({ employees = [], embedded = false }) {
   // payment (End-February) always trues up to the real annual figures, so this
   // assumption never affects the final total — only how much lands in August.
   const halfTarget = annualTarget / 2;
-  const h1Pct = halfTarget > 0 ? gmBreakdown.gmH1 / halfTarget : 0;
+  const h1Pct = halfTarget > 0 ? gmBreakdown.nmH1 / halfTarget : 0;
   const h1Category = categoryFor(h1Pct);
-  const payment1 = h1Category.rate * gmBreakdown.gmH1;
+  const payment1 = h1Category.rate * gmBreakdown.nmH1;
   const payment2 = grossTotal - payment1;
 
   const toggleClient = name => {
@@ -194,14 +200,14 @@ export default function BonusSIP({ employees = [], embedded = false }) {
               </select>
             </div>
             <div>
-              <div style={label}>Annual GM Target ({currentYear}, SAR)</div>
+              <div style={label}>Annual Net Margin Target ({currentYear}, SAR)</div>
               <input type="number" value={annualTarget || ''} onChange={e => setAnnualTarget(Number(e.target.value) || 0)}
                 placeholder="e.g. 1,500,000"
                 style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 13, fontWeight: 700, color: '#374151', fontFamily: 'monospace' }} />
             </div>
           </div>
 
-          <div style={label}>Your clients ({selectedClients.length} selected — GM is summed automatically from their contracts)</div>
+          <div style={label}>Your clients ({selectedClients.length} selected — Net Margin is summed automatically from their contracts)</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
             {allClients.map(c => (
               <button key={c} onClick={() => toggleClient(c)}
@@ -217,15 +223,15 @@ export default function BonusSIP({ employees = [], embedded = false }) {
           </div>
         </div>
 
-        {/* GM Achievement */}
+        {/* Net Margin Achievement */}
         <div style={{ ...card, backgroundColor: MD }}>
-          <div style={{ ...sectionTitle, color: 'white' }}>Gross Margin Achievement — {currentYear}</div>
-          <div style={{ ...sectionDesc, color: '#93c5fd' }}>From your selected clients' contracts, real margin rate (not Revenue − Payroll)</div>
+          <div style={{ ...sectionTitle, color: 'white' }}>Net Margin Achievement — {currentYear}</div>
+          <div style={{ ...sectionDesc, color: '#93c5fd' }}>From your selected clients' contracts — Gross Margin minus partner payout (Gross Margin achieved: SAR {fC(gmBreakdown.gmAnnual)})</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
             {[
-              { l: 'H1 Achieved (Jan-Jun)', v: `SAR ${fC(gmBreakdown.gmH1)}` },
-              { l: 'H2 Achieved (Jul-Dec)', v: `SAR ${fC(gmBreakdown.gmH2)}` },
-              { l: 'Annual Achieved GM', v: `SAR ${fC(gmBreakdown.gmAnnual)}` },
+              { l: 'H1 Achieved (Jan-Jun)', v: `SAR ${fC(gmBreakdown.nmH1)}` },
+              { l: 'H2 Achieved (Jul-Dec)', v: `SAR ${fC(gmBreakdown.nmH2)}` },
+              { l: 'Annual Achieved Net Margin', v: `SAR ${fC(gmBreakdown.nmAnnual)}` },
               { l: 'Achievement vs. Target', v: fPct(annualPct), accent: annualCategory.color },
             ].map((it, i) => (
               <div key={it.l} style={{ padding: i > 0 ? '0 16px' : '0 16px 0 0', borderLeft: i > 0 ? '1px solid #ffffff22' : 'none' }}>
@@ -243,17 +249,17 @@ export default function BonusSIP({ employees = [], embedded = false }) {
         {/* Incentive breakdown */}
         <div style={card}>
           <div style={sectionTitle}>Incentive Breakdown</div>
-          <div style={sectionDesc}>Category incentive on achieved GM (§5.1), over-achievement (§5.2), margin sharing (§6)</div>
+          <div style={sectionDesc}>Category incentive on achieved Net Margin (§5.1), over-achievement (§5.2), margin sharing (§6)</div>
 
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <tbody>
               <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-                <td style={{ padding: '10px 0', color: '#374151' }}>Category incentive — {annualCategory.name} ({fPct(annualCategory.rate)} of annual GM)</td>
+                <td style={{ padding: '10px 0', color: '#374151' }}>Category incentive — {annualCategory.name} ({fPct(annualCategory.rate)} of annual Net Margin)</td>
                 <td style={{ padding: '10px 0', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#374151' }}>SAR {fC(categoryIncentive)}</td>
               </tr>
               <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
                 <td style={{ padding: '10px 0', color: '#374151' }}>
-                  Over-achievement ({fPct(overAchievementRate)} of GM above target, {role}, paid End-February)
+                  Over-achievement ({fPct(overAchievementRate)} of Net Margin above target, {role}, paid End-February)
                   {annualPct <= 1 && <span style={{ color: '#9ca3af', fontWeight: 600 }}> — not applicable yet (under 100%)</span>}
                 </td>
                 <td style={{ padding: '10px 0', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#374151' }}>SAR {fC(overAchievementIncentive)}</td>
@@ -321,7 +327,7 @@ export default function BonusSIP({ employees = [], embedded = false }) {
             <div style={{ padding: '12px 16px', borderRadius: 10, border: '1px solid #e5e7eb', background: '#f9fafb' }}>
               <div style={label}>1st Payment — End-August</div>
               <div style={{ fontSize: 17, fontWeight: 900, color: '#374151', fontFamily: 'monospace' }}>SAR {fC(payment1)}</div>
-              <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 3 }}>CAT incentive on H1 GM only ({h1Category.name})</div>
+              <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 3 }}>CAT incentive on H1 Net Margin only ({h1Category.name})</div>
             </div>
             <div style={{ padding: '12px 16px', borderRadius: 10, border: '1px solid #e5e7eb', background: '#f9fafb' }}>
               <div style={label}>2nd Payment — End-February</div>
