@@ -122,7 +122,11 @@ export default function BonusSIP({ employees = [], embedded = false }) {
   // (Gross Margin minus partner payout) rather than raw Gross Margin.
   const annualPct = annualTarget > 0 ? gmBreakdown.nmAnnual / annualTarget : 0;
   const annualCategory = categoryFor(annualPct);
-  const categoryIncentive = annualCategory.rate * gmBreakdown.nmAnnual;
+  // Category incentive rate applies up to the target only — capped at
+  // min(achieved, target). Everything achieved beyond 100% of target is NOT paid
+  // again at the (higher) category rate; it flows entirely into Over-achievement
+  // below, at the lower 5%/10% rate, so it's never double-counted.
+  const categoryIncentive = annualCategory.rate * Math.min(gmBreakdown.nmAnnual, annualTarget);
 
   const overAchievementRate = role === 'Sales Hunter' ? 0.10 : 0.05;
   const overAchievementBase = Math.max(0, gmBreakdown.nmAnnual - annualTarget);
@@ -137,13 +141,15 @@ export default function BonusSIP({ employees = [], embedded = false }) {
   const netTotal = grossTotal - adjustmentAmount;
 
   // 1st payment (End-August) is evaluated against 40% of the annual target (H1
-  // sub-target); the 2nd payment (End-February) covers the remaining 60% of the
-  // target's worth of CAT incentive, plus over-achievement and margin sharing —
-  // and always trues up to the real annual figures above regardless.
+  // sub-target) — same capping rule as above: paid up to min(H1 achieved, H1
+  // sub-target), never on the excess. The 2nd payment (End-February) covers the
+  // remaining 60% of the target's worth of CAT incentive, plus all over-
+  // achievement and margin sharing, and always trues up to the real annual
+  // figures above regardless.
   const h1TargetShare = annualTarget * 0.4;
   const h1Pct = h1TargetShare > 0 ? gmBreakdown.nmH1 / h1TargetShare : 0;
   const h1Category = categoryFor(h1Pct);
-  const payment1 = h1Category.rate * gmBreakdown.nmH1;
+  const payment1 = h1Category.rate * Math.min(gmBreakdown.nmH1, h1TargetShare);
   const payment2 = grossTotal - payment1;
 
   const toggleClient = name => {
@@ -253,7 +259,7 @@ export default function BonusSIP({ employees = [], embedded = false }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <tbody>
               <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-                <td style={{ padding: '10px 0', color: '#374151' }}>Category incentive — {annualCategory.name} ({fPct(annualCategory.rate)} of annual Net Margin)</td>
+                <td style={{ padding: '10px 0', color: '#374151' }}>Category incentive — {annualCategory.name} ({fPct(annualCategory.rate)}, capped at target — excess goes to Over-achievement below)</td>
                 <td style={{ padding: '10px 0', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#374151' }}>SAR {fC(categoryIncentive)}</td>
               </tr>
               <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
