@@ -2515,7 +2515,21 @@ function ForecastTab({ employees = [] }) {
   };
   const remainingNetMargin = monthlySeries.future.reduce((s, m) => s + m.netMarginConfirmed + m.netMarginPipeline, 0);
 
-  const maxBar = Math.max(...months.map(m => revenueByMonth[m]), ...monthlySeries.future.map(m => m.revenueConfirmed + m.revenuePipeline), 1);
+  // Lookup for past months' contract-based revenue estimate, keyed by 'YYYY-MM' — used
+  // as a fallback on the Revenue chart when a month has zero actual invoices (meaning
+  // the invoice just hasn't been entered yet, not that there was no business).
+  const pastRevenueByKey = useMemo(() => {
+    const map = {};
+    monthlySeries.past.forEach(m => { map[m.key] = m.revenueConfirmed + m.revenuePipeline; });
+    return map;
+  }, [monthlySeries]);
+
+  const maxBar = Math.max(
+    ...months.map(m => revenueByMonth[m]),
+    ...months.map(m => pastRevenueByKey[m] || 0),
+    ...monthlySeries.future.map(m => m.revenueConfirmed + m.revenuePipeline),
+    1
+  );
   const maxPOBar = Math.max(...months.map(m => newPOsByMonth[m]), 1);
   const maxHeadcount = Math.max(...monthlySeries.past.map(m => m.headcountConfirmed + m.headcountPipeline), ...monthlySeries.future.map(m => m.headcountConfirmed + m.headcountPipeline), 1);
   const maxPayroll = Math.max(...monthlySeries.past.map(m => m.payrollConfirmed + m.payrollPipeline), ...monthlySeries.future.map(m => m.payrollConfirmed + m.payrollPipeline), 1);
@@ -2631,18 +2645,36 @@ function ForecastTab({ employees = [] }) {
       {/* Revenue chart: actual invoices (last 12mo) + contract-based Confirmed/Pipeline projection */}
       <div className="print-card" style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
-          Monthly Revenue (from invoices) — {selectedClient} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>(solid = actual invoice · solid blue/purple = Confirmed · dashed = Pipeline · sanity-check avg last 3mo = SAR {fC(actualBaseline.avgLast3)})</span>
+          Monthly Revenue — {selectedClient} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>(solid = actual invoice · amber dashed = estimated from contracts, not yet invoiced · solid blue/purple = Confirmed · dashed = Pipeline · sanity-check avg last 3mo = SAR {fC(actualBaseline.avgLast3)})</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 190, borderBottom: '1px solid #f3f4f6', paddingBottom: 6 }}>
-          {months.map(m => (
-            <div key={m} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-              {revenueByMonth[m] > 0 && (
-                <span style={{ fontSize: 10, fontWeight: 800, color: M, whiteSpace: 'nowrap' }}>{fK(revenueByMonth[m])}</span>
-              )}
-              <div title={`${monthLabel(m)}: SAR ${fC(revenueByMonth[m])} invoiced`}
-                style={{ width: '100%', maxWidth: 30, height: `${Math.max(2, (revenueByMonth[m] / maxBar) * 140)}px`, backgroundColor: M, borderRadius: '3px 3px 0 0', opacity: 0.85 }} />
-            </div>
-          ))}
+          {months.map(m => {
+            const actual = revenueByMonth[m];
+            const estimate = pastRevenueByKey[m] || 0;
+            return (
+              <div key={m} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                {actual > 0 ? (
+                  <>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: M, whiteSpace: 'nowrap' }}>{fK(actual)}</span>
+                    <div title={`${monthLabel(m)}: SAR ${fC(actual)} invoiced`}
+                      style={{ width: '100%', maxWidth: 30, height: `${Math.max(2, (actual / maxBar) * 140)}px`, backgroundColor: M, borderRadius: '3px 3px 0 0', opacity: 0.85 }} />
+                  </>
+                ) : estimate > 0 ? (
+                  <>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: '#b45309', whiteSpace: 'nowrap' }}>{fK(estimate)}</span>
+                    <div title={`${monthLabel(m)}: SAR ${fC(estimate)} estimated from contracts — no invoice recorded yet`}
+                      style={{
+                        width: '100%', maxWidth: 30, height: `${Math.max(2, (estimate / maxBar) * 140)}px`,
+                        border: '1.5px dashed #d97706', backgroundColor: '#fde68a55', borderRadius: '3px 3px 0 0',
+                      }} />
+                  </>
+                ) : (
+                  <div title={`${monthLabel(m)}: SAR 0`}
+                    style={{ width: '100%', maxWidth: 30, height: 2, backgroundColor: M, borderRadius: '3px 3px 0 0', opacity: 0.85 }} />
+                )}
+              </div>
+            );
+          })}
           {monthlySeries.future.map(p => (
             <div key={p.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
               {p.revenuePipeline > 0 && (
@@ -2772,8 +2804,11 @@ function ForecastTab({ employees = [] }) {
         employee ever assigned to {selectedClient}, including ones since expired or resigned — someone who left in March was still on payroll in
         January, so excluding them would understate what actually happened. Either way, each employee only counts in the months their own
         start/end date actually covers.
+        <br/><strong style={{ color: '#92400e' }}>Amber dashed bars on the Revenue chart:</strong> when a past month has zero actual invoices, the bar shows the
+        contract-based estimate instead (same calculation as the future months) rather than a flat zero — real work happened, the invoice just hasn't
+        been entered yet. As soon as that month's invoices are added to the system, its bar automatically switches to the real (solid) invoiced amount.
         {actualBaseline.skippedMonths.length > 0 && (
-          <><br/><strong style={{ color: '#b45309' }}>⚠ Heads up:</strong> {actualBaseline.skippedMonths.length} recent month{actualBaseline.skippedMonths.length !== 1 ? 's' : ''} ({actualBaseline.skippedMonths.map(monthLabel).join(', ')}) show SAR 0 in actual invoices — check the Payroll/Gross Margin charts below for those months to see the real activity that's still awaiting an invoice.</>
+          <><br/><strong style={{ color: '#b45309' }}>⚠ Heads up:</strong> {actualBaseline.skippedMonths.length} recent month{actualBaseline.skippedMonths.length !== 1 ? 's' : ''} ({actualBaseline.skippedMonths.map(monthLabel).join(', ')}) still show SAR 0 in actual invoices — shown above as amber-dashed estimates from contracts. Worth entering those invoices when you can, for an exact number.</>
         )}
       </div>
 
