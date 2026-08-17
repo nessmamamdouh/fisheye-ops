@@ -2557,19 +2557,22 @@ function ForecastTab({ employees = [] }) {
     return { revenue, gm, netMargin, payroll };
   };
 
-  // Full calendar-year (Jan–Dec of the current year) totals — see displayFinancials()
-  // above for how each month's numbers are chosen (actual invoice vs contract estimate).
+  // Full calendar-year (Jan–Dec of the current year) totals — 100% contract-based:
+  // Revenue here = payroll (per contract) + registered margin per employee, for every
+  // month including past ones (NOT actual invoices — see the Monthly Revenue chart
+  // below for the actual-invoice view). This keeps all 5 metrics in this card
+  // (Revenue, Payroll, Gross Margin, Net Margin, Avg Headcount) consistently
+  // contract-derived, per Nessma's explicit instruction.
   const fullYearTotals = useMemo(() => {
     const yearPrefix = `${currentYear}-`;
     const pastInYear = monthlySeries.past.filter(m => m.key.startsWith(yearPrefix));
     const monthsInYear = [...pastInYear, ...monthlySeries.future];
     let revenue = 0, payroll = 0, gm = 0, netMargin = 0, headcountSum = 0;
     monthsInYear.forEach(m => {
-      const d = displayFinancials(m);
-      revenue += d.revenue;
-      payroll += d.payroll;
-      gm += d.gm;
-      netMargin += d.netMargin;
+      revenue += m.revenueConfirmed + m.revenuePipeline;
+      payroll += m.payrollConfirmed + m.payrollPipeline;
+      gm += m.gmConfirmed + m.gmPipeline;
+      netMargin += m.netMarginConfirmed + m.netMarginPipeline;
       headcountSum += m.headcountConfirmed + m.headcountPipeline;
     });
     return {
@@ -2577,7 +2580,7 @@ function ForecastTab({ employees = [] }) {
       avgHeadcount: monthsInYear.length ? headcountSum / monthsInYear.length : 0,
       monthCount: monthsInYear.length,
     };
-  }, [monthlySeries, revenueByMonth, pastRevenueByKey, currentYear]);
+  }, [monthlySeries, currentYear]);
 
   const maxBar = Math.max(
     ...months.map(m => revenueByMonth[m]),
@@ -2618,7 +2621,7 @@ function ForecastTab({ employees = [] }) {
     rows.push(['Total Net Margin (SAR)', fC(fullYearTotals.netMargin)]);
     rows.push(['Avg Headcount / month', fCount(fullYearTotals.avgHeadcount)]);
     rows.push([]);
-    rows.push(['Month', 'Type', 'Revenue Source', 'Revenue (SAR)', 'Payroll (SAR)', 'Gross Margin = Revenue-Payroll (SAR)', 'Net Margin (SAR)', 'Headcount Confirmed', 'Headcount Pipeline']);
+    rows.push(['Month', 'Type', 'Revenue Source', 'Revenue (SAR)', 'Payroll (SAR)', 'Gross Margin - contracted rate (SAR)', 'Net Margin (SAR)', 'Headcount Confirmed', 'Headcount Pipeline']);
     monthlySeries.past.forEach(m => {
       const d = displayFinancials(m);
       const src = (revenueByMonth[m.key] || 0) > 0 ? 'Actual invoices' : 'Contract estimate (no invoice yet)';
@@ -2714,7 +2717,7 @@ function ForecastTab({ employees = [] }) {
       {/* Full calendar-year totals — Jan–Dec of the current year in one place */}
       <div className="print-card" style={{ backgroundColor: '#00293A', borderRadius: 12, padding: '14px 18px' }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
-          Full Year Totals — {currentYear} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>(Jan–Dec · Revenue = actual invoices + estimates · Margin = real contracted rate, not Revenue−Payroll — see note below)</span>
+          Full Year Totals — {currentYear} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>(Jan–Dec · 100% contract-based: Revenue = payroll + registered margin per employee · Margin = real contracted rate, not Revenue−Payroll — see note below. For actual invoiced revenue, see the Monthly Revenue chart)</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 18 }}>
           <div>
