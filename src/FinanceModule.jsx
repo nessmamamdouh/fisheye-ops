@@ -2532,24 +2532,48 @@ function ForecastTab({ employees = [] }) {
     return map;
   }, [monthlySeries]);
 
-  // Full calendar-year (Jan–Dec of the current year) totals — the past months (Jan..this
-  // month) use actual invoiced revenue where available, falling back to the same
-  // contract-based estimate the chart uses when a month's invoice isn't entered yet; the
-  // remaining months use the Confirmed+Pipeline projection. Payroll/Margin always come
-  // from contracts (past pool includes since-ended employees, future pool active-only).
+  // Displayed Revenue / Gross Margin / Net Margin for a given month — guarantees
+  // Revenue − Payroll = Gross Margin and Gross Margin − Partner Payout = Net Margin
+  // hold EXACTLY, for every month and in every total, with no exceptions:
+  //   - Future months: everything is contract-based already, so this is a no-op —
+  //     revenueForEmp() was already built as payroll + margin per employee.
+  //   - Past months WITH actual invoices: Revenue = the real invoiced amount (ground
+  //     truth), so Gross Margin is DERIVED as Revenue − Payroll for that month instead
+  //     of using the contract's planned margin — the real invoice is what actually
+  //     happened, so that's the correct realized margin for that month.
+  //   - Past months with NO invoices yet: falls back to the contract estimate for both
+  //     Revenue and Gross Margin (same numbers as the amber-dashed bar on the chart).
+  // Partner payout (Gross Margin − Net Margin) is always taken from contracts — payout
+  // terms don't change based on invoicing timing — then subtracted from whichever
+  // Gross Margin figure applies.
+  const displayFinancials = m => {
+    const payroll = m.payrollConfirmed + m.payrollPipeline;
+    const contractGM = m.gmConfirmed + m.gmPipeline;
+    const contractNet = m.netMarginConfirmed + m.netMarginPipeline;
+    const partnerPayout = contractGM - contractNet;
+    if (m.isFuture) {
+      const revenue = m.revenueConfirmed + m.revenuePipeline;
+      return { revenue, gm: contractGM, netMargin: contractNet, payroll };
+    }
+    const actual = revenueByMonth[m.key] || 0;
+    const revenue = actual > 0 ? actual : (pastRevenueByKey[m.key] || 0);
+    const gm = revenue - payroll;
+    return { revenue, gm, netMargin: gm - partnerPayout, payroll };
+  };
+
+  // Full calendar-year (Jan–Dec of the current year) totals — see displayFinancials()
+  // above for how each month's numbers are chosen (actual invoice vs contract estimate).
   const fullYearTotals = useMemo(() => {
     const yearPrefix = `${currentYear}-`;
     const pastInYear = monthlySeries.past.filter(m => m.key.startsWith(yearPrefix));
     const monthsInYear = [...pastInYear, ...monthlySeries.future];
     let revenue = 0, payroll = 0, gm = 0, netMargin = 0, headcountSum = 0;
     monthsInYear.forEach(m => {
-      const rev = m.isFuture
-        ? m.revenueConfirmed + m.revenuePipeline
-        : (revenueByMonth[m.key] > 0 ? revenueByMonth[m.key] : (pastRevenueByKey[m.key] || 0));
-      revenue += rev;
-      payroll += m.payrollConfirmed + m.payrollPipeline;
-      gm += m.gmConfirmed + m.gmPipeline;
-      netMargin += m.netMarginConfirmed + m.netMarginPipeline;
+      const d = displayFinancials(m);
+      revenue += d.revenue;
+      payroll += d.payroll;
+      gm += d.gm;
+      netMargin += d.netMargin;
       headcountSum += m.headcountConfirmed + m.headcountPipeline;
     });
     return {
@@ -2568,8 +2592,8 @@ function ForecastTab({ employees = [] }) {
   const maxPOBar = Math.max(...months.map(m => newPOsByMonth[m]), 1);
   const maxHeadcount = Math.max(...monthlySeries.past.map(m => m.headcountConfirmed + m.headcountPipeline), ...monthlySeries.future.map(m => m.headcountConfirmed + m.headcountPipeline), 1);
   const maxPayroll = Math.max(...monthlySeries.past.map(m => m.payrollConfirmed + m.payrollPipeline), ...monthlySeries.future.map(m => m.payrollConfirmed + m.payrollPipeline), 1);
-  const maxGM = Math.max(...monthlySeries.past.map(m => m.gmConfirmed + m.gmPipeline), ...monthlySeries.future.map(m => m.gmConfirmed + m.gmPipeline), 1);
-  const maxNetMargin = Math.max(...monthlySeries.past.map(m => m.netMarginConfirmed + m.netMarginPipeline), ...monthlySeries.future.map(m => m.netMarginConfirmed + m.netMarginPipeline), 1);
+  const maxGM = Math.max(...monthlySeries.past.map(m => displayFinancials(m).gm), ...monthlySeries.future.map(m => m.gmConfirmed + m.gmPipeline), 1);
+  const maxNetMargin = Math.max(...monthlySeries.past.map(m => displayFinancials(m).netMargin), ...monthlySeries.future.map(m => m.netMarginConfirmed + m.netMarginPipeline), 1);
 
   const fCount = n => String(Math.round(Number(n) || 0));
   const printAreaRef = useRef(null);
@@ -2598,9 +2622,16 @@ function ForecastTab({ employees = [] }) {
     rows.push(['Total Net Margin (SAR)', fC(fullYearTotals.netMargin)]);
     rows.push(['Avg Headcount / month', fCount(fullYearTotals.avgHeadcount)]);
     rows.push([]);
-    rows.push(['Month', 'Type', 'Actual Revenue — invoices (SAR)', 'Headcount Confirmed', 'Headcount Pipeline', 'Payroll Confirmed (SAR)', 'Payroll Pipeline (SAR)', 'Gross Margin Confirmed (SAR)', 'Gross Margin Pipeline (SAR)', 'Net Margin Confirmed (SAR)', 'Net Margin Pipeline (SAR)']);
-    monthlySeries.past.forEach(m => rows.push([m.label, 'Past', Math.round(revenueByMonth[m.key] || 0), m.headcountConfirmed, m.headcountPipeline, Math.round(m.payrollConfirmed), Math.round(m.payrollPipeline), Math.round(m.gmConfirmed), Math.round(m.gmPipeline), Math.round(m.netMarginConfirmed), Math.round(m.netMarginPipeline)]));
-    monthlySeries.future.forEach(m => rows.push([m.label, 'Future', '', m.headcountConfirmed, m.headcountPipeline, Math.round(m.payrollConfirmed), Math.round(m.payrollPipeline), Math.round(m.gmConfirmed), Math.round(m.gmPipeline), Math.round(m.netMarginConfirmed), Math.round(m.netMarginPipeline)]));
+    rows.push(['Month', 'Type', 'Revenue Source', 'Revenue (SAR)', 'Payroll (SAR)', 'Gross Margin = Revenue-Payroll (SAR)', 'Net Margin (SAR)', 'Headcount Confirmed', 'Headcount Pipeline']);
+    monthlySeries.past.forEach(m => {
+      const d = displayFinancials(m);
+      const src = (revenueByMonth[m.key] || 0) > 0 ? 'Actual invoices' : 'Contract estimate (no invoice yet)';
+      rows.push([m.label, 'Past', src, Math.round(d.revenue), Math.round(d.payroll), Math.round(d.gm), Math.round(d.netMargin), m.headcountConfirmed, m.headcountPipeline]);
+    });
+    monthlySeries.future.forEach(m => {
+      const d = displayFinancials(m);
+      rows.push([m.label, 'Future', 'Contract projection (Confirmed+Pipeline)', Math.round(d.revenue), Math.round(d.payroll), Math.round(d.gm), Math.round(d.netMargin), m.headcountConfirmed, m.headcountPipeline]);
+    });
     rows.push([]);
     rows.push(['Pipeline employees driving next month', 'Monthly Payroll (SAR)', 'Est. Revenue (SAR)', 'Pricing']);
     nextMonthPipelineBreakdown.forEach(e => rows.push([e.name, Math.round(e.totalPackage), Math.round(e.revenue), e.priced ? 'set' : 'estimated (client avg margin)']));
@@ -2797,14 +2828,14 @@ function ForecastTab({ employees = [] }) {
         maxVal={maxPayroll} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
 
       <MonthlyBarChart
-        title={`Gross Margin — ${selectedClient}`} note="(client markup on top of payroll = Revenue − Payroll, before partner payout)"
-        pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: m.gmConfirmed + m.gmPipeline }))}
+        title={`Gross Margin — ${selectedClient}`} note="(= Revenue − Payroll, before partner payout · past months use actual revenue where invoiced)"
+        pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: displayFinancials(m).gm }))}
         futureMonths={monthlySeries.future.map(m => ({ key: m.key, label: m.label, isNextMonth: m.isNextMonth, confirmed: m.gmConfirmed, pipeline: m.gmPipeline, total: m.gmConfirmed + m.gmPipeline }))}
         maxVal={maxGM} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
 
       <MonthlyBarChart
         title={`Net Margin — ${selectedClient}`} note="(gross margin minus partner payout — what Fisheye actually keeps)"
-        pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: m.netMarginConfirmed + m.netMarginPipeline }))}
+        pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: displayFinancials(m).netMargin }))}
         futureMonths={monthlySeries.future.map(m => ({ key: m.key, label: m.label, isNextMonth: m.isNextMonth, confirmed: m.netMarginConfirmed, pipeline: m.netMarginPipeline, total: m.netMarginConfirmed + m.netMarginPipeline }))}
         maxVal={maxNetMargin} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
 
@@ -2866,11 +2897,12 @@ function ForecastTab({ employees = [] }) {
       <div className="print-card" style={{ fontSize: 11, color: '#6b7280', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', lineHeight: 1.6 }}>
         <strong style={{ color: '#92400e' }}>How this is calculated:</strong> for every month shown, every {selectedClient} employee
         whose contract is active that month (by start/end date) is split into <strong>Confirmed</strong> (has a PO number) or <strong>Pipeline</strong> (quotation
-        sent, PO still pending). Payroll = each employee's totalPackage. Gross Margin = the client price/margin set on their profile,
-        or this client's average margin (~{(fallbackMarginRatio * 100).toFixed(1)}%) for the rare employee still missing pricing. Net Margin = Gross Margin
-        minus what Fisheye pays the partner (partner-mode employees only — 0 for direct-mode). Revenue = Payroll + Gross Margin, so <strong>Revenue − Payroll
-        always equals Gross Margin</strong> — both are shown VAT-exclusive (actual invoices use their amountPreVat field, matching the contract math for
-        future months), since VAT is collected on the client's behalf, not real company revenue.
+        sent, PO still pending). Payroll = each employee's totalPackage. Revenue = the actual invoiced amount where one's been entered (VAT-exclusive,
+        via amountPreVat), otherwise the contract estimate (payroll + client price/margin, or this client's average margin ~{(fallbackMarginRatio * 100).toFixed(1)}%
+        for the rare employee still missing pricing). <strong>Gross Margin is always Revenue − Payroll</strong> — for months with a real invoice, that's the
+        margin actually realized that month; otherwise it's the contract's planned margin. <strong>Net Margin is always Gross Margin minus partner payout</strong>
+        (partner-mode employees only, taken from their contract — 0 for direct-mode). This holds exactly for every single month and for every total on this page:
+        Revenue − Payroll = Gross Margin, and Gross Margin − Partner Payout = Net Margin, with no exceptions.
         <br/><strong style={{ color: '#92400e' }}>Past vs. future months use different employee pools:</strong> future months only count employees still
         active with {selectedClient} today (so someone who's resigned doesn't look like they're still working next month). Past months count EVERY
         employee ever assigned to {selectedClient}, including ones since expired or resigned — someone who left in March was still on payroll in
