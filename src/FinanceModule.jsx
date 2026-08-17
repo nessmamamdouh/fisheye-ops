@@ -2355,14 +2355,18 @@ function ForecastTab({ employees = [] }) {
     return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
   };
 
-  // Actual monthly revenue for the selected client (invoiceDate, excludes credit notes)
+  // Actual monthly revenue for the selected client (invoiceDate, excludes credit notes).
+  // Uses amountPreVat (VAT-exclusive) so this lines up with the contract-based Revenue
+  // figure elsewhere in this tab — VAT is collected on behalf of the tax authority, not
+  // real company revenue, so it's excluded here (falls back to totalDue on older records
+  // that don't have amountPreVat saved).
   const revenueByMonth = useMemo(() => {
     const map = {}; months.forEach(m => { map[m] = 0; });
     invoices
       .filter(i => String(i.clientName || '').trim() === selectedClient && !String(i.status || '').toLowerCase().includes('credit'))
       .forEach(i => {
         const mk = monthKey(i.invoiceDate) || monthKey(i.paidDate);
-        if (mk && mk in map) map[mk] += Number(i.totalDue || 0);
+        if (mk && mk in map) map[mk] += Number(i.amountPreVat ?? i.totalDue ?? 0);
       });
     return map;
   }, [invoices, selectedClient, months]);
@@ -2416,19 +2420,23 @@ function ForecastTab({ employees = [] }) {
 
   // For the rare employee still missing client pricing: learn a margin ratio from
   // this client's own Confirmed (PO in hand), fully-priced employees instead of guessing.
+  // Pure margin ratio (margin ÷ payroll) — NOT calcLine().total, which would bake VAT
+  // into the ratio and inflate it.
   const fallbackMarginRatio = useMemo(() => {
     const priced = clientEmployees.filter(e => hasPO(e) && hasPricing(e) && Number(e.totalPackage || 0) > 0);
     if (!priced.length) return 0.15;
-    const ratios = priced.map(e => calcLine(e).total / Number(e.totalPackage) - 1);
+    const ratios = priced.map(e => calcLine(e).margin / Number(e.totalPackage));
     return ratios.reduce((s, r) => s + r, 0) / ratios.length;
   }, [clientEmployees]);
 
-  // Per-employee financial lines — all derived from the contract, not invoices.
-  // grossMargin = what Fisheye charges on top of payroll (before VAT, before partner payout).
-  // revenue     = full client invoice (payroll + margin + 15% VAT on margin) — same formula calcLine() uses.
+  // Per-employee financial lines — all derived from the contract, not invoices, and all
+  // VAT-exclusive so Revenue − Payroll = Gross Margin always holds exactly (VAT is
+  // collected on behalf of the tax authority, not real company revenue, so it's left out).
+  // grossMargin = what Fisheye charges on top of payroll (before partner payout).
+  // revenue     = payroll + Gross Margin (VAT-exclusive) — matches amountPreVat on real invoices.
   // netMargin   = grossMargin − partner payout (what Fisheye actually keeps; partner-mode only, 0 payout for direct-mode).
   const grossMarginForEmp = e => (hasPricing(e) ? calcLine(e).margin : Number(e.totalPackage || 0) * fallbackMarginRatio);
-  const revenueForEmp = e => Number(e.totalPackage || 0) + grossMarginForEmp(e) * 1.15;
+  const revenueForEmp = e => Number(e.totalPackage || 0) + grossMarginForEmp(e);
   const netMarginForEmp = e => grossMarginForEmp(e) - calcPartnerPayout(e);
 
   const now = new Date();
@@ -2789,7 +2797,7 @@ function ForecastTab({ employees = [] }) {
         maxVal={maxPayroll} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
 
       <MonthlyBarChart
-        title={`Gross Margin — ${selectedClient}`} note="(client markup on top of payroll, before VAT and before partner payout)"
+        title={`Gross Margin — ${selectedClient}`} note="(client markup on top of payroll = Revenue − Payroll, before partner payout)"
         pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: m.gmConfirmed + m.gmPipeline }))}
         futureMonths={monthlySeries.future.map(m => ({ key: m.key, label: m.label, isNextMonth: m.isNextMonth, confirmed: m.gmConfirmed, pipeline: m.gmPipeline, total: m.gmConfirmed + m.gmPipeline }))}
         maxVal={maxGM} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
@@ -2860,8 +2868,9 @@ function ForecastTab({ employees = [] }) {
         whose contract is active that month (by start/end date) is split into <strong>Confirmed</strong> (has a PO number) or <strong>Pipeline</strong> (quotation
         sent, PO still pending). Payroll = each employee's totalPackage. Gross Margin = the client price/margin set on their profile,
         or this client's average margin (~{(fallbackMarginRatio * 100).toFixed(1)}%) for the rare employee still missing pricing. Net Margin = Gross Margin
-        minus what Fisheye pays the partner (partner-mode employees only — 0 for direct-mode). Revenue = payroll + Gross Margin + 15% VAT
-        on the margin, matching how invoices are actually calculated.
+        minus what Fisheye pays the partner (partner-mode employees only — 0 for direct-mode). Revenue = Payroll + Gross Margin, so <strong>Revenue − Payroll
+        always equals Gross Margin</strong> — both are shown VAT-exclusive (actual invoices use their amountPreVat field, matching the contract math for
+        future months), since VAT is collected on the client's behalf, not real company revenue.
         <br/><strong style={{ color: '#92400e' }}>Past vs. future months use different employee pools:</strong> future months only count employees still
         active with {selectedClient} today (so someone who's resigned doesn't look like they're still working next month). Past months count EVERY
         employee ever assigned to {selectedClient}, including ones since expired or resigned — someone who left in March was still on payroll in
