@@ -136,13 +136,12 @@ export default function BonusSIP({ employees = [], embedded = false }) {
   const adjustmentAmount = grossTotal * (Number(adjustmentPct || 0) / 100);
   const netTotal = grossTotal - adjustmentAmount;
 
-  // 1st payment (End-August) is an ESTIMATE — the policy defines CAT tiers against
-  // the ANNUAL target, but doesn't spell out a separate H1 sub-target. Assuming an
-  // even 50/50 split of the annual target for this interim estimate only; the 2nd
-  // payment (End-February) always trues up to the real annual figures, so this
-  // assumption never affects the final total — only how much lands in August.
-  const halfTarget = annualTarget / 2;
-  const h1Pct = halfTarget > 0 ? gmBreakdown.nmH1 / halfTarget : 0;
+  // 1st payment (End-August) is evaluated against 40% of the annual target (H1
+  // sub-target); the 2nd payment (End-February) covers the remaining 60% of the
+  // target's worth of CAT incentive, plus over-achievement and margin sharing —
+  // and always trues up to the real annual figures above regardless.
+  const h1TargetShare = annualTarget * 0.4;
+  const h1Pct = h1TargetShare > 0 ? gmBreakdown.nmH1 / h1TargetShare : 0;
   const h1Category = categoryFor(h1Pct);
   const payment1 = h1Category.rate * gmBreakdown.nmH1;
   const payment2 = grossTotal - payment1;
@@ -320,8 +319,8 @@ export default function BonusSIP({ employees = [], embedded = false }) {
         <div style={card}>
           <div style={sectionTitle}>Payment Schedule (§5.3)</div>
           <div style={sectionDesc}>
-            1st payment estimate assumes the annual target splits evenly across H1/H2 — the policy doesn't define a separate H1 sub-target,
-            so this is an interim estimate only. The 2nd payment always trues up to the real annual figures above, so the final total is unaffected.
+            1st payment is evaluated against 40% of the annual target (H1 sub-target); the 2nd payment covers the remaining 60% plus over-achievement
+            and margin sharing, and always trues up to the real annual figures above.
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div style={{ padding: '12px 16px', borderRadius: 10, border: '1px solid #e5e7eb', background: '#f9fafb' }}>
