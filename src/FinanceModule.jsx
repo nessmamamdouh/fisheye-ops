@@ -12,6 +12,17 @@ import { supabase } from "./utils/supabase";
 const M   = "#A02843";
 const MD  = "#00293A";
 
+// Shared legend for the Forecast tab's monthly bar charts (Headcount, Payroll,
+// Gross Margin, Net Margin): solid maroon = past/actual, solid blue/purple =
+// Confirmed (has PO), dashed = Pipeline (awaiting PO).
+const FORECAST_LEGEND = [
+  { color: M, label: 'Actual (past months)' },
+  { color: '#0369a1', label: 'Confirmed — next month' },
+  { color: '#0369a1', dashed: true, label: 'Pipeline — next month' },
+  { color: '#7c3aed', label: 'Confirmed — later months' },
+  { color: '#7c3aed', dashed: true, label: 'Pipeline — later months' },
+];
+
 const fmtSAR = n =>
   `SAR ${Number(n || 0).toLocaleString("en-SA", { minimumFractionDigits: 2 })}`;
 const fmtNum = n =>
@@ -2300,6 +2311,7 @@ function PayrollFlowTracker({ employees, sharedFlows, onSaveFlows }) {
 function ForecastTab({ employees = [] }) {
   const [invoices, setInvoices] = useState([]);
   const [selectedClient, setSelectedClient] = useState('');
+  const [showMethodology, setShowMethodology] = useState(false);
   const fC = n => Number(n || 0).toLocaleString('en-SA', { maximumFractionDigits: 0 });
   const fK = n => {
     const v = Number(n || 0);
@@ -2507,6 +2519,15 @@ function ForecastTab({ employees = [] }) {
       .sort((a, b) => b.revenue - a.revenue);
   }, [allMonthDefs, clientEmployees, fallbackMarginRatio]);
 
+  // Roll-up of the Pipeline breakdown above — "how much is sitting in pending POs"
+  const pendingPOsSummary = useMemo(() => {
+    const count = nextMonthPipelineBreakdown.length;
+    const payroll = nextMonthPipelineBreakdown.reduce((s, e) => s + e.totalPackage, 0);
+    const revenue = nextMonthPipelineBreakdown.reduce((s, e) => s + e.revenue, 0);
+    const margin = revenue - payroll;
+    return { count, payroll, revenue, margin };
+  }, [nextMonthPipelineBreakdown]);
+
   // Actual historical run-rate — kept only as an on-screen sanity-check reference
   const actualBaseline = useMemo(() => {
     const completedMonths = months.slice(0, -1);
@@ -2667,6 +2688,8 @@ function ForecastTab({ employees = [] }) {
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 18px; background: #fff; color: #111827; }
         .print-card { break-inside: avoid-page; page-break-inside: avoid; margin-bottom: 14px; }
         table { break-inside: avoid-page; }
+        .no-print { display: none !important; }
+        .methodology-content { display: block !important; }
       </style>
     </head><body>
       <h2 style="margin:0 0 2px;font-size:18px;">Fisheye Forecast — ${selectedClient}</h2>
@@ -2678,25 +2701,33 @@ function ForecastTab({ employees = [] }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Client selector + export toolbar — excluded from the printed/exported report */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, backgroundColor: '#f9fafb', borderRadius: 10, padding: '10px 14px', border: '1px solid #f3f4f6', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Client</span>
-        <select value={selectedClient} onChange={e => setSelectedClient(e.target.value)}
-          style={{ padding: '6px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 12, fontWeight: 700, color: '#374151', cursor: 'pointer' }}>
-          {clients.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>
-          Historical bars = actual invoices · future bars = Confirmed + Pipeline payroll &amp; margin from employee contracts
-        </span>
-        <button onClick={handlePrint}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', background: 'white', fontSize: 12, fontWeight: 700, color: '#374151', cursor: 'pointer' }}>
-          🖨️ Print / Save as PDF
-        </button>
-        <button onClick={handleExportExcel}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: `1.5px solid ${M}55`, background: 'white', fontSize: 12, fontWeight: 700, color: M, cursor: 'pointer' }}>
-          📊 Export Excel
-        </button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Report header + toolbar — excluded from the printed/exported report */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, backgroundColor: 'white', borderRadius: 12, padding: '14px 20px', border: '1px solid #e5e7eb', flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: '#111827', letterSpacing: '-0.2px' }}>{selectedClient} — Revenue Forecast</div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 3 }}>Confirmed vs. Pipeline projection, built from employee contracts</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Client</span>
+            <select value={selectedClient} onChange={e => setSelectedClient(e.target.value)}
+              style={{ padding: '7px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 12, fontWeight: 700, color: '#374151', cursor: 'pointer', background: '#f9fafb' }}>
+              {clients.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{ width: 1, height: 26, background: '#e5e7eb' }} />
+          <button onClick={handlePrint}
+            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 8, border: '1.5px solid #e5e7eb', background: 'white', fontSize: 12, fontWeight: 700, color: '#374151', cursor: 'pointer' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
+            Print / Save as PDF
+          </button>
+          <button onClick={handleExportExcel}
+            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 8, border: 'none', background: M, fontSize: 12, fontWeight: 700, color: 'white', cursor: 'pointer', boxShadow: `0 2px 8px ${M}40` }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+            Export Excel
+          </button>
+        </div>
       </div>
 
       {/* Everything below is what gets printed/exported — wrapped so handlePrint can clone it whole */}
@@ -2715,39 +2746,36 @@ function ForecastTab({ employees = [] }) {
       </div>
 
       {/* Full calendar-year totals — Jan–Dec of the current year in one place */}
-      <div className="print-card" style={{ backgroundColor: '#00293A', borderRadius: 12, padding: '14px 18px' }}>
-        <div style={{ fontSize: 11, fontWeight: 800, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
-          Full Year Totals — {currentYear} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>(Jan–Dec · 100% contract-based: Revenue = payroll + registered margin per employee · Margin = real contracted rate, not Revenue−Payroll — see note below. For actual invoiced revenue, see the Monthly Revenue chart)</span>
+      <div className="print-card" style={{ backgroundColor: MD, borderRadius: 12, padding: '18px 22px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 18 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: 'white', letterSpacing: '0.02em' }}>Full Year Totals — {currentYear}</div>
+          <div style={{ fontSize: 11, color: '#93c5fd' }}>100% contract-based (Jan–Dec) · actual invoiced revenue shown in the chart below</div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 18 }}>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Total Revenue</div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: 'white', fontFamily: 'monospace' }}>SAR {fC(fullYearTotals.revenue)}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Total Payroll</div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: 'white', fontFamily: 'monospace' }}>SAR {fC(fullYearTotals.payroll)}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Total Gross Margin</div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: 'white', fontFamily: 'monospace' }}>SAR {fC(fullYearTotals.gm)}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Total Net Margin</div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: '#4ade80', fontFamily: 'monospace' }}>SAR {fC(fullYearTotals.netMargin)}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Avg Headcount / mo</div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: 'white', fontFamily: 'monospace' }}>{fCount(fullYearTotals.avgHeadcount)}</div>
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)' }}>
+          {[
+            { label: 'Total Revenue', value: `SAR ${fC(fullYearTotals.revenue)}` },
+            { label: 'Total Payroll', value: `SAR ${fC(fullYearTotals.payroll)}` },
+            { label: 'Total Gross Margin', value: `SAR ${fC(fullYearTotals.gm)}`, sub: fullYearTotals.revenue > 0 ? `${(fullYearTotals.gm / fullYearTotals.revenue * 100).toFixed(1)}% of revenue` : null },
+            { label: 'Total Net Margin', value: `SAR ${fC(fullYearTotals.netMargin)}`, sub: fullYearTotals.revenue > 0 ? `${(fullYearTotals.netMargin / fullYearTotals.revenue * 100).toFixed(1)}% of revenue` : null, accent: '#4ade80' },
+            { label: 'Avg Headcount / mo', value: fCount(fullYearTotals.avgHeadcount) },
+          ].map((it, i) => (
+            <div key={it.label} style={{ padding: i > 0 ? '0 18px' : '0 18px 0 0', borderLeft: i > 0 ? '1px solid #ffffff22' : 'none' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{it.label}</div>
+              <div style={{ fontSize: 21, fontWeight: 900, color: it.accent || 'white', fontFamily: 'monospace', letterSpacing: '-0.5px' }}>{it.value}</div>
+              {it.sub && <div style={{ fontSize: 10, color: '#93c5fd', marginTop: 4, fontWeight: 600 }}>{it.sub}</div>}
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Revenue chart: actual invoices (last 12mo) + contract-based Confirmed/Pipeline projection */}
-      <div className="print-card" style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
-        <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
-          Monthly Revenue — {selectedClient} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>(solid = actual invoice · amber dashed = estimated from contracts, not yet invoiced · solid blue/purple = Confirmed · dashed = Pipeline · sanity-check avg last 3mo = SAR {fC(actualBaseline.avgLast3)})</span>
-        </div>
+      <div className="print-card" style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '18px 20px', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+        <ChartHeader title={`Monthly Revenue — ${selectedClient}`} description={`3-month actual average: SAR ${fC(actualBaseline.avgLast3)}/mo`} />
+        <Legend items={[
+          { color: M, label: 'Actual invoice' },
+          { color: '#d97706', dashed: true, label: 'Estimated — not yet invoiced' },
+          ...FORECAST_LEGEND.slice(1),
+        ]} />
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 190, borderBottom: '1px solid #f3f4f6', paddingBottom: 6 }}>
           {months.map(m => {
             const actual = revenueByMonth[m];
@@ -2815,34 +2843,32 @@ function ForecastTab({ employees = [] }) {
           since ended (so historical months reflect who actually worked here then, not
           just who's still active today). See methodology note below for detail. */}
       <MonthlyBarChart
-        title={`Headcount — ${selectedClient}`} note="(people, not SAR — solid past = actual · blue/purple future = Confirmed · dashed = Pipeline)"
+        title={`Headcount — ${selectedClient}`} description="People, not SAR"
         pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: m.headcountConfirmed + m.headcountPipeline }))}
         futureMonths={monthlySeries.future.map(m => ({ key: m.key, label: m.label, isNextMonth: m.isNextMonth, confirmed: m.headcountConfirmed, pipeline: m.headcountPipeline, total: m.headcountConfirmed + m.headcountPipeline }))}
         maxVal={maxHeadcount} fmtK={fCount} fmtFull={fCount} />
 
       <MonthlyBarChart
-        title={`Monthly Payroll (Cost) — ${selectedClient}`} note="(from contracts, incl. since-ended ones — real cost even if invoices aren't entered yet)"
+        title={`Monthly Payroll (Cost) — ${selectedClient}`} description="From contracts, including since-ended ones — real cost even before invoices are entered"
         pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: m.payrollConfirmed + m.payrollPipeline }))}
         futureMonths={monthlySeries.future.map(m => ({ key: m.key, label: m.label, isNextMonth: m.isNextMonth, confirmed: m.payrollConfirmed, pipeline: m.payrollPipeline, total: m.payrollConfirmed + m.payrollPipeline }))}
         maxVal={maxPayroll} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
 
       <MonthlyBarChart
-        title={`Gross Margin — ${selectedClient}`} note="(the client's real contracted margin rate on top of payroll, before partner payout — not Revenue minus Payroll, see note below)"
+        title={`Gross Margin — ${selectedClient}`} description="Real contracted margin rate on top of payroll, before partner payout — not Revenue minus Payroll (see Methodology below)"
         pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: displayFinancials(m).gm }))}
         futureMonths={monthlySeries.future.map(m => ({ key: m.key, label: m.label, isNextMonth: m.isNextMonth, confirmed: m.gmConfirmed, pipeline: m.gmPipeline, total: m.gmConfirmed + m.gmPipeline }))}
         maxVal={maxGM} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
 
       <MonthlyBarChart
-        title={`Net Margin — ${selectedClient}`} note="(gross margin minus partner payout — what Fisheye actually keeps)"
+        title={`Net Margin — ${selectedClient}`} description="Gross Margin minus partner payout — what Fisheye actually keeps"
         pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: displayFinancials(m).netMargin }))}
         futureMonths={monthlySeries.future.map(m => ({ key: m.key, label: m.label, isNextMonth: m.isNextMonth, confirmed: m.netMarginConfirmed, pipeline: m.netMarginPipeline, total: m.netMarginConfirmed + m.netMarginPipeline }))}
         maxVal={maxNetMargin} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
 
       {/* New POs / requests per month — the pipeline/demand signal */}
-      <div className="print-card" style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
-        <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
-          New POs / Requests per Month — {selectedClient}
-        </div>
+      <div className="print-card" style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '18px 20px', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+        <ChartHeader title={`New POs / Requests per Month — ${selectedClient}`} />
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 90, borderBottom: '1px solid #f3f4f6', paddingBottom: 6 }}>
           {months.map(m => (
             <div key={m} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -2861,10 +2887,28 @@ function ForecastTab({ employees = [] }) {
 
       {/* Pipeline breakdown — who's driving next month's Pipeline number */}
       {nextMonthPipelineBreakdown.length > 0 && (
-        <div className="print-card" style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-            Pipeline Employees Driving Next Month — {selectedClient} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>({nextMonthPipelineBreakdown.length} awaiting PO)</span>
+        <div className="print-card" style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '18px 20px', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+          <ChartHeader title={`Pending POs — ${selectedClient}`} description="Active employees still awaiting a purchase order" />
+
+          {/* Total pending-PO summary — the money sitting behind these {count} employees */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
+            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Pending POs</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: '#92400e', fontFamily: 'monospace' }}>{pendingPOsSummary.count}</div>
+              <div style={{ fontSize: 10, color: '#b45309', marginTop: 2, fontWeight: 600 }}>employees awaiting PO</div>
+            </div>
+            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Total Payroll if Approved</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: '#92400e', fontFamily: 'monospace' }}>SAR {fC(pendingPOsSummary.payroll)}</div>
+              <div style={{ fontSize: 10, color: '#b45309', marginTop: 2, fontWeight: 600 }}>per month, cost</div>
+            </div>
+            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Total Margin if Approved</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: '#92400e', fontFamily: 'monospace' }}>SAR {fC(pendingPOsSummary.margin)}</div>
+              <div style={{ fontSize: 10, color: '#b45309', marginTop: 2, fontWeight: 600 }}>per month, before partner payout</div>
+            </div>
           </div>
+
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ borderBottom: '1.5px solid #f3f4f6' }}>
@@ -2892,32 +2936,43 @@ function ForecastTab({ employees = [] }) {
         </div>
       )}
 
-      {/* Methodology note — keep the forecast auditable */}
-      <div className="print-card" style={{ fontSize: 11, color: '#6b7280', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', lineHeight: 1.6 }}>
-        <strong style={{ color: '#92400e' }}>How this is calculated:</strong> for every month shown, every {selectedClient} employee
+      {/* Methodology note — collapsed by default on-screen for a cleaner read, always
+          shown in full in the printed/exported PDF (see .methodology-content !important
+          rule in handlePrint's stylesheet). */}
+      <div className="print-card" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px' }}>
+        <button onClick={() => setShowMethodology(v => !v)} className="no-print"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+            style={{ transform: showMethodology ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}><polyline points="9 18 15 12 9 6" /></svg>
+          Methodology &amp; notes
+          <span style={{ fontWeight: 500, textTransform: 'none', color: '#9ca3af' }}>— how these numbers are calculated</span>
+        </button>
+        <div className="methodology-content" style={{ display: showMethodology ? 'block' : 'none', fontSize: 11, color: '#6b7280', lineHeight: 1.6, marginTop: 10, paddingTop: 10, borderTop: '1px solid #e5e7eb' }}>
+        <strong style={{ color: '#374151' }}>How this is calculated:</strong> for every month shown, every {selectedClient} employee
         whose contract is active that month (by start/end date) is split into <strong>Confirmed</strong> (has a PO number) or <strong>Pipeline</strong> (quotation
         sent, PO still pending). Payroll = each employee's totalPackage. <strong>Gross Margin is the client's real contracted margin rate</strong> — the
         price/margin set on their profile, or this client's average margin (~{(fallbackMarginRatio * 100).toFixed(1)}%) for the rare employee still missing pricing —
         applied every month their contract is active. Net Margin = Gross Margin minus what Fisheye pays the partner (partner-mode employees only, from
         their contract — 0 for direct-mode). Revenue = the actual invoiced amount where one's been entered (VAT-exclusive, via amountPreVat), otherwise
         the same contract estimate (payroll + Gross Margin).
-        <br/><strong style={{ color: '#92400e' }}>Why Revenue − Payroll won't exactly equal Gross Margin some months:</strong> Gross Margin reflects the real
+        <br/><strong style={{ color: '#374151' }}>Why Revenue − Payroll won't exactly equal Gross Margin some months:</strong> Gross Margin reflects the real
         margin RATE Fisheye charges (~{(fallbackMarginRatio * 100).toFixed(1)}% here) — that's the trustworthy number for "what % are we actually making." Revenue, for past
         months, is whatever got invoiced that calendar month — and invoices aren't always dated the same month as the payroll they cover (e.g. a batch
         invoiced in March can cover weeks of earlier work), so "this month's revenue minus this month's payroll" is a cash-timing gap, not a margin
         figure, and can swing well above or below the real ~{(fallbackMarginRatio * 100).toFixed(1)}% rate in any single month. Trust the Gross Margin chart for the real margin;
         trust the Revenue chart for real cash timing — they're answering two different questions, not two views of the same number.
-        <br/><strong style={{ color: '#92400e' }}>Past vs. future months use different employee pools:</strong> future months only count employees still
+        <br/><strong style={{ color: '#374151' }}>Past vs. future months use different employee pools:</strong> future months only count employees still
         active with {selectedClient} today (so someone who's resigned doesn't look like they're still working next month). Past months count EVERY
         employee ever assigned to {selectedClient}, including ones since expired or resigned — someone who left in March was still on payroll in
         January, so excluding them would understate what actually happened. Either way, each employee only counts in the months their own
         start/end date actually covers.
-        <br/><strong style={{ color: '#92400e' }}>Amber dashed bars on the Revenue chart:</strong> when a past month has zero actual invoices, the bar shows the
+        <br/><strong style={{ color: '#374151' }}>Amber dashed bars on the Revenue chart:</strong> when a past month has zero actual invoices, the bar shows the
         contract-based estimate instead (same calculation as the future months) rather than a flat zero — real work happened, the invoice just hasn't
         been entered yet. As soon as that month's invoices are added to the system, its bar automatically switches to the real (solid) invoiced amount.
         {actualBaseline.skippedMonths.length > 0 && (
           <><br/><strong style={{ color: '#b45309' }}>⚠ Heads up:</strong> {actualBaseline.skippedMonths.length} recent month{actualBaseline.skippedMonths.length !== 1 ? 's' : ''} ({actualBaseline.skippedMonths.map(monthLabel).join(', ')}) still show SAR 0 in actual invoices — shown above as amber-dashed estimates from contracts. Worth entering those invoices when you can, for an exact number.</>
         )}
+        </div>
       </div>
 
       </div>
@@ -2927,10 +2982,39 @@ function ForecastTab({ employees = [] }) {
 
 function Kpi({ label, value, sub, color, bg, border }) {
   return (
-    <div style={{ backgroundColor: bg, borderRadius: 10, border: `1px solid ${border}`, borderLeft: `4px solid ${color}`, padding: '12px 14px' }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 16, fontWeight: 900, color, fontFamily: 'monospace', letterSpacing: '-0.5px' }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color, fontWeight: 700, marginTop: 2, opacity: 0.75 }}>{sub}</div>}
+    <div style={{ backgroundColor: bg, borderRadius: 10, border: `1px solid ${border}`, borderLeft: `4px solid ${color}`, padding: '13px 15px', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>{label}</div>
+      <div style={{ fontSize: 17, fontWeight: 900, color, fontFamily: 'monospace', letterSpacing: '-0.5px' }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color, fontWeight: 700, marginTop: 3, opacity: 0.75 }}>{sub}</div>}
+    </div>
+  );
+}
+
+/** Compact card title + one-line muted description, shared across all Forecast charts. */
+function ChartHeader({ title, description }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: '#111827' }}>{title}</div>
+      {description && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{description}</div>}
+    </div>
+  );
+}
+
+/** Row of colored swatches + labels — replaces dense inline "note" text so charts
+ *  are readable at a glance. items: [{color, dashed?, label}]. */
+function Legend({ items }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginBottom: 14 }}>
+      {items.map((it, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#6b7280', fontWeight: 600 }}>
+          <span style={{
+            width: 12, height: 12, borderRadius: 3, display: 'inline-block', flexShrink: 0,
+            background: it.dashed ? 'transparent' : it.color,
+            border: it.dashed ? `1.5px dashed ${it.color}` : 'none',
+          }} />
+          {it.label}
+        </div>
+      ))}
     </div>
   );
 }
@@ -2939,12 +3023,11 @@ function Kpi({ label, value, sub, color, bg, border }) {
  *  (actual/contract) months, Confirmed(solid)+Pipeline(dashed) stacked bars for
  *  future months. pastMonths: [{key,label,total}]. futureMonths: [{key,label,
  *  isNextMonth,confirmed,pipeline,total}]. */
-function MonthlyBarChart({ title, note, pastMonths, futureMonths, maxVal, fmtK, fmtFull }) {
+function MonthlyBarChart({ title, description, pastMonths, futureMonths, maxVal, fmtK, fmtFull }) {
   return (
-    <div className="print-card" style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 18px' }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
-        {title} {note && <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>{note}</span>}
-      </div>
+    <div className="print-card" style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #e5e7eb', padding: '18px 20px', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+      <ChartHeader title={title} description={description} />
+      <Legend items={FORECAST_LEGEND} />
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 170, borderBottom: '1px solid #f3f4f6', paddingBottom: 6 }}>
         {pastMonths.map(m => (
           <div key={m.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
