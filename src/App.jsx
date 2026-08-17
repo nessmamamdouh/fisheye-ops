@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { FinanceModule } from './FinanceModule';
 import ClientPortal from './ClientPortal';
 import PartnerPortal from './PartnerPortal';
+import BonusSIP from './BonusSIP';
 import { OnboardingModule } from './modules/onboarding';
 import { AnalyticsDashboard } from './Analyticsdashboard';
 import WeeklyMonthlyReports from './Weeklymonthlyreports';
@@ -6798,6 +6799,7 @@ export default function App() {
       <Routes>
         <Route path="/partner/:partnerId" element={<PartnerPortal employees={employees} partners={partners}/>}/>
         <Route path="/client/:clientName"  element={<ClientPortal employees={employees}/>}/>
+        <Route path="/my-bonus" element={<BonusSIP employees={employees}/>}/>
         <Route path="/*" element={<FisheyeOpsPro employees={employees} setEmployees={setEmployees}/>}/>
       </Routes>
     </BrowserRouter>

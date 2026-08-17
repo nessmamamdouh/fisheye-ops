@@ -29,7 +29,7 @@ const fmtNum = n =>
   Number(n || 0).toLocaleString("en-SA", { minimumFractionDigits: 2 });
  
 /** Calculate per-employee billing line */
-const calcLine = emp => {
+export const calcLine = emp => {
   const totalPkg = Number(emp.totalPackage || 0);
   let marginAmount = 0;
 
@@ -51,7 +51,7 @@ const calcLine = emp => {
 };
 
 /** What Fisheye pays the partner (cost side) */
-const calcPartnerPayout = emp => {
+export const calcPartnerPayout = emp => {
   if (emp.profitMode !== "partner") return 0;
   const totalPkg = Number(emp.totalPackage || 0);
   if (emp.partnerCostType === "percent") return Math.round((Number(emp.partnerCost || 0) / 100) * totalPkg);
@@ -198,7 +198,7 @@ function parseYM(ym) {
  * parseDate(str) — handles MM/DD/YY, MM/DD/YYYY, and YYYY-MM-DD safely.
  * Avoids (a) 2-digit year → 1926 bug and (b) ISO UTC midnight → wrong local day.
  */
-function parseDate(str) {
+export function parseDate(str) {
   if (!str) return null;
   const s = String(str).trim();
   // ISO: YYYY-MM-DD (parse as local to avoid UTC shift)
