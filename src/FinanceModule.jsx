@@ -2684,9 +2684,14 @@ function ForecastTab({ employees = [] }) {
       <title>Fisheye Forecast — ${selectedClient}</title>
       <style>
         @page { size: A4 landscape; margin: 12mm; }
-        * { box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 18px; background: #fff; color: #111827; }
-        .print-card { break-inside: avoid-page; page-break-inside: avoid; margin-bottom: 14px; }
+        * {
+          box-sizing: border-box;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 18px; background: #fff; color: #111827; -webkit-font-smoothing: antialiased; }
+        .print-card { break-inside: avoid-page; page-break-inside: avoid; margin-bottom: 14px; box-shadow: none !important; }
         table { break-inside: avoid-page; }
         .no-print { display: none !important; }
         .methodology-content { display: block !important; }
