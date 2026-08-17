@@ -2524,6 +2524,33 @@ function ForecastTab({ employees = [] }) {
     return map;
   }, [monthlySeries]);
 
+  // Full calendar-year (Jan–Dec of the current year) totals — the past months (Jan..this
+  // month) use actual invoiced revenue where available, falling back to the same
+  // contract-based estimate the chart uses when a month's invoice isn't entered yet; the
+  // remaining months use the Confirmed+Pipeline projection. Payroll/Margin always come
+  // from contracts (past pool includes since-ended employees, future pool active-only).
+  const fullYearTotals = useMemo(() => {
+    const yearPrefix = `${currentYear}-`;
+    const pastInYear = monthlySeries.past.filter(m => m.key.startsWith(yearPrefix));
+    const monthsInYear = [...pastInYear, ...monthlySeries.future];
+    let revenue = 0, payroll = 0, gm = 0, netMargin = 0, headcountSum = 0;
+    monthsInYear.forEach(m => {
+      const rev = m.isFuture
+        ? m.revenueConfirmed + m.revenuePipeline
+        : (revenueByMonth[m.key] > 0 ? revenueByMonth[m.key] : (pastRevenueByKey[m.key] || 0));
+      revenue += rev;
+      payroll += m.payrollConfirmed + m.payrollPipeline;
+      gm += m.gmConfirmed + m.gmPipeline;
+      netMargin += m.netMarginConfirmed + m.netMarginPipeline;
+      headcountSum += m.headcountConfirmed + m.headcountPipeline;
+    });
+    return {
+      revenue, payroll, gm, netMargin,
+      avgHeadcount: monthsInYear.length ? headcountSum / monthsInYear.length : 0,
+      monthCount: monthsInYear.length,
+    };
+  }, [monthlySeries, revenueByMonth, pastRevenueByKey, currentYear]);
+
   const maxBar = Math.max(
     ...months.map(m => revenueByMonth[m]),
     ...months.map(m => pastRevenueByKey[m] || 0),
@@ -2555,6 +2582,13 @@ function ForecastTab({ employees = [] }) {
     rows.push(['Gross Margin (SAR)', fC(nextMonth.gmConfirmed + nextMonth.gmPipeline)]);
     rows.push(['Net Margin (SAR)', fC(nextMonth.netMarginConfirmed + nextMonth.netMarginPipeline)]);
     rows.push([`Rest of ${currentYear} net margin (SAR)`, fC(remainingNetMargin)]);
+    rows.push([]);
+    rows.push([`Full Year Totals — ${currentYear} (Jan–Dec)`, 'Value']);
+    rows.push(['Total Revenue (SAR)', fC(fullYearTotals.revenue)]);
+    rows.push(['Total Payroll (SAR)', fC(fullYearTotals.payroll)]);
+    rows.push(['Total Gross Margin (SAR)', fC(fullYearTotals.gm)]);
+    rows.push(['Total Net Margin (SAR)', fC(fullYearTotals.netMargin)]);
+    rows.push(['Avg Headcount / month', fCount(fullYearTotals.avgHeadcount)]);
     rows.push([]);
     rows.push(['Month', 'Type', 'Actual Revenue — invoices (SAR)', 'Headcount Confirmed', 'Headcount Pipeline', 'Payroll Confirmed (SAR)', 'Payroll Pipeline (SAR)', 'Gross Margin Confirmed (SAR)', 'Gross Margin Pipeline (SAR)', 'Net Margin Confirmed (SAR)', 'Net Margin Pipeline (SAR)']);
     monthlySeries.past.forEach(m => rows.push([m.label, 'Past', Math.round(revenueByMonth[m.key] || 0), m.headcountConfirmed, m.headcountPipeline, Math.round(m.payrollConfirmed), Math.round(m.payrollPipeline), Math.round(m.gmConfirmed), Math.round(m.gmPipeline), Math.round(m.netMarginConfirmed), Math.round(m.netMarginPipeline)]));
@@ -2640,6 +2674,35 @@ function ForecastTab({ employees = [] }) {
         <Kpi label="Next month — Gross Margin" value={`SAR ${fC(nextMonth.gmConfirmed + nextMonth.gmPipeline)}`} sub="before partner payout" color="#7c3aed" bg="#faf5ff" border="#ddd6fe" />
         <Kpi label="Next month — Net Margin" value={`SAR ${fC(nextMonth.netMarginConfirmed + nextMonth.netMarginPipeline)}`} sub="after partner payout" color="#059669" bg="#f0fdf4" border="#bbf7d0" />
         <Kpi label={`Rest of ${currentYear} (${monthsLeftInYear}mo)`} value={`SAR ${fC(remainingNetMargin)}`} sub="net margin" color={M} bg="#fff5f5" border={`${M}33`} />
+      </div>
+
+      {/* Full calendar-year totals — Jan–Dec of the current year in one place */}
+      <div className="print-card" style={{ backgroundColor: '#00293A', borderRadius: 12, padding: '14px 18px' }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+          Full Year Totals — {currentYear} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>(Jan–Dec · actual invoices + contract estimates where missing + Confirmed/Pipeline projection)</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 18 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Total Revenue</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: 'white', fontFamily: 'monospace' }}>SAR {fC(fullYearTotals.revenue)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Total Payroll</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: 'white', fontFamily: 'monospace' }}>SAR {fC(fullYearTotals.payroll)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Total Gross Margin</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: 'white', fontFamily: 'monospace' }}>SAR {fC(fullYearTotals.gm)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Total Net Margin</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: '#4ade80', fontFamily: 'monospace' }}>SAR {fC(fullYearTotals.netMargin)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Avg Headcount / mo</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: 'white', fontFamily: 'monospace' }}>{fCount(fullYearTotals.avgHeadcount)}</div>
+          </div>
+        </div>
       </div>
 
       {/* Revenue chart: actual invoices (last 12mo) + contract-based Confirmed/Pipeline projection */}
