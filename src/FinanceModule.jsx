@@ -2532,33 +2532,29 @@ function ForecastTab({ employees = [] }) {
     return map;
   }, [monthlySeries]);
 
-  // Displayed Revenue / Gross Margin / Net Margin for a given month — guarantees
-  // Revenue − Payroll = Gross Margin and Gross Margin − Partner Payout = Net Margin
-  // hold EXACTLY, for every month and in every total, with no exceptions:
-  //   - Future months: everything is contract-based already, so this is a no-op —
-  //     revenueForEmp() was already built as payroll + margin per employee.
-  //   - Past months WITH actual invoices: Revenue = the real invoiced amount (ground
-  //     truth), so Gross Margin is DERIVED as Revenue − Payroll for that month instead
-  //     of using the contract's planned margin — the real invoice is what actually
-  //     happened, so that's the correct realized margin for that month.
-  //   - Past months with NO invoices yet: falls back to the contract estimate for both
-  //     Revenue and Gross Margin (same numbers as the amber-dashed bar on the chart).
-  // Partner payout (Gross Margin − Net Margin) is always taken from contracts — payout
-  // terms don't change based on invoicing timing — then subtracted from whichever
-  // Gross Margin figure applies.
+  // Displayed Revenue / Gross Margin / Net Margin for a given month.
+  //
+  // IMPORTANT: Gross Margin and Net Margin are always the CONTRACT-based figures — the
+  // real margin rate on each employee's actual pricing (~{fallbackMarginRatio-ish}%, the
+  // rate Fisheye actually charges). They are NOT derived by subtracting Payroll from
+  // actual invoiced Revenue. That was tried and produced nonsense (a one-off month's
+  // margin swinging to near-zero or negative) because actual invoices are batched and
+  // dated independently of when the underlying payroll/work happened — e.g. a single
+  // invoice in March can cover weeks of work billed late, so "March revenue minus March
+  // payroll" doesn't measure March's real margin at all, it measures a timing gap.
+  // Revenue itself still prefers the actual invoiced amount when one exists (ground truth
+  // cash), falling back to the contract estimate otherwise — so Revenue and Payroll are
+  // each individually reliable, but Revenue − Payroll for a past month is a cash-timing
+  // gap, not a margin figure. Gross Margin is the trustworthy number for "what % are we
+  // actually charging on top of cost" — that's what should be quoted as the margin rate.
   const displayFinancials = m => {
     const payroll = m.payrollConfirmed + m.payrollPipeline;
-    const contractGM = m.gmConfirmed + m.gmPipeline;
-    const contractNet = m.netMarginConfirmed + m.netMarginPipeline;
-    const partnerPayout = contractGM - contractNet;
-    if (m.isFuture) {
-      const revenue = m.revenueConfirmed + m.revenuePipeline;
-      return { revenue, gm: contractGM, netMargin: contractNet, payroll };
-    }
-    const actual = revenueByMonth[m.key] || 0;
-    const revenue = actual > 0 ? actual : (pastRevenueByKey[m.key] || 0);
-    const gm = revenue - payroll;
-    return { revenue, gm, netMargin: gm - partnerPayout, payroll };
+    const gm = m.gmConfirmed + m.gmPipeline;
+    const netMargin = m.netMarginConfirmed + m.netMarginPipeline;
+    const revenue = m.isFuture
+      ? m.revenueConfirmed + m.revenuePipeline
+      : ((revenueByMonth[m.key] || 0) > 0 ? revenueByMonth[m.key] : (pastRevenueByKey[m.key] || 0));
+    return { revenue, gm, netMargin, payroll };
   };
 
   // Full calendar-year (Jan–Dec of the current year) totals — see displayFinancials()
@@ -2718,7 +2714,7 @@ function ForecastTab({ employees = [] }) {
       {/* Full calendar-year totals — Jan–Dec of the current year in one place */}
       <div className="print-card" style={{ backgroundColor: '#00293A', borderRadius: 12, padding: '14px 18px' }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
-          Full Year Totals — {currentYear} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>(Jan–Dec · actual invoices + contract estimates where missing + Confirmed/Pipeline projection)</span>
+          Full Year Totals — {currentYear} <span style={{ fontWeight: 500, color: '#9ca3af', textTransform: 'none' }}>(Jan–Dec · Revenue = actual invoices + estimates · Margin = real contracted rate, not Revenue−Payroll — see note below)</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 18 }}>
           <div>
@@ -2828,7 +2824,7 @@ function ForecastTab({ employees = [] }) {
         maxVal={maxPayroll} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
 
       <MonthlyBarChart
-        title={`Gross Margin — ${selectedClient}`} note="(= Revenue − Payroll, before partner payout · past months use actual revenue where invoiced)"
+        title={`Gross Margin — ${selectedClient}`} note="(the client's real contracted margin rate on top of payroll, before partner payout — not Revenue minus Payroll, see note below)"
         pastMonths={monthlySeries.past.map(m => ({ key: m.key, label: m.label, total: displayFinancials(m).gm }))}
         futureMonths={monthlySeries.future.map(m => ({ key: m.key, label: m.label, isNextMonth: m.isNextMonth, confirmed: m.gmConfirmed, pipeline: m.gmPipeline, total: m.gmConfirmed + m.gmPipeline }))}
         maxVal={maxGM} fmtK={fK} fmtFull={n => `SAR ${fC(n)}`} />
@@ -2897,12 +2893,17 @@ function ForecastTab({ employees = [] }) {
       <div className="print-card" style={{ fontSize: 11, color: '#6b7280', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', lineHeight: 1.6 }}>
         <strong style={{ color: '#92400e' }}>How this is calculated:</strong> for every month shown, every {selectedClient} employee
         whose contract is active that month (by start/end date) is split into <strong>Confirmed</strong> (has a PO number) or <strong>Pipeline</strong> (quotation
-        sent, PO still pending). Payroll = each employee's totalPackage. Revenue = the actual invoiced amount where one's been entered (VAT-exclusive,
-        via amountPreVat), otherwise the contract estimate (payroll + client price/margin, or this client's average margin ~{(fallbackMarginRatio * 100).toFixed(1)}%
-        for the rare employee still missing pricing). <strong>Gross Margin is always Revenue − Payroll</strong> — for months with a real invoice, that's the
-        margin actually realized that month; otherwise it's the contract's planned margin. <strong>Net Margin is always Gross Margin minus partner payout</strong>
-        (partner-mode employees only, taken from their contract — 0 for direct-mode). This holds exactly for every single month and for every total on this page:
-        Revenue − Payroll = Gross Margin, and Gross Margin − Partner Payout = Net Margin, with no exceptions.
+        sent, PO still pending). Payroll = each employee's totalPackage. <strong>Gross Margin is the client's real contracted margin rate</strong> — the
+        price/margin set on their profile, or this client's average margin (~{(fallbackMarginRatio * 100).toFixed(1)}%) for the rare employee still missing pricing —
+        applied every month their contract is active. Net Margin = Gross Margin minus what Fisheye pays the partner (partner-mode employees only, from
+        their contract — 0 for direct-mode). Revenue = the actual invoiced amount where one's been entered (VAT-exclusive, via amountPreVat), otherwise
+        the same contract estimate (payroll + Gross Margin).
+        <br/><strong style={{ color: '#92400e' }}>Why Revenue − Payroll won't exactly equal Gross Margin some months:</strong> Gross Margin reflects the real
+        margin RATE Fisheye charges (~{(fallbackMarginRatio * 100).toFixed(1)}% here) — that's the trustworthy number for "what % are we actually making." Revenue, for past
+        months, is whatever got invoiced that calendar month — and invoices aren't always dated the same month as the payroll they cover (e.g. a batch
+        invoiced in March can cover weeks of earlier work), so "this month's revenue minus this month's payroll" is a cash-timing gap, not a margin
+        figure, and can swing well above or below the real ~{(fallbackMarginRatio * 100).toFixed(1)}% rate in any single month. Trust the Gross Margin chart for the real margin;
+        trust the Revenue chart for real cash timing — they're answering two different questions, not two views of the same number.
         <br/><strong style={{ color: '#92400e' }}>Past vs. future months use different employee pools:</strong> future months only count employees still
         active with {selectedClient} today (so someone who's resigned doesn't look like they're still working next month). Past months count EVERY
         employee ever assigned to {selectedClient}, including ones since expired or resigned — someone who left in March was still on payroll in
