@@ -18,7 +18,7 @@ import {
   Download, MessageCircle, Calendar, AlertCircle, Trash2, BarChart2,
   Menu, ChevronDown, Copy, Check, Mail, Filter, FileUp,
   Edit3, Save, Hash, Zap, ClipboardList, Briefcase, Archive, Globe, Link, Inbox, UserPlus, Database,
-  Target, CalendarDays, Receipt, AlertTriangle, RefreshCw, GitBranch
+  Target, CalendarDays, Receipt, AlertTriangle, RefreshCw, GitBranch, Award
 } from "lucide-react";
 import { ActionCenter, OperationsCalendar, ClientCommandCenter } from './ActionCenterV2';
 
@@ -6488,6 +6488,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
     { k:"partners",     l:"Partners",       i:Briefcase,   section:null      },
     { k:"onboarding",   l:"Onboarding",     i:UserPlus,    section:"OPS"     },
     { k:"finance",      l:"Finance",        i:DollarSign,  section:null      },
+    { k:"bonus",        l:"My Bonus",       i:Award,       section:null      },
     { k:"analytics",    l:"Analytics",      i:BarChart2,   section:"INSIGHTS"},
     { k:"weeklyreport", l:"Reports",        i:FileText,    section:null      },
     { k:"settings",     l:"Settings",       i:Settings,    section:"SYSTEM"  },
@@ -6501,6 +6502,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
     clients:     "🏢 Client Command Center",
     partners:    "🤝 Partner Hub",
     finance:     "💳 Finance & Reconciliation",
+    bonus:       "🏆 My Bonus — SIP Outsourcing Policy",
     billing:     "📄 Billing Flow",
     onboarding:  "🚀 Onboarding Tracker",
     analytics:   "📈 Analytics Dashboard",
@@ -6736,6 +6738,9 @@ function FisheyeOpsPro({ employees, setEmployees }) {
 
           {/* ── FINANCE (consolidated: Payroll · Billing · Settlements) ── */}
           {nav==="finance" && <FinanceModule employees={employees} setEmployees={setEmployees} onNav={k => { setNav(k); localStorage.setItem("fisheye_nav", k); }} pendingOpenPO={pendingOpenPO} onPendingPOHandled={() => setPendingOpenPO(null)}/>}
+
+          {/* ── MY BONUS (SIP Outsourcing Policy) ── */}
+          {nav==="bonus" && <BonusSIP employees={employees} embedded/>}
 
           {/* ── ONBOARDING ── */}
           {nav==="onboarding" && <OnboardingModule employees={employees} setEmployees={setEmployees} partners={partners}/>}

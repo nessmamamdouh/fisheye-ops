@@ -3,11 +3,12 @@ import { getClientsList } from './utils/helpers';
 import { supabase } from './utils/supabase';
 import { calcLine, parseDate } from './FinanceModule';
 
-// Private, unlinked page — reachable only via direct URL (/my-bonus), not in any
-// sidebar/nav. Implements the SIP Outsourcing Policy (Ref. FE-2026-010) incentive
-// calculator: Gross Margin achievement vs. annual target → CAT 1-3 incentive tiers,
-// year-end over-achievement, and (for Account Management) margin-sharing on
-// handed-over clients.
+// Implements the SIP Outsourcing Policy (Ref. FE-2026-010) incentive calculator:
+// Gross Margin achievement vs. annual target → CAT 1-3 incentive tiers, year-end
+// over-achievement, and (for Account Management) margin-sharing on handed-over
+// clients. Used two ways: as the "My Bonus" sidebar tab inside the main app shell
+// (embedded=true, no own page chrome) and as a standalone page at /my-bonus
+// (embedded=false, renders its own full-page background/header).
 
 const M  = '#A02843';
 const MD = '#00293A';
@@ -37,7 +38,7 @@ const categoryFor = pct => {
   return               { name: 'Below 80% — Not Eligible',   rate: 0,    color: '#9ca3af' };
 };
 
-export default function BonusSIP({ employees = [] }) {
+export default function BonusSIP({ employees = [], embedded = false }) {
   const [role, setRole] = useState('Account Management');
   const [annualTarget, setAnnualTarget] = useState(0);
   const [selectedClients, setSelectedClients] = useState([]);
@@ -152,19 +153,31 @@ export default function BonusSIP({ employees = [] }) {
   const sectionTitle = { fontSize: 13, fontWeight: 800, color: '#111827', marginBottom: 4 };
   const sectionDesc = { fontSize: 11, color: '#9ca3af', marginBottom: 16 };
 
+  const Wrapper = embedded ? React.Fragment : 'div';
+  const wrapperProps = embedded ? {} : { style: { backgroundColor: '#f9fafb', minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif', padding: '28px 32px' } };
+
   return (
-    <div style={{ backgroundColor: '#f9fafb', minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif', padding: '28px 32px' }}>
+    <Wrapper {...wrapperProps}>
       <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
         {/* Header */}
+        {!embedded && (
         <div>
           <div style={{ fontSize: 20, fontWeight: 900, color: '#111827', letterSpacing: '-0.3px' }}>My Bonus — SIP Outsourcing Policy</div>
           <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
-            Personal incentive calculator, Ref. FE-2026-010 · {currentYear} · private page, not linked anywhere in the app
+            Personal incentive calculator, Ref. FE-2026-010 · {currentYear}
             {saveState === 'saving' && <span style={{ marginLeft: 8, color: '#d97706' }}>saving…</span>}
             {saveState === 'saved' && <span style={{ marginLeft: 8, color: '#059669' }}>saved</span>}
           </div>
         </div>
+        )}
+        {embedded && (
+        <div style={{ fontSize: 12, color: '#9ca3af' }}>
+          Personal incentive calculator, Ref. FE-2026-010 · {currentYear}
+          {saveState === 'saving' && <span style={{ marginLeft: 8, color: '#d97706' }}>saving…</span>}
+          {saveState === 'saved' && <span style={{ marginLeft: 8, color: '#059669' }}>saved</span>}
+        </div>
+        )}
 
         {/* Settings */}
         <div style={card}>
@@ -327,6 +340,6 @@ export default function BonusSIP({ employees = [] }) {
         </div>
 
       </div>
-    </div>
+    </Wrapper>
   );
 }
