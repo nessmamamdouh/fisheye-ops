@@ -30,6 +30,16 @@ const isActiveInMonth = (e, year, month) => {
   return (!start || start <= monthEnd) && (!end || end >= monthStart);
 };
 
+// Manual GM correction — Sela's system-computed H1 2026 GM (SAR 564,063.72) sits
+// below the official finance figure from Ahmed Talaat's H1 email (SAR 596,682.45),
+// a known ~32,619 SAR gap the system doesn't yet capture (contract-timing/invoice
+// lag, not a data error worth reconciling employee-by-employee across 474 records).
+// Applied ONLY here in the bonus calculator, added to H1 gm/nm alongside the
+// system total — the Forecast tab is left untouched and stays 100% system-derived.
+const GM_CORRECTIONS = {
+  Sela: { period: 'H1', amount: 596682.45 - 564063.72 }, // = 32,618.73
+};
+
 // CAT 1-3 tiers from the policy §5.1 — same table for both roles.
 const categoryFor = pct => {
   if (pct >= 1)    return { name: 'CAT 1 — Outstanding',        rate: 0.15, color: '#059669' };
@@ -112,7 +122,14 @@ export default function BonusSIP({ employees = [], embedded = false }) {
           }
         });
       }
-      perClient.push({ client: clientName, gm: clientGM, netMargin: clientNM, headcount: clientEmployeesAll.length });
+      const correction = GM_CORRECTIONS[clientName];
+      if (correction) {
+        clientGM += correction.amount;
+        clientNM += correction.amount;
+        if (correction.period === 'H1') { gmH1 += correction.amount; nmH1 += correction.amount; }
+        else { gmH2 += correction.amount; nmH2 += correction.amount; }
+      }
+      perClient.push({ client: clientName, gm: clientGM, netMargin: clientNM, headcount: clientEmployeesAll.length, correction: correction?.amount || 0 });
     });
     return { gmH1, gmH2, gmAnnual: gmH1 + gmH2, nmH1, nmH2, nmAnnual: nmH1 + nmH2, perClient };
   }, [employees, selectedClients, currentYear]);
@@ -232,6 +249,11 @@ export default function BonusSIP({ employees = [], embedded = false }) {
         <div style={{ ...card, backgroundColor: MD }}>
           <div style={{ ...sectionTitle, color: 'white' }}>Net Margin Achievement — {currentYear}</div>
           <div style={{ ...sectionDesc, color: '#93c5fd' }}>From your selected clients' contracts — Gross Margin minus partner payout (Gross Margin achieved: SAR {fC(gmBreakdown.gmAnnual)})</div>
+          {gmBreakdown.perClient.some(c => c.correction) && (
+            <div style={{ fontSize: 10, color: '#fcd34d', marginTop: -8, marginBottom: 14 }}>
+              Includes a manual H1 correction for Sela (+SAR {fC(GM_CORRECTIONS.Sela.amount)}) to match Ahmed Talaat's official finance figures — bonus calculator only, Forecast tab is unaffected.
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
             {[
               { l: 'H1 Achieved (Jan-Jun)', v: `SAR ${fC(gmBreakdown.nmH1)}` },
