@@ -11,6 +11,7 @@ import WeeklyReportGenerator from './Weeklyreportgenerator';
 import { useSupabaseSync } from './hooks/useSupabaseSync';
 import { supabase, testConnection } from './utils/supabase';
 import { isExcluded, isWFDone, hasMissingPO, hasValidPO, getClientsList } from './utils/helpers';
+import { getEffectiveClientsList, getEffectiveClientMeta, getEffectiveMappingRules, CLIENT_COLOR_PALETTE, CONFIG_KEY, classifyProject } from './utils/appConfig';
 import {
   LayoutDashboard, Users, DollarSign, Ticket, Settings, Building2,
   Bell, Clock, FileText, Upload, Plus, X, Send, Eye,
@@ -45,14 +46,8 @@ const MD = "#00293A";  // Fisheye Navy    — Pantone 303C
 const ML = "#c04060";  // Crimson light tint
 const TODAY = new Date();
 TODAY.setHours(0, 0, 0, 0);
-const CLIENTS_LIST = ["Sela","Channelplay","Riva Engineering 2"];
-const CLIENT_META = {
-  "Sela":               { badge:"#bbf7d0", text:"#14532d", dot:"#16a34a", phone:"" },
-  "SPL":                { badge:"#e9d5ff", text:"#4c1d95", dot:"#7c3aed", phone:"" },
-  "Channelplay":        { badge:"#bfdbfe", text:"#1e3a8a", dot:"#2563eb", phone:"" },
-  "Riva Engineering 2": { badge:"#fecdd3", text:"#881337", dot:M,         phone:"" },
-  "Combuzz HR":         { badge:"#fed7aa", text:"#7c2d12", dot:"#ea580c", phone:"" },
-};
+const CLIENTS_LIST = getEffectiveClientsList();
+const CLIENT_META = getEffectiveClientMeta();
 const WORKFLOW_OPTS = [
   "Docs Requested","Docs Received","Docs Received +","Agreement Sent",
   "Agreement Signed","Pending","Complete","Rejected","Qiwa Submitted","Qiwa Approved", "Onboarding", "Iqama Transferred"
@@ -80,13 +75,7 @@ function calculateHeadcountByClient(employees) {
 }
 
 function mapClient(project = "") {
-  const p = project.trim().toUpperCase();
-  if (!p) return "Sela";
-  if (p === "CEO") return "Riva Engineering 2";
-  if (p.includes("SILQFI")) return "Channelplay";
-  if (p.includes("SPL")) return "SPL";
-  if (["MAVERIC","C5I","INSPIRING MINDS","SAUDI FRANSI"].some(k => p.includes(k))) return "Combuzz HR";
-  return "Sela";
+  return classifyProject(project);
 }
 
 function parseCSVLine(line) {
@@ -3506,7 +3495,7 @@ function calcClientHealth(clientName, employees) {
 // ─── CLIENT HUB ─────────────────────────────────────────────────────────
 const DEF_CLIENTS=[
   {id:"C-01",name:"Sela",region:"Riyadh",email:"contact@sela.sa",status:"active",contacts:[{name:"Ahmed Al-Saleh",role:"HR Director",phone:"+966501234567"},{name:"Layla Al-Rashid",role:"Finance",phone:"+966502345678"}],notes:"Primary client · Multiple projects",requestLog:[{ts:"2026-04-20T10:00:00Z",type:"Invoice",employee:"Batch A",status:"Completed"},{ts:"2026-04-28T15:00:00Z",type:"Contract Update",employee:"Batch B",status:"Pending"}]},
-  {id:"C-03",name:"Channelplay",region:"Eastern Province",email:"admin@channelplay.sa",status:"active",contacts:[{name:"Sara Mohammed",role:"HR Manager",phone:"+966507654321"}],notes:"Tech company · SILQFI projects",requestLog:[]},
+  {id:"C-03",name:"Channel Play",region:"Eastern Province",email:"admin@Channel Play.sa",status:"active",contacts:[{name:"Sara Mohammed",role:"HR Manager",phone:"+966507654321"}],notes:"Tech company · SILQFI projects",requestLog:[]},
   {id:"C-04",name:"Riva Engineering 2",region:"Riyadh",email:"ops@riva.sa",status:"active",contacts:[{name:"Mohammed CEO",role:"Executive",phone:"+966501111111"}],notes:"CEO projects",requestLog:[]},
 ];
 
@@ -5436,6 +5425,231 @@ function NotificationsSettings({ employees }) {
   );
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🗂️ CONFIGURATION PANEL — Settings → Configuration
+// Edits the client list / colors / auto-classification rules that used to be
+// hardcoded (CLIENTS_LIST, CLIENT_META, mapClient). Renaming a client cascades
+// to existing employee records and Client Hub records, then persists + reloads.
+// ═══════════════════════════════════════════════════════════════════════════════
+function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
+  const [rows, setRows] = useState(() => {
+    const list = getEffectiveClientsList();
+    const meta = getEffectiveClientMeta();
+    return list.map((name, i) => ({
+      id: `row-${i}-${name}`,
+      origName: name,
+      name,
+      meta: meta[name] || CLIENT_COLOR_PALETTE[i % CLIENT_COLOR_PALETTE.length],
+    }));
+  });
+  const [rules, setRules] = useState(() => getEffectiveMappingRules().map((r, i) => ({ id: `rule-${i}`, ...r })));
+  const [testProject, setTestProject] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  const empCountFor = (name) => employees.filter(e => e.client === name).length;
+
+  const updateRowName  = (id, val)  => setRows(rs => rs.map(r => r.id === id ? { ...r, name: val } : r));
+  const updateRowColor = (id, meta) => setRows(rs => rs.map(r => r.id === id ? { ...r, meta } : r));
+  const addRow = () => setRows(rs => [...rs, { id: `row-new-${Date.now()}`, origName: "", name: "", meta: CLIENT_COLOR_PALETTE[rs.length % CLIENT_COLOR_PALETTE.length] }]);
+  const removeRow = (id) => {
+    const row = rows.find(r => r.id === id);
+    if (!row) return;
+    const count = row.origName ? empCountFor(row.origName) : 0;
+    if (count > 0) {
+      alert(`مينفعش تمسحي "${row.origName}" — لسه فيه ${count} موظف مسجل تحته. غيّري الاسم بدل ما تمسحيه، أو انقلي الموظفين لعميل تاني الأول.`);
+      return;
+    }
+    setRows(rs => rs.filter(r => r.id !== id));
+  };
+
+  const clientOptions   = rows.map(r => r.name.trim()).filter(Boolean);
+  const nonDefaultRules = rules.filter(r => r.matchType !== "default");
+  const defaultRule     = rules.find(r => r.matchType === "default") || { id: "rule-default", client: clientOptions[0] || "", matchType: "default", value: "" };
+  const updateRule = (id, patch) => setRules(rs => rs.map(r => r.id === id ? { ...r, ...patch } : r));
+  const removeRule = (id) => setRules(rs => rs.filter(r => r.id !== id));
+  const addRule = () => setRules(rs => {
+    const idx = rs.findIndex(r => r.matchType === "default");
+    const newRule = { id: `rule-new-${Date.now()}`, client: clientOptions[0] || "", matchType: "contains", value: "" };
+    const arr = [...rs];
+    if (idx === -1) arr.push(newRule); else arr.splice(idx, 0, newRule);
+    return arr;
+  });
+  const moveRule = (id, dir) => setRules(rs => {
+    const arr = [...rs];
+    const i = arr.findIndex(r => r.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= arr.length || arr[j].matchType === "default" || arr[i].matchType === "default") return rs;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    return arr;
+  });
+
+  const testResult = useMemo(() => {
+    if (!testProject.trim()) return null;
+    return classifyProject(testProject, [...nonDefaultRules, defaultRule]);
+  }, [testProject, rules]);
+
+  const pendingRenames = rows.filter(r => r.origName && r.name.trim() && r.origName !== r.name.trim());
+  const totalAffected  = pendingRenames.reduce((sum, r) => sum + empCountFor(r.origName), 0);
+
+  const doSave = async () => {
+    const finalNames = rows.map(r => r.name.trim()).filter(Boolean);
+    if (!finalNames.length) return alert("لازم يفضل عميل واحد على الأقل في الليستة.");
+    if (new Set(finalNames).size !== finalNames.length) return alert("في اسمين عملاء نفس بعض — لازم كل اسم يكون فريد.");
+    if (nonDefaultRules.some(r => !r.value.trim())) return alert("في قاعدة تصنيف من غير كلمة مفتاحية — املاها أو امسحيها.");
+    if (!defaultRule.client) return alert("لازم تختاري عميل افتراضي (آخر قاعدة).");
+
+    if (pendingRenames.length) {
+      const ok = window.confirm(
+        `هيتم تحديث ${totalAffected} موظف تلقائيًا بالأسماء الجديدة:\n` +
+        pendingRenames.map(r => `• ${r.origName} → ${r.name.trim()}`).join("\n") +
+        `\n\nمتابعة؟`
+      );
+      if (!ok) return;
+    }
+
+    setSaving(true);
+    try {
+      let updatedEmployees = employees;
+      for (const r of pendingRenames) {
+        const oldName = r.origName, newName = r.name.trim();
+        const affected = updatedEmployees.filter(e => e.client === oldName);
+        if (affected.length) {
+          updatedEmployees = updatedEmployees.map(e => e.client === oldName ? { ...e, client: newName } : e);
+          const ids = affected.map(e => e._id);
+          await supabase.from('employees_master').update({ client: newName }).in('_id', ids);
+        }
+      }
+      if (updatedEmployees !== employees) {
+        setEmployees(updatedEmployees);
+        try { localStorage.setItem("fisheyeData_v3", JSON.stringify(updatedEmployees)); } catch {}
+      }
+
+      if (pendingRenames.length && Array.isArray(clients) && clients.length) {
+        const lookup = Object.fromEntries(pendingRenames.map(r => [r.origName, r.name.trim()]));
+        const newClients = clients.map(c => lookup[c.name] ? { ...c, name: lookup[c.name] } : c);
+        saveClients && saveClients(newClients);
+      }
+
+      const clientMeta = {};
+      rows.forEach(r => { const n = r.name.trim(); if (n) clientMeta[n] = r.meta; });
+      const mappingRules = [
+        ...nonDefaultRules.map(r => ({ client: r.client, matchType: r.matchType, value: r.value.trim() })),
+        { client: defaultRule.client, matchType: "default", value: "" },
+      ];
+      const finalCfg = { clientsList: finalNames, clientMeta, mappingRules };
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(finalCfg));
+      const { error } = await supabase.from('fisheye_app_data').upsert({ key: CONFIG_KEY, data: finalCfg }, { onConflict: 'key' });
+      if (error) console.warn('config sync error:', error.message);
+
+      setSaving(false);
+      setSavedFlash(true);
+      setTimeout(() => window.location.reload(), 700);
+    } catch (err) {
+      setSaving(false);
+      alert("❌ حصل خطأ أثناء الحفظ: " + err.message);
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+      <Card style={{ padding: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+          <h3 style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>Client Names</h3>
+          <Btn onClick={addRow}><Plus size={13}/> Add Client</Btn>
+        </div>
+        <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 14px" }}>
+          دول أسماء العملاء اللي بتظهر في كل الفلاتر والداشبورد والتقارير. غيّري الاسم وهيتحدث تلقائي في كل حتة، شامل سجلات الموظفين الحاليين.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {rows.map(row => {
+            const count = row.origName ? empCountFor(row.origName) : 0;
+            const renamed = row.origName && row.name.trim() && row.origName !== row.name.trim();
+            return (
+              <div key={row.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", border: "1px solid #f3f4f6", borderRadius: 10, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {CLIENT_COLOR_PALETTE.map((pal, i) => (
+                    <button key={i} onClick={() => updateRowColor(row.id, pal)} title="لون"
+                      style={{ width: 16, height: 16, borderRadius: "50%", backgroundColor: pal.dot, border: row.meta?.dot === pal.dot ? `2px solid ${MD}` : "2px solid transparent", cursor: "pointer", padding: 0 }}/>
+                  ))}
+                </div>
+                <input value={row.name} onChange={e => updateRowName(row.id, e.target.value)} placeholder="اسم العميل"
+                  style={{ flex: "1 1 160px", padding: "6px 10px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600 }}/>
+                {renamed && (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "#d97706", backgroundColor: "#fffbeb", padding: "3px 8px", borderRadius: 999 }}>
+                    ⚠️ هيتحدث {count} موظف
+                  </span>
+                )}
+                {!renamed && count > 0 && <span style={{ fontSize: 10, color: "#9ca3af" }}>{count} موظف حاليًا</span>}
+                <button onClick={() => removeRow(row.id)} title="مسح" style={{ marginInlineStart: "auto", width: 26, height: 26, borderRadius: 7, border: "1px solid #fecaca", backgroundColor: "#fff1f2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                  <Trash2 size={12}/>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card style={{ padding: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+          <h3 style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>Auto-Classification Rules</h3>
+          <Btn onClick={addRule}><Plus size={13}/> Add Rule</Btn>
+        </div>
+        <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 14px" }}>
+          لما موظف جديد ييجي بمشروع معين، النظام بيحدد العميل تلقائي بالقواعد دي بالترتيب (أول قاعدة تتطابق تكسب). آخر قاعدة هي الافتراضي لو مفيش أي تطابق.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {nonDefaultRules.map((r, idx) => (
+            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", border: "1px solid #f3f4f6", borderRadius: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 10, color: "#9ca3af", width: 16, textAlign: "center" }}>{idx + 1}</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <button onClick={() => moveRule(r.id, -1)} disabled={idx === 0} style={{ border: "none", background: "none", cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1, fontSize: 10, lineHeight: 1, padding: 0 }}>▲</button>
+                <button onClick={() => moveRule(r.id, 1)} disabled={idx === nonDefaultRules.length - 1} style={{ border: "none", background: "none", cursor: idx === nonDefaultRules.length - 1 ? "default" : "pointer", opacity: idx === nonDefaultRules.length - 1 ? 0.3 : 1, fontSize: 10, lineHeight: 1, padding: 0 }}>▼</button>
+              </div>
+              <select value={r.matchType} onChange={e => updateRule(r.id, { matchType: e.target.value })} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11 }}>
+                <option value="contains">Project contains</option>
+                <option value="exact">Project = exactly</option>
+              </select>
+              <input value={r.value} onChange={e => updateRule(r.id, { value: e.target.value })} placeholder="keyword" style={{ flex: "1 1 120px", padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, fontFamily: "monospace" }}/>
+              <span style={{ fontSize: 11, color: "#9ca3af" }}>→</span>
+              <select value={r.client} onChange={e => updateRule(r.id, { client: e.target.value })} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11, fontWeight: 600 }}>
+                {clientOptions.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <button onClick={() => removeRule(r.id)} style={{ marginInlineStart: "auto", width: 24, height: 24, borderRadius: 6, border: "1px solid #fecaca", backgroundColor: "#fff1f2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                <Trash2 size={11}/>
+              </button>
+            </div>
+          ))}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 8px", border: "1px dashed #d1d5db", borderRadius: 8, backgroundColor: "#fafafa" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280" }}>Default (no match) →</span>
+            <select value={defaultRule.client} onChange={e => updateRule(defaultRule.id, { client: e.target.value })} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11, fontWeight: 600 }}>
+              {clientOptions.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 16, padding: "10px 12px", backgroundColor: "#f9fafb", borderRadius: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280" }}>🔍 جرّبي اسم مشروع:</span>
+          <input value={testProject} onChange={e => setTestProject(e.target.value)} placeholder="مثال: SILQFI Batch 2" style={{ flex: "1 1 160px", padding: "6px 10px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12 }}/>
+          {testResult && <ClientBadge client={testResult}/>}
+        </div>
+      </Card>
+
+      <Card style={{ padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+        <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>عايزة تعدّلي أسماء الـ Partners؟ ده متاح من صفحة <b>Partner Hub</b> نفسها (إضافة/تعديل/حذف partner).</p>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {savedFlash && <span style={{ fontSize: 12, fontWeight: 700, color: "#16a34a" }}>✅ محفوظ — بيتم تحديث الصفحة...</span>}
+          <Btn onClick={doSave} disabled={saving} style={{ ...s.btnPrimary, opacity: saving ? 0.6 : 1 }}>
+            <Save size={13}/> {saving ? "جاري الحفظ..." : "Save Configuration"}
+          </Btn>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 function SettingsView({
   onClear,
   empCount, 
@@ -5448,11 +5662,14 @@ function SettingsView({
   downloadFromCloud,
   backup,
   bidirectionalSync,
-  employees
+  employees,
+  setEmployees,
+  clients,
+  saveClients,
 }) {
   const [tab,setTab]=useState("general");
   const [confirmClear,setConfirmClear]=useState(false);
-  const stabs=[{k:"general",l:"General"},{k:"notifications",l:"🔔 Notifications"},{k:"integration",l:"Integration Guide"},{k:"mapping",l:"Client Mapping"},{k:"logic",l:"Report Logic"}];
+  const stabs=[{k:"general",l:"General"},{k:"notifications",l:"🔔 Notifications"},{k:"config",l:"🗂️ Configuration"},{k:"integration",l:"Integration Guide"},{k:"mapping",l:"Client Mapping"},{k:"logic",l:"Report Logic"}];
   return (
     <div style={{maxWidth:720,display:"flex",flexDirection:"column",gap:20}}>
       <h2 style={{margin:0,fontSize:20,fontWeight:700}}>Settings</h2>
@@ -5508,6 +5725,9 @@ function SettingsView({
       {tab==="notifications"&&(
         <NotificationsSettings employees={employees}/>
       )}
+      {tab==="config"&&(
+        <ConfigurationPanel employees={employees} setEmployees={setEmployees} clients={clients} saveClients={saveClients}/>
+      )}
       {tab==="integration"&&(
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
           {[
@@ -5541,11 +5761,15 @@ function SettingsView({
       {tab==="mapping"&&(
         <Card style={{padding:20}}>
           <h3 style={{fontWeight:700,fontSize:14,margin:"0 0 16px"}}>Client Mapping Rules</h3>
-          {[{c:"Riva Engineering 2",r:'Project = "CEO" (exact)'},{c:"Channelplay",r:'Contains "SILQFI"'},{c:"SPL",r:'Contains "SPL"'},{c:"Combuzz HR",r:"Maveric · C5i · Inspiring Minds · Saudi Fransi"},{c:"Sela",r:"All other projects (default)"}].map(({c,r})=>(
-            <div key={c} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #f3f4f6"}}>
-              <ClientBadge client={c}/><span style={{fontSize:11,color:"#9ca3af",fontFamily:"monospace"}}>{r}</span>
+          {getEffectiveMappingRules().map((r,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #f3f4f6"}}>
+              <ClientBadge client={r.client}/>
+              <span style={{fontSize:11,color:"#9ca3af",fontFamily:"monospace"}}>
+                {r.matchType==="default" ? "All other projects (default)" : r.matchType==="exact" ? `Project = "${r.value}" (exact)` : `Contains "${r.value}"`}
+              </span>
             </div>
           ))}
+          <p style={{fontSize:11,color:"#9ca3af",margin:"14px 0 0"}}>عايزة تعدّلي القواعد دي؟ من تاب <b>🗂️ Configuration</b> جنبها.</p>
         </Card>
       )}
       {tab==="logic"&&(
@@ -5919,7 +6143,7 @@ function InvoiceBuilderTab({ invoices, saveInvs, pos, employees }) {
 // ─── Partner Flow Tab ────────────────────────────────────────────────────────
 function PartnerFlowTab({ flows, saveFlows, employees }) {
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ client:"Channelplay", partner:"Safwa", month:"", timesheetSent:false, partnerAmt:"", marginPct:15 });
+  const [form, setForm] = useState({ client:"Channel Play", partner:"Safwa", month:"", timesheetSent:false, partnerAmt:"", marginPct:15 });
   const upd = (k,v) => setForm(f=>({...f,[k]:v}));
 
   const clientEmps  = employees.filter(e=>e.client===form.client && !isExcluded(e));
@@ -5938,7 +6162,7 @@ function PartnerFlowTab({ flows, saveFlows, employees }) {
       marginAmt, clientPreVat, vat, clientTotal, employeeCount:clientEmps.length,
       status:"draft", createdAt:new Date().toISOString()
     }, ...flows]);
-    setForm({ client:"Channelplay", partner:"Safwa", month:"", timesheetSent:false, partnerAmt:"", marginPct:15 });
+    setForm({ client:"Channel Play", partner:"Safwa", month:"", timesheetSent:false, partnerAmt:"", marginPct:15 });
     setShowAdd(false);
   };
 
@@ -5972,7 +6196,7 @@ function PartnerFlowTab({ flows, saveFlows, employees }) {
       <div style={{padding:14,borderRadius:12,backgroundColor:"#eff6ff",border:"1px solid #bfdbfe",fontSize:12,color:"#1e40af"}}>
         <p style={{fontWeight:700,margin:"0 0 4px"}}>🔄 Partner Flow — كيف يشتغل</p>
         <p style={{margin:0,lineHeight:1.7}}>
-          ١. استقبل التايم شيت من العميل (Channelplay) &nbsp;→&nbsp;
+          ١. استقبل التايم شيت من العميل (Channel Play) &nbsp;→&nbsp;
           ٢. ارسله لـ Safwa &nbsp;→&nbsp;
           ٣. استلم فاتورة Safwa &nbsp;→&nbsp;
           ٤. أضف مارجنك &nbsp;→&nbsp;
@@ -6762,6 +6986,9 @@ function FisheyeOpsPro({ employees, setEmployees }) {
             backup={backup}
             bidirectionalSync={bidirectionalSync}
             employees={employees}
+            setEmployees={setEmployees}
+            clients={clients}
+            saveClients={saveClients}
           />}
 
           {/* ── DEEP LINKS (accessible via URL/nav programmatically, not in sidebar) ── */}

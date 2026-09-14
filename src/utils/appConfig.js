@@ -1,0 +1,93 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// ⚙️ APP CONFIG — editable client list / colors / auto-classification rules
+// Lets the Settings → Configuration page override what used to be hardcoded
+// constants in App.jsx (CLIENTS_LIST, CLIENT_META, mapClient()).
+// Persisted to localStorage + synced to Supabase (table: fisheye_app_data,
+// key: 'fisheyeAppConfig_v1'), same pattern as fisheyeClients_v1 / fisheyePartners_v1.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const CONFIG_KEY = "fisheyeAppConfig_v1";
+
+export const DEFAULT_CLIENTS_LIST = ["Sela", "Channel Play", "Riva Engineering 2"];
+
+export const DEFAULT_CLIENT_META = {
+  "Sela":               { badge: "#bbf7d0", text: "#14532d", dot: "#16a34a", phone: "" },
+  "SPL":                { badge: "#e9d5ff", text: "#4c1d95", dot: "#7c3aed", phone: "" },
+  "Channel Play":       { badge: "#bfdbfe", text: "#1e3a8a", dot: "#2563eb", phone: "" },
+  "Riva Engineering 2": { badge: "#fecdd3", text: "#881337", dot: "#A02843", phone: "" },
+  "Combuzz HR":         { badge: "#fed7aa", text: "#7c2d12", dot: "#ea580c", phone: "" },
+};
+
+// Ordered, first match wins. The last rule MUST be matchType:"default".
+export const DEFAULT_MAPPING_RULES = [
+  { client: "Riva Engineering 2", matchType: "exact",    value: "CEO" },
+  { client: "Channel Play",       matchType: "contains", value: "SILQFI" },
+  { client: "SPL",                matchType: "contains", value: "SPL" },
+  { client: "Combuzz HR",         matchType: "contains", value: "MAVERIC" },
+  { client: "Combuzz HR",         matchType: "contains", value: "C5I" },
+  { client: "Combuzz HR",         matchType: "contains", value: "INSPIRING MINDS" },
+  { client: "Combuzz HR",         matchType: "contains", value: "SAUDI FRANSI" },
+  { client: "Sela",               matchType: "default",  value: "" },
+];
+
+// Small preset palette so a newly-added client always gets a legible badge
+// (light background + readable text + matching dot) without a full color picker.
+export const CLIENT_COLOR_PALETTE = [
+  { badge: "#bbf7d0", text: "#14532d", dot: "#16a34a" }, // green
+  { badge: "#bfdbfe", text: "#1e3a8a", dot: "#2563eb" }, // blue
+  { badge: "#fecdd3", text: "#881337", dot: "#A02843" }, // crimson
+  { badge: "#fed7aa", text: "#7c2d12", dot: "#ea580c" }, // orange
+  { badge: "#e9d5ff", text: "#4c1d95", dot: "#7c3aed" }, // purple
+  { badge: "#fef08a", text: "#713f12", dot: "#ca8a04" }, // amber
+  { badge: "#a5f3fc", text: "#164e63", dot: "#0891b2" }, // cyan
+  { badge: "#e5e7eb", text: "#374151", dot: "#6b7280" }, // gray
+  { badge: "#fbcfe8", text: "#831843", dot: "#db2777" }, // pink
+  { badge: "#d9f99d", text: "#365314", dot: "#65a30d" }, // lime
+];
+
+export function loadAppConfig() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CONFIG_KEY));
+    return raw && typeof raw === "object" ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+export function getEffectiveClientsList() {
+  const cfg = loadAppConfig();
+  return (cfg && Array.isArray(cfg.clientsList) && cfg.clientsList.length)
+    ? cfg.clientsList
+    : DEFAULT_CLIENTS_LIST;
+}
+
+export function getEffectiveClientMeta() {
+  const cfg = loadAppConfig();
+  return (cfg && cfg.clientMeta && typeof cfg.clientMeta === "object")
+    ? cfg.clientMeta
+    : DEFAULT_CLIENT_META;
+}
+
+export function getEffectiveMappingRules() {
+  const cfg = loadAppConfig();
+  return (cfg && Array.isArray(cfg.mappingRules) && cfg.mappingRules.length)
+    ? cfg.mappingRules
+    : DEFAULT_MAPPING_RULES;
+}
+
+// Pure classification function shared by the live App (mapClient) and the
+// Configuration page's "test a project name" preview — keep them identical.
+export function classifyProject(project = "", rules = null) {
+  const p = (project || "").trim().toUpperCase();
+  const activeRules = rules || getEffectiveMappingRules();
+  for (const r of activeRules) {
+    if (r.matchType === "default") return r.client;
+    const v = (r.value || "").trim().toUpperCase();
+    if (!v) continue;
+    if (r.matchType === "exact" && p === v) return r.client;
+    if (r.matchType === "contains" && p.includes(v)) return r.client;
+  }
+  // Ultimate fallback if somehow no default rule exists
+  const list = getEffectiveClientsList();
+  return list[0] || "Sela";
+}
