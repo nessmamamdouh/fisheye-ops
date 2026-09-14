@@ -2115,6 +2115,12 @@ const submitRenew = async () => {
                             if (!emp) { skippedCount++; console.warn(`⚠️ Contract ID ${csvContractId} not found in DB — skipped`); continue; }
                             matchedBy = `contract:${csvContractId}`;
                           }
+                          // Safety check: the row's own Employee ID should belong to the same
+                          // person as the Contract ID we matched on. If it doesn't, the CSV row
+                          // and the DB record disagree about who this is — flag it loudly instead
+                          // of silently writing this row's data onto the wrong employee.
+                          const idMismatch = matchedBy.startsWith('contract:') &&
+                            String(emp.employeeId || '').trim() !== String(empId).trim();
                           const fieldsToUpdate = {};
                           headers.forEach((h, idx) => {
                             const field = ALLOWED[h]; if (!field) return;
@@ -2144,7 +2150,7 @@ const submitRenew = async () => {
                           // Only keep fieldsToUpdate entries that actually changed
                           const realFields = {};
                           fieldDiffs.forEach(({ field, newVal }) => { realFields[field] = newVal; });
-                          changes.push({ emp, fieldsToUpdate: realFields, fieldDiffs, matchedBy });
+                          changes.push({ emp, fieldsToUpdate: realFields, fieldDiffs, matchedBy, idMismatch, csvEmployeeId: empId });
                         }
                         if (changes.length === 0 && notFound.length === 0) {
                           alert('No changes detected in this CSV.'); e.target.value = ''; return;
@@ -2173,6 +2179,11 @@ const submitRenew = async () => {
                           setCsvUnchecked(new Set());
                           alert(`✅ Applied: ${updated} employees updated${errors > 0 ? `\n❌ Errors: ${errors}` : ''}`);
                         };
+                        const initialUnchecked = new Set();
+                        changes.forEach(({ emp, fieldDiffs, idMismatch }) => {
+                          if (idMismatch) fieldDiffs.forEach(({ field }) => initialUnchecked.add(`${emp._id}:${field}`));
+                        });
+                        setCsvUnchecked(initialUnchecked);
                         setPendingCSVDiff({ changes, notFound, skippedCount, applyFn });
                         e.target.value = '';
                       }} />
@@ -2708,13 +2719,16 @@ const submitRenew = async () => {
         const applying = csvApplying;
 
         // Flatten rows: one row per (employee × changed field), each with a unique key
-        const rows = changes.flatMap(({ emp, fieldDiffs, matchedBy }) =>
+        const rows = changes.flatMap(({ emp, fieldDiffs, matchedBy, idMismatch, csvEmployeeId }) =>
           fieldDiffs.map(({ field, oldVal, newVal }) => ({
             key: `${emp._id}:${field}`,
             empId: emp._id,
             name: emp.name,
             contractId: emp.contractId || '—',
             matchedBy: matchedBy || 'unique',
+            idMismatch: !!idMismatch,
+            csvEmployeeId,
+            dbEmployeeId: emp.employeeId,
             field,
             oldVal: oldVal === undefined || oldVal === null ? '—' : String(oldVal),
             newVal: String(newVal),
@@ -2813,7 +2827,7 @@ const submitRenew = async () => {
                           const isWeakMatch = r.matchedBy !== 'unique' && !r.matchedBy.startsWith('contract:');
                           return (
                             <tr key={r.key} style={{
-                              backgroundColor: !isChecked ? "#f9fafb" : isWeakMatch ? "#fffbeb" : (i % 2 === 0 ? "white" : "#f9fafb"),
+                              backgroundColor: !isChecked ? "#f9fafb" : r.idMismatch ? "#fef2f2" : isWeakMatch ? "#fffbeb" : (i % 2 === 0 ? "white" : "#f9fafb"),
                               opacity: isChecked ? 1 : 0.45,
                             }}>
                               <td style={{ padding: "7px 10px", borderBottom: "1px solid #f3f4f6", textAlign: "center" }}>
@@ -2827,12 +2841,12 @@ const submitRenew = async () => {
                               <td style={{ padding: "7px 10px", color: "#111827", fontWeight: 600, borderBottom: "1px solid #f3f4f6", whiteSpace: "nowrap" }}>{r.name}</td>
                               <td style={{ padding: "7px 10px", color: "#6b7280", borderBottom: "1px solid #f3f4f6", fontFamily: "monospace", whiteSpace: "nowrap" }}>{r.contractId}</td>
                               <td style={{ padding: "7px 10px", borderBottom: "1px solid #f3f4f6", whiteSpace: "nowrap" }}>
-                                <span style={{
+                                <span title={r.idMismatch ? `CSV Employee ID: ${r.csvEmployeeId}  —  DB Employee ID: ${r.dbEmployeeId}` : undefined} style={{
                                   padding: "2px 7px", borderRadius: 999, fontSize: 10, fontWeight: 700,
-                                  backgroundColor: r.matchedBy.startsWith('contract:') ? "#dcfce7" : isWeakMatch ? "#fef3c7" : "#f3f4f6",
-                                  color: r.matchedBy.startsWith('contract:') ? "#15803d" : isWeakMatch ? "#92400e" : "#6b7280",
+                                  backgroundColor: r.idMismatch ? "#fee2e2" : r.matchedBy.startsWith('contract:') ? "#dcfce7" : isWeakMatch ? "#fef3c7" : "#f3f4f6",
+                                  color: r.idMismatch ? "#991b1b" : r.matchedBy.startsWith('contract:') ? "#15803d" : isWeakMatch ? "#92400e" : "#6b7280",
                                 }}>
-                                  {r.matchedBy.startsWith('contract:') ? '✅ Contract' : isWeakMatch ? '⚠️ '+r.matchedBy : '—'}
+                                  {r.idMismatch ? '❌ ID Mismatch' : r.matchedBy.startsWith('contract:') ? '✅ Contract' : isWeakMatch ? '⚠️ '+r.matchedBy : '—'}
                                 </span>
                               </td>
                               <td style={{ padding: "7px 10px", color: "#374151", fontWeight: 600, borderBottom: "1px solid #f3f4f6" }}>{FIELD_LABEL[r.field] || r.field}</td>
@@ -2843,6 +2857,21 @@ const submitRenew = async () => {
                         })}
                       </tbody>
                     </table>
+                  </div>
+                )}
+
+                {/* ID mismatches — CSV row's Employee ID disagrees with the DB owner of that Contract ID */}
+                {rows.some(r => r.idMismatch) && (
+                  <div style={{
+                    padding: "12px 14px", borderRadius: 10, backgroundColor: "#fef2f2",
+                    border: "1px solid #fecaca", marginBottom: 16,
+                  }}>
+                    <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 12, color: "#991b1b" }}>
+                      ❌ {new Set(rows.filter(r => r.idMismatch).map(r => r.empId)).size} صف الـ Employee ID بتاعه في الـ CSV مش نفس صاحب الـ Contract ID ده في النظام — اتمنعوا تلقائيًا من التحديد.
+                    </p>
+                    <p style={{ margin: 0, fontSize: 11, color: "#7f1d1d" }}>
+                      يعني ممكن الملف يكون بتاع شخص تاني أو فيه Contract ID اتكرر/اتغيّر. راجعيهم كويس قبل ما تحطيهم ✔️ يدويًا.
+                    </p>
                   </div>
                 )}
 
