@@ -1801,18 +1801,27 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
       const mapped = projectClientMap[proj];
       if (mapped) {
         resolved.push({ ...r, client: mapped });
-      } else if (client && client !== "All") {
-        resolved.push({ ...r, client });
       } else {
+        // Unknown project — NEVER silently assign it to whichever
+        // Workforce tab happens to be open. Always surface it in the
+        // "Assign Client to Projects" popup so a new client/project
+        // requires an explicit, visible confirmation instead of quietly
+        // being filed under the active tab's client.
         needsClient.push(r);
       }
     });
 
     if (needsClient.length === 0) {
-      // كل الموظفين اتحددلهم client تلقائياً
+      // كل الموظفين اتحددلهم client تلقائياً (المشروع معروف مسبقاً)
       await doInsertCSV(resolved);
     } else {
-      // فيه موظفين محتاجين اختيار client يدوي
+      // فيه موظفين محتاجين اختيار client يدوي — نقترح الـ tab المفتوح
+      // حالياً كقيمة افتراضية (تقدري تغيريها)، لكن لازم تأكيد صريح
+      // بالضغط على "Save & Insert".
+      if (client && client !== "All") {
+        const projectsNeedingClient = [...new Set(needsClient.map(r => r.project || "Unknown"))];
+        setCsvClientAssign(Object.fromEntries(projectsNeedingClient.map(p => [p, client])));
+      }
       setPendingAddCSV({ resolved, needsClient });
     }
   };
@@ -2992,7 +3001,7 @@ const submitRenew = async () => {
                         <span style={{ fontSize:11, color:"#9ca3af" }}>{byProject[proj].length} موظف</span>
                       </div>
                       <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                        {clientsList.map(c => {
+                        {CLIENTS_LIST.map(c => {
                           const meta = CLIENT_META[c] || {};
                           const sel = csvClientAssign[proj] === c;
                           return (
