@@ -11,7 +11,7 @@ import WeeklyReportGenerator from './Weeklyreportgenerator';
 import { useSupabaseSync } from './hooks/useSupabaseSync';
 import { supabase, testConnection } from './utils/supabase';
 import { isExcluded, isWFDone, hasMissingPO, hasValidPO, getClientsList } from './utils/helpers';
-import { getEffectiveClientsList, getEffectiveClientMeta, getEffectiveMappingRules, CLIENT_COLOR_PALETTE, CONFIG_KEY, classifyProject } from './utils/appConfig';
+import { getEffectiveClientsList, getEffectiveClientMeta, getEffectiveMappingRules, CLIENT_COLOR_PALETTE, CONFIG_KEY, classifyProject, sanitizeClientName, clientRequiresPO } from './utils/appConfig';
 import {
   LayoutDashboard, Users, DollarSign, Ticket, Settings, Building2,
   Bell, Clock, FileText, Upload, Plus, X, Send, Eye,
@@ -168,7 +168,7 @@ function buildReport(employees) {
   const pending = pool.filter(e => !isWFDone(e.workflowStatus));
   const byProject = {};
   pending.forEach(e => { if(!byProject[e.project]) byProject[e.project]=[]; byProject[e.project].push(e); });
-  const selaPoAlert = employees.filter(e => e.client==="Sela" && !isExcluded(e) && hasMissingPO(e));
+  const selaPoAlert = employees.filter(e => clientRequiresPO(e.client) && !isExcluded(e) && hasMissingPO(e));
   const expiring = employees.filter(e => { const d=daysUntil(e.endDate); return d>=0&&d<=30&&!isExcluded(e); });
 return { byProject, selaPoAlert, expiring, pendingCount: pending.length };
 }
@@ -1661,7 +1661,7 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
   const kpiNew      = useMemo(() => employees.filter(e => (e.status||"").toLowerCase()==="new").length, [employees]);
   const kpiExpiring = useMemo(() => employees.filter(e => { const d=daysUntil(e.endDate); return d>=0&&d<=30&&!isExcluded(e); }).length, [employees]);
   const kpiNoPO     = useMemo(() => employees.filter(e =>
-    e.client === "Sela" && !isExcluded(e) && hasMissingPO(e)
+    clientRequiresPO(e.client) && !isExcluded(e) && hasMissingPO(e)
   ).length, [employees]);
   // ─── handleUpdateField: تحديث حقل واحد لموظف محدد (كان مفقود من props!) ───
   const handleUpdateField = async (id, field, value) => {
@@ -3535,8 +3535,8 @@ function calcClientHealth(clientName, employees) {
   const pending = clientEmps.filter(e => !isWFDone(e.workflowStatus)).length;
   score -= Math.round((pending / total) * 25);
 
-  // Missing PO penalty (Sela specific)
-  if (clientName === "Sela") {
+  // Missing PO penalty (only for clients whose billing requires a PO on file)
+  if (clientRequiresPO(clientName)) {
     const missingPO = clientEmps.filter(hasMissingPO).length;
     score -= Math.round((missingPO / total) * 20);
   }
@@ -3619,7 +3619,7 @@ function ClientHub({ employees, clients, saveClients }) {
   const totalPending=clients.reduce((s,c)=>s+(c.requestLog||[]).filter(r=>r.status==="Pending").length,0);
   // PO issues: include expired (same as Action Center) — expired Sela employees still need PO for invoicing
   const isResignedEmp=e=>["resigned","resigned_ar","مستقيل"].includes((e.status||"").toLowerCase().trim());
-  const totalPOIssues=employees.filter(e=>e.client==="Sela"&&!isResignedEmp(e)&&hasMissingPO(e)).length;
+  const totalPOIssues=employees.filter(e=>clientRequiresPO(e.client)&&!isResignedEmp(e)&&hasMissingPO(e)).length;
   const totalOverdue=clients.reduce((s,c)=>s+(c.requestLog||[]).filter(r=>r.status==="Pending"&&Math.floor((Date.now()-new Date(r.ts))/(864e5))>5).length,0);
 
   // ── detail modal data ──
@@ -4962,7 +4962,7 @@ function DashboardView({ employees, isOnline, syncStatus, syncMessage, syncProgr
     docs:        pool.filter(e => (e.workflowStatus||'').toLowerCase() === 'docs requested'),
     expiring30:  pool.filter(e => { const d = daysUntil(e.endDate); return d > 7 && d <= 30; }),
     pending:     pool.filter(e => (e.workflowStatus||'').toLowerCase() === 'pending'),
-    nopo:        pool.filter(e => e.client === 'Sela' && !e.poNumbers),
+    nopo:        pool.filter(e => clientRequiresPO(e.client) && !e.poNumbers),
     onboarding:  pool.filter(e => (e.workflowStatus||'').toLowerCase() === 'onboarding'),
     onTrack:     pool.filter(e => isWFDone(e.workflowStatus)),
   };
@@ -5513,8 +5513,8 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
 
   const empCountFor = (name) => employees.filter(e => e.client === name).length;
 
-  const updateRowName  = (id, val)  => setRows(rs => rs.map(r => r.id === id ? { ...r, name: val } : r));
-  const updateRowColor = (id, meta) => setRows(rs => rs.map(r => r.id === id ? { ...r, meta } : r));
+  const updateRowName  = (id, val)  => setRows(rs => rs.map(r => r.id === id ? { ...r, name: sanitizeClientName(val) } : r));
+  const updateRowColor = (id, meta) => setRows(rs => rs.map(r => r.id === id ? { ...r, meta: { ...r.meta, ...meta } } : r));
   const addRow = () => setRows(rs => [...rs, { id: `row-new-${Date.now()}`, origName: "", name: "", meta: CLIENT_COLOR_PALETTE[rs.length % CLIENT_COLOR_PALETTE.length] }]);
   const removeRow = (id) => {
     const row = rows.find(r => r.id === id);
@@ -5597,9 +5597,10 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
 
       const clientMeta = {};
       rows.forEach(r => { const n = r.name.trim(); if (n) clientMeta[n] = r.meta; });
+      const renameLookup = Object.fromEntries(pendingRenames.map(r => [r.origName, r.name.trim()]));
       const mappingRules = [
-        ...nonDefaultRules.map(r => ({ client: r.client, matchType: r.matchType, value: r.value.trim() })),
-        { client: defaultRule.client, matchType: "default", value: "" },
+        ...nonDefaultRules.map(r => ({ client: renameLookup[r.client] || r.client, matchType: r.matchType, value: r.value.trim() })),
+        { client: renameLookup[defaultRule.client] || defaultRule.client, matchType: "default", value: "" },
       ];
       const finalCfg = { clientsList: finalNames, clientMeta, mappingRules };
       localStorage.setItem(CONFIG_KEY, JSON.stringify(finalCfg));

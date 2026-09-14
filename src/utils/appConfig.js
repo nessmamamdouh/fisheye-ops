@@ -11,7 +11,11 @@ export const CONFIG_KEY = "fisheyeAppConfig_v1";
 export const DEFAULT_CLIENTS_LIST = ["Sela", "Channel Play", "Riva Engineering 2"];
 
 export const DEFAULT_CLIENT_META = {
-  "Sela":               { badge: "#bbf7d0", text: "#14532d", dot: "#16a34a", phone: "" },
+  // requiresPO: this client's billing/payroll only counts an employee as
+  // billable once a PO number is on file (see FinanceModule + Action Center).
+  // Kept on the client's own meta record so it survives a rename made from
+  // the Configuration page instead of being tied to the literal word "Sela".
+  "Sela":               { badge: "#bbf7d0", text: "#14532d", dot: "#16a34a", phone: "", requiresPO: true },
   "SPL":                { badge: "#e9d5ff", text: "#4c1d95", dot: "#7c3aed", phone: "" },
   "Channel Play":       { badge: "#bfdbfe", text: "#1e3a8a", dot: "#2563eb", phone: "" },
   "Riva Engineering 2": { badge: "#fecdd3", text: "#881337", dot: "#A02843", phone: "" },
@@ -52,6 +56,40 @@ export function loadAppConfig() {
   } catch {
     return null;
   }
+}
+
+// Strips characters that are invisible or near-invisible in the Configuration
+// UI but make a name fail every exact-match comparison elsewhere in the app
+// (Arabic/Unicode combining diacritics, zero-width characters, stray control
+// characters), then trims and collapses internal whitespace. This exists
+// because a client name once picked up two stray Arabic kasra marks while
+// being typed/edited (looked exactly like "Sela" on screen, i.e. "SELA" with
+// invisible combining marks) and every part of the app that compared against
+// the plain name silently stopped matching it. Call this on every keystroke
+// in the Configuration name field, not just on save, so what's on screen is
+// always what actually gets compared.
+export function sanitizeClientName(name) {
+  return String(name || "")
+    .normalize("NFC")
+    // Unicode combining marks (covers Arabic tashkeel like kasra/damma/fatha
+    // U+064B-U+065F/U+0670 as well as Latin/other combining diacritics
+    // U+0300-U+036F) and zero-width/invisible characters.
+    .replace(/[̀-ًͯ-ٰٟ​-‏﻿]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Whether this client's billing only counts employees with a PO number as
+// billable (see ProfitPerClientTab in FinanceModule and the Payroll tab in
+// the Action Center). Stored on the client's own meta record so a rename via
+// Configuration carries the flag with it automatically. Configs saved before
+// this flag existed won't have it recorded on any client yet, so fall back to
+// the one client this rule has always applied to.
+export function clientRequiresPO(clientName) {
+  const meta = getEffectiveClientMeta();
+  const m = meta[clientName];
+  if (m && typeof m.requiresPO === "boolean") return m.requiresPO;
+  return clientName === "Sela";
 }
 
 export function getEffectiveClientsList() {

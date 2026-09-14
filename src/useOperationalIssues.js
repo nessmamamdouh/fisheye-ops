@@ -12,6 +12,7 @@
 
 import { useMemo } from "react";
 import { isExcluded } from "./utils/helpers"; // single source of truth: excludes expired + resigned
+import { clientRequiresPO } from "./utils/appConfig";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const TODAY = new Date();
@@ -160,7 +161,7 @@ export function useOperationalIssues(employees = []) {
     // Missing PO (Sela only) — Sela is the only client that uses PO numbers
     // Includes expired Sela employees: expired + no PO = salary paid but can't invoice
     allNonResigned
-      .filter((e) => e.client === "Sela" && (!e.poNumbers || String(e.poNumbers).trim() === ""))
+      .filter((e) => clientRequiresPO(e.client) && (!e.poNumbers || String(e.poNumbers).trim() === ""))
       .forEach((e) => {
         const isExp = (e.status || "").toLowerCase() === "expired";
         payroll.push({
@@ -170,8 +171,8 @@ export function useOperationalIssues(employees = []) {
           employee: e,
           daysLeft: null,
           label: isExp
-            ? "Missing PO (Sela) — expired contract, invoice pending 🔴"
-            : "Missing PO Number (Sela) — invoice risk",
+            ? `Missing PO (${e.client}) — expired contract, invoice pending 🔴`
+            : `Missing PO Number (${e.client}) — invoice risk`,
           severity: isExp ? "critical" : "high",
           actions: ["send_reminder", "open_employee", "mark_resolved"],
         });

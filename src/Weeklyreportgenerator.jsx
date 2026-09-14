@@ -30,18 +30,16 @@ import {
   AlertCircle, TrendingUp, Calendar, MessageCircle
 } from "lucide-react";
 import { isExcluded, isWFDone } from "./utils/helpers";
+import { getEffectiveClientMeta, clientRequiresPO } from "./utils/appConfig";
 
 // ─── Constants (mirrors App.jsx) ─────────────────────────────────────────────
 const M   = "#A02843";
 const MD  = "#00293A";
 
-const CLIENT_META  = {
-  "Sela":               { badge:"#bbf7d0", text:"#14532d", dot:"#16a34a" },
-  "SPL":                { badge:"#e9d5ff", text:"#4c1d95", dot:"#7c3aed" },
-  "Channelplay":        { badge:"#bfdbfe", text:"#1e3a8a", dot:"#2563eb" },
-  "Riva Engineering 2": { badge:"#fecdd3", text:"#881337", dot:M        },
-  "Combuzz HR":         { badge:"#fed7aa", text:"#7c2d12", dot:"#ea580c" },
-};
+// Single source of truth: reads from the Settings -> Configuration page
+// (src/utils/appConfig.js) instead of keeping its own separate copy, so a
+// client rename or recolor there takes effect here automatically.
+const CLIENT_META  = getEffectiveClientMeta();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const TODAY       = new Date(); TODAY.setHours(0,0,0,0);
@@ -181,7 +179,7 @@ function buildClientReport(clientName, employees, weekEnd) {
   const pending   = pool.filter(e => !isWFDone(e.workflowStatus));
   const expiring7 = pool.filter(e => { const d = daysUntil(e.endDate, ref); return d >= 0 && d <= 7; });
   const expiring30= pool.filter(e => { const d = daysUntil(e.endDate, ref); return d > 7 && d <= 30; });
-  const missingPO = clientName === "Sela" ? pool.filter(e => !e.poNumbers) : [];
+  const missingPO = clientRequiresPO(clientName) ? pool.filter(e => !e.poNumbers) : [];
   const onboarding= pool.filter(e => (e.workflowStatus||"").toLowerCase() === "onboarding");
   const stuckAgr  = pool.filter(e => (e.workflowStatus||"").toLowerCase() === "agreement sent");
   // needsAction = items requiring urgent human intervention this week

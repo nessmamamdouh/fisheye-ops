@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { isExcluded } from "./utils/helpers";
 import { supabase } from "./utils/supabase";
+import { clientRequiresPO } from "./utils/appConfig";
 
 // ─── CONSTANTS & HELPERS ─────────────────────────────────────────────────────
 const M   = "#A02843";
@@ -249,7 +250,7 @@ const card  = { backgroundColor: "white", borderRadius: 12, border: "1px solid #
 const CLIENT_COLORS_MAP = {
   "Sela":               { accent: "#A02843", light: "#fff5f5" },
   "SPL":                { accent: "#7c3aed", light: "#f5f3ff" },
-  "Channelplay":        { accent: "#2563eb", light: "#eff6ff" },
+  "Channel Play":        { accent: "#2563eb", light: "#eff6ff" },
   "Riva Engineering 2": { accent: "#c2410c", light: "#fff7ed" },
   "Combuzz HR":         { accent: "#d97706", light: "#fffbeb" },
 };
@@ -1578,7 +1579,7 @@ function ProfitPerClientTab({ employees }) {
     const clients = Array.from(new Set(active.map(e => e.client).filter(Boolean))).sort();
     return clients.map(client => {
       const emps = active.filter(e => e.client === client);
-      const billable = client === "Sela"
+      const billable = clientRequiresPO(client)
         ? emps.filter(e => e.poNumbers && String(e.poNumbers).trim() !== "")
         : emps;
       let totalBilled = 0, totalMargin = 0, totalVAT = 0, totalPartnerPayout = 0;
@@ -1593,7 +1594,7 @@ function ProfitPerClientTab({ employees }) {
       const netProfit    = totalMargin - totalPartnerPayout;
       const marginPct    = totalBilled > 0 ? (totalMargin  / totalBilled) * 100 : 0;
       const netPct       = totalBilled > 0 ? (netProfit    / totalBilled) * 100 : 0;
-      const noPO = client === "Sela" ? emps.filter(e => !e.poNumbers || String(e.poNumbers).trim() === "").length : 0;
+      const noPO = clientRequiresPO(client) ? emps.filter(e => !e.poNumbers || String(e.poNumbers).trim() === "").length : 0;
       return { client, emps, headcount: emps.length, billableCount: billable.length, totalPayroll, totalBilled, totalMargin, totalPartnerPayout, netProfit, totalVAT, marginPct, netPct, noPO };
     });
   }, [active]);
@@ -1841,7 +1842,7 @@ function MonthlyPLTrend({ employees, clientRows }) {
           if (end   && end   < firstDay) return false;
           return true;
         });
-        const billable = client === 'Sela'
+        const billable = clientRequiresPO(client)
           ? emps.filter(e => e.poNumbers && String(e.poNumbers).trim() !== '')
           : emps;
         let billed = 0, margin = 0, partnerPayout = 0;

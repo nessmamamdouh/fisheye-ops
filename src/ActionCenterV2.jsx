@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useOperationalIssues, daysUntil } from "./useOperationalIssues";
 import { isExcluded } from "./utils/helpers";
+import { getEffectiveClientsList, getEffectiveClientMeta } from "./utils/appConfig";
 
 // ─── Brand colors (ساعتك matches App.jsx) ─────────────────────────────────
 const M  = "#A02843";
@@ -349,7 +350,6 @@ function SeverityBadge({ severity }) {
 // daysUntil is imported from useOperationalIssues — single source of truth
 const TODAY_CAL = new Date();
 TODAY_CAL.setHours(0, 0, 0, 0);
-const CLIENTS_LIST = ["Sela","SPL","Channelplay","Riva Engineering 2","Combuzz HR"];
 const PRIORITY_OPS = { CRITICAL:0, HIGH:1, MEDIUM:2, LOW:3 };
 const PRIORITY_META_OPS = {
   0:{label:"CRITICAL",color:"#dc2626",bg:"#fee2e2",border:"#fca5a5",dot:"#dc2626"},
@@ -359,13 +359,10 @@ const PRIORITY_META_OPS = {
 };
 
 // ─── Client Badge ─────────────────────────────────────────────────────────────
-const CLIENT_META = {
-  "Sela":               { badge: "#bbf7d0", text: "#14532d", dot: "#16a34a" },
-  "SPL":                { badge: "#e9d5ff", text: "#4c1d95", dot: "#7c3aed" },
-  "Channelplay":        { badge: "#bfdbfe", text: "#1e3a8a", dot: "#2563eb" },
-  "Riva Engineering 2": { badge: "#fecdd3", text: "#881337", dot: M },
-  "Combuzz HR":         { badge: "#fed7aa", text: "#7c2d12", dot: "#ea580c" },
-};
+// Single source of truth: reads from the Settings → Configuration page
+// (src/utils/appConfig.js) instead of keeping its own separate copy, so a
+// client rename or recolor there takes effect here automatically.
+const CLIENT_META = getEffectiveClientMeta();
 
 function ClientBadge({ client }) {
   const m = CLIENT_META[client] || { badge: "#e5e7eb", text: "#374151", dot: "#6b7280" };
@@ -443,14 +440,8 @@ function stdText(text) {
   });
   return out;
 }
-const CLIENT_OWNER = {
-  "Sela":               "Nessma Mamdouh",
-  "SPL":                "Nessma Mamdouh",
-  "Channelplay":        "Nessma Mamdouh",
-  "Riva Engineering 2": "Nessma Mamdouh",
-  "Combuzz HR":         "Nessma Mamdouh",
-};
-function resolveOwner(client) { return CLIENT_OWNER[client] || "Ops Team"; }
+const CLIENT_OWNER = Object.fromEntries(getEffectiveClientsList().map(name => [name, "Nessma Mamdouh"]));
+function resolveOwner(client) { return CLIENT_OWNER[client] || "Nessma Mamdouh"; }
 
 // ─── Standardize issue label → English ───────────────────────────────────────
 const LABEL_MAP = {
