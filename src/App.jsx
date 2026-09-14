@@ -1821,16 +1821,50 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
     try {
       // Strip temp _id so Supabase auto-generates the real one
       const clean = records.map(({ _id, ...rest }) => rest);
+
+      // ── Guard: never create a duplicate Contract ID ──────────────────
+      // A Contract ID must belong to exactly one employee. If the CSV reuses
+      // a Contract ID that already exists (or repeats one within the same
+      // file), inserting it would make two different people share one
+      // Contract ID — and any later "Update from CSV" or PO/contract lookup
+      // can then silently land on the wrong person. Block those rows instead.
+      const existingContractIds = new Set(
+        employees.map(e => String(e.contractId || '').trim()).filter(Boolean)
+      );
+      const seenInBatch = new Set();
+      const toInsert = [];
+      const blocked = [];
+      clean.forEach(r => {
+        const cid = String(r.contractId || '').trim();
+        if (cid && (existingContractIds.has(cid) || seenInBatch.has(cid))) {
+          blocked.push({ name: r.name, contractId: cid });
+          return;
+        }
+        if (cid) seenInBatch.add(cid);
+        toInsert.push(r);
+      });
+
+      if (toInsert.length === 0) {
+        alert(`❌ اتوقف الرفع بالكامل — كل الـ Contract IDs في الملف ده مستخدمة بالفعل لموظفين تانيين:\n` +
+          blocked.map(b => `• ${b.name} — ${b.contractId}`).join('\n'));
+        return;
+      }
+
       // Insert in chunks of 50
       let allInserted = [];
-      for (let i = 0; i < clean.length; i += 50) {
-        const { data, error } = await supabase.from('employees_master').insert(clean.slice(i, i + 50)).select();
+      for (let i = 0; i < toInsert.length; i += 50) {
+        const { data, error } = await supabase.from('employees_master').insert(toInsert.slice(i, i + 50)).select();
         if (error) throw error;
         allInserted = [...allInserted, ...data];
       }
       setEmployees(prev => [...allInserted, ...prev]);
       setPendingAddCSV(null);
-      alert(`✅ تم رفع ${allInserted.length} موظف بنجاح!`);
+      let msg = `✅ تم رفع ${allInserted.length} موظف بنجاح!`;
+      if (blocked.length > 0) {
+        msg += `\n\n⚠️ اتجاهل ${blocked.length} صف لأن الـ Contract ID بتاعهم مستخدم بالفعل لموظف تاني — غيّري الرقم وارفعيهم تاني:\n` +
+          blocked.map(b => `• ${b.name} — ${b.contractId}`).join('\n');
+      }
+      alert(msg);
     } catch (err) {
       console.error("CSV Insert Error:", err);
       alert(`❌ خطأ: ${err.message}`);
