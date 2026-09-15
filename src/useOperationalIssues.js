@@ -47,10 +47,12 @@ const scorePriority = (issue) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 🔥 THE HOOK
+// 🔥 THE CORE COMPUTATION (pure — extracted from the hook so it can be unit
+// tested directly, with no React rendering context required. useOperationalIssues
+// below is a thin useMemo wrapper around this; behavior is unchanged.)
 // ═══════════════════════════════════════════════════════════════════════════════
-export function useOperationalIssues(employees = []) {
-  return useMemo(() => {
+export function computeOperationalIssues(employees = []) {
+  {
     // active: excludes expired + resigned — used for all normal issue checks
     const active  = employees.filter((e) => !isExcluded(e));
     // allNonResigned: excludes resigned only, KEEPS expired — used only for the
@@ -417,5 +419,12 @@ active
       byClient,
       byEmployee,
     };
-  }, [employees]);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🔥 THE HOOK — memoizes computeOperationalIssues() across renders
+// ═══════════════════════════════════════════════════════════════════════════════
+export function useOperationalIssues(employees = []) {
+  return useMemo(() => computeOperationalIssues(employees), [employees]);
 }

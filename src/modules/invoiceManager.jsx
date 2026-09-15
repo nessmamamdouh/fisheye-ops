@@ -456,8 +456,32 @@ const MONTH_MAP = {
 };
 export function normalizeDate(d) {
   if (!d) return d;
-  // Replace letter-O with digit-0 (common OCR/copy-paste typo)
-  let s = String(d).trim().replace(/[Oo]/g, '0');
+  const raw = String(d).trim();
+
+  // DD-Mon-YY or DD-Mon-YYYY (e.g. "8-Mar-26", "19-Apr-2026") — matched
+  // FIRST, on the raw string, before the O→0 typo fix below. Otherwise
+  // "Oct" (the one month name that contains the letter "o") gets corrupted
+  // into "0ct" by that fix and silently fails to normalize (regression
+  // caught while adding test coverage: normalizeDate("5-Oct-26") used to
+  // come back as the unparsed string "5-0ct-26" instead of "2026-10-05").
+  // Day/year still tolerate an O-for-0 typo (e.g. "1O-Mar-26") — just not
+  // the month letters.
+  const mon = raw.match(/^([0-9Oo]{1,2})-([A-Za-z]{3})-([0-9Oo]{2,4})$/);
+  if (mon) {
+    const mm = MONTH_MAP[mon[2].toLowerCase()];
+    if (mm) {
+      const dd = mon[1].replace(/[Oo]/g, '0');
+      const yr = mon[3].replace(/[Oo]/g, '0');
+      const yyyy = yr.length === 2 ? `20${yr}` : yr;
+      return `${yyyy}-${mm}-${dd.padStart(2, '0')}`;
+    }
+    // 3-letter token isn't a recognized month (e.g. "5-Xyz-26") — fall
+    // through to the purely-numeric checks below, same as before.
+  }
+
+  // Replace letter-O with digit-0 (common OCR/copy-paste typo) for the
+  // remaining, purely-numeric formats.
+  const s = raw.replace(/[Oo]/g, '0');
   // Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   // DD/MM/YYYY or D/M/YYYY
@@ -465,15 +489,6 @@ export function normalizeDate(d) {
   if (slash) {
     const [, dd, mm, yyyy] = slash;
     return `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
-  }
-  // DD-Mon-YY or DD-Mon-YYYY (e.g. "8-Mar-26", "19-Apr-2026")
-  const mon = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
-  if (mon) {
-    const [, dd, mStr, yr] = mon;
-    const mm = MONTH_MAP[mStr.toLowerCase()];
-    if (!mm) return s;
-    const yyyy = yr.length === 2 ? `20${yr}` : yr;
-    return `${yyyy}-${mm}-${dd.padStart(2,'0')}`;
   }
   return s; // unrecognised — return as-is
 }
