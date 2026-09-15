@@ -6428,6 +6428,18 @@ function FisheyeOpsPro({ employees, setEmployees }) {
     { k:"settings",     l:"Settings",       i:Settings,    section:"SYSTEM"  },
   ];
 
+  // Guard against a stale/removed nav value left over in localStorage from a
+  // previous app version (e.g. a tab that no longer exists) — without this,
+  // the page renders a blank content area with a stale header. Runs once on
+  // mount and falls back to the Action Center.
+  useEffect(() => {
+    if (!navItems.some(item => item.k === nav)) {
+      setNav("action");
+      localStorage.setItem("fisheye_nav", "action");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const labels = {
     action:      "⚡ Action Center",
     calendar:    "📅 Operations Calendar",
@@ -6439,7 +6451,6 @@ function FisheyeOpsPro({ employees, setEmployees }) {
     bonus:       "🏆 My Bonus — SIP Outsourcing Policy",
     billing:     "📄 Billing Flow",
     onboarding:  "🚀 Onboarding Tracker",
-    analytics:   "📈 Analytics Dashboard",
     escalations:  "🚨 Escalation Manager",
     weeklyreport: "📧 Weekly Client Reports",
     settlement:  "🤝 Partner Settlement",
