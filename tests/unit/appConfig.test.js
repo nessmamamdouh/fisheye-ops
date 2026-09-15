@@ -1,0 +1,135 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import {
+  classifyProject,
+  classifyProjectStrict,
+  sanitizeClientName,
+  getEffectiveClientsList,
+  getEffectiveClientMeta,
+  getEffectiveMappingRules,
+  DEFAULT_MAPPING_RULES,
+  DEFAULT_CLIENT_META,
+  CONFIG_KEY,
+} from '../../src/utils/appConfig.js';
+
+beforeEach(() => {
+  localStorage.clear();
+});
+
+describe('classifyProject / classifyProjectStrict', () => {
+  it('matches an exact rule case-insensitively', () => {
+    expect(classifyProjectStrict('alpha')).toBe('Alpha');
+    expect(classifyProjectStrict('ALPHA')).toBe('Alpha');
+  });
+
+  it('matches a contains rule', () => {
+    expect(classifyProjectStrict('ZATCA Batch 2')).toBe('ZATCA');
+  });
+
+  it('returns null (needs manual assignment) for an unrecognized project under the strict classifier', () => {
+    expect(classifyProjectStrict('Some Totally New Project')).toBeNull();
+  });
+
+  it('classifyProject (non-strict) falls back to the default client instead of null', () => {
+    // This is exactly the "silently defaults to Sela" behavior -- only
+    // acceptable where a human has already been shown a chance to override
+    // it (e.g. as a convenience pre-fill), never as a substitute for asking.
+    expect(classifyProject('Some Totally New Project')).toBe('Sela');
+  });
+
+  it('empty/blank project returns null under the strict classifier', () => {
+    expect(classifyProjectStrict('')).toBeNull();
+    expect(classifyProjectStrict('   ')).toBeNull();
+  });
+});
+
+describe('sanitizeClientName', () => {
+  it('strips invisible Arabic combining marks that make a name silently stop matching', () => {
+    // This is the exact real-world corruption found in the live saved
+    // config: "Sela" with two invisible Arabic kasra marks baked in, which
+    // looks identical on screen but fails every plain string comparison.
+    const corrupted = 'SِِELA';
+    expect(sanitizeClientName(corrupted)).toBe('SELA');
+  });
+
+  it('collapses internal whitespace and trims', () => {
+    expect(sanitizeClientName('  Combuzz   HR  ')).toBe('Combuzz HR');
+  });
+});
+
+describe('getEffectiveMappingRules — merge, not replace (regression test)', () => {
+  it('falls back to DEFAULT_MAPPING_RULES when nothing is saved', () => {
+    expect(getEffectiveMappingRules()).toEqual(DEFAULT_MAPPING_RULES);
+  });
+
+  it('REGRESSION: an old saved rule set (predating later-added clients) still picks up new default rules instead of masking them', () => {
+    // This reproduces the exact bug that hid SPL/Pentagram/Finara/etc from
+    // Reconcile: an account's saved config had only 9 old rules from before
+    // those clients were registered in code. Merge must add every default
+    // rule the saved set doesn't already cover, while still respecting the
+    // saved rules that DO exist.
+    const oldSavedRules = [
+      { client: 'Riva Engineering', matchType: 'exact', value: 'CEO' },
+      { client: 'Combuzz HR', matchType: 'contains', value: 'MAVERIC' },
+      { client: 'Sela', matchType: 'default', value: '' },
+    ];
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({ mappingRules: oldSavedRules }));
+
+    const merged = getEffectiveMappingRules();
+
+    // Saved rules are preserved...
+    expect(merged.find(r => r.value === 'CEO')).toBeTruthy();
+    expect(merged.find(r => r.value === 'MAVERIC')).toBeTruthy();
+    // ...and every default rule not already covered by a saved rule is
+    // still present, so newer clients classify correctly even on an
+    // account with an old saved config.
+    expect(classifyProjectStrict('SPL', merged)).toBe('SPL');
+    expect(classifyProjectStrict('Pentagram Batch 3', merged)).toBe('Pentagram');
+    expect(classifyProjectStrict('Finara', merged)).toBe('Finara');
+    // The trailing rule must still be the "default" fallback, and it must
+    // be the SAVED one (the account's own choice), not silently swapped
+    // for the coded default.
+    expect(merged[merged.length - 1]).toEqual({ client: 'Sela', matchType: 'default', value: '' });
+  });
+
+  it('a saved rule for the same (matchType, value) pair overrides the coded default instead of duplicating it', () => {
+    const savedRules = [
+      { client: 'Some Other Client', matchType: 'exact', value: 'ALPHA' }, // overrides DEFAULT's "Alpha"
+      { client: 'Sela', matchType: 'default', value: '' },
+    ];
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({ mappingRules: savedRules }));
+    const merged = getEffectiveMappingRules();
+    expect(classifyProjectStrict('ALPHA', merged)).toBe('Some Other Client');
+    // Only one rule should exist for the exact:"ALPHA" key, not two.
+    const alphaRules = merged.filter(r => r.matchType === 'exact' && r.value.toUpperCase() === 'ALPHA');
+    expect(alphaRules.length).toBe(1);
+  });
+});
+
+describe('getEffectiveClientMeta — merge, not replace', () => {
+  it('a client added in code (DEFAULT_CLIENT_META) still appears even with an older saved config', () => {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({ clientMeta: { Sela: DEFAULT_CLIENT_META.Sela } }));
+    const merged = getEffectiveClientMeta();
+    expect(merged.Pentagram).toBeTruthy();
+    expect(merged.ZATCA).toBeTruthy();
+  });
+
+  it('a saved customization (e.g. a recolored client) overrides the coded default', () => {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({
+      clientMeta: { Sela: { badge: '#000000', text: '#ffffff', dot: '#123456', phone: '0500000000' } },
+    }));
+    const merged = getEffectiveClientMeta();
+    expect(merged.Sela.badge).toBe('#000000');
+    expect(merged.Sela.phone).toBe('0500000000');
+  });
+});
+
+describe('getEffectiveClientsList — merge, not replace', () => {
+  it('surfaces both saved and coded-default client names, deduplicated', () => {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({ clientsList: ['Riva Engineering 3', 'Sela'] }));
+    const merged = getEffectiveClientsList();
+    expect(merged).toContain('Riva Engineering 3');
+    expect(merged).toContain('Sela');
+    expect(merged).toContain('Pentagram'); // from clientMeta keys, not clientsList/DEFAULT_CLIENTS_LIST
+    expect(new Set(merged).size).toBe(merged.length); // no duplicates
+  });
+});
