@@ -112,14 +112,20 @@ export default {
         xl: 'var(--r-xl)',
         '2xl': 'var(--r-2xl)',
       },
+      // Deliberately points at the NEW --ds-shadow-* tokens (index.css),
+      // never the shared --shadow-* tokens ~114 existing .fe-* legacy
+      // styles read directly -- so these Tailwind shadow utilities (used
+      // only by src/components/ui/*, never by any pre-Tailwind screen)
+      // can be genuinely bold without shifting a single legacy shadow.
       boxShadow: {
-        xs: 'var(--shadow-xs)',
-        sm: 'var(--shadow-sm)',
-        DEFAULT: 'var(--shadow-sm)',
-        md: 'var(--shadow-md)',
-        lg: 'var(--shadow-lg)',
-        xl: 'var(--shadow-xl)',
-        brand: 'var(--shadow-brand)',
+        xs: 'var(--ds-shadow-xs)',
+        sm: 'var(--ds-shadow-sm)',
+        DEFAULT: 'var(--ds-shadow-sm)',
+        md: 'var(--ds-shadow-md)',
+        lg: 'var(--ds-shadow-lg)',
+        xl: 'var(--ds-shadow-xl)',
+        brand: 'var(--ds-shadow-brand)',
+        'brand-lg': 'var(--ds-shadow-brand-lg)',
       },
       // Motion tokens from the /animate skill's rule set -- built-in CSS
       // easings are "too weak" for UI; these are the recommended strong

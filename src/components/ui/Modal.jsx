@@ -2,10 +2,12 @@ import { useEffect } from "react";
 import { X } from "lucide-react";
 
 /**
- * Modal — centered dialog with backdrop blur. Entrance: scale(0.96)+opacity
- * -> scale(1)+opacity over 200ms on the "emphasized" strong ease-out curve
- * (see .ds-modal-box / .ds-overlay in index.css) — respects
- * prefers-reduced-motion globally (see index.css).
+ * Modal — centered dialog with a translucent, blurred backdrop (apple-design
+ * "materials" — the scrim separates the modal task from the page behind it)
+ * and a crimson-to-navy signature bar across the top. Entrance:
+ * scale(0.96)+opacity -> scale(1)+opacity over 200ms on the "emphasized"
+ * strong ease-out curve (see .ds-modal-box / .ds-overlay in index.css) —
+ * respects prefers-reduced-motion globally (see index.css).
  *
  * @param {boolean} open
  * @param {() => void} onClose - called on backdrop click, Escape key, or the × button
@@ -33,12 +35,12 @@ export default function Modal({ open, onClose, title, size = "md", footer, child
 
   return (
     <div
-      className="ds-overlay fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4"
+      className="ds-overlay fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 backdrop-blur-[2px] p-4"
       onClick={onClose}
     >
       <div
         className={[
-          "ds-modal-box w-full rounded-lg bg-white shadow-xl dark:bg-stone-900",
+          "ds-modal-box w-full overflow-hidden rounded-lg bg-white shadow-xl dark:bg-stone-900",
           SIZE_CLASSES[size] || SIZE_CLASSES.md,
         ].join(" ")}
         role="dialog"
@@ -46,6 +48,7 @@ export default function Modal({ open, onClose, title, size = "md", footer, child
         aria-label={title}
         onClick={e => e.stopPropagation()}
       >
+        <div className="h-1 bg-gradient-to-r from-primary to-secondary" aria-hidden="true" />
         {title && (
           <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-stone-700">
             <h3 className="font-serif font-semibold text-stone-900 dark:text-stone-50">{title}</h3>

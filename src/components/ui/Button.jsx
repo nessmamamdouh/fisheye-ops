@@ -16,19 +16,22 @@ import { forwardRef } from "react";
  */
 // hover: gated to real pointers (`[@media(hover:hover)]:`) so a tap on
 // touch doesn't leave a phantom hover state stuck on the button — see the
-// apple-design / ui-ux-pro-max "hover-vs-tap" rule.
+// apple-design / ui-ux-pro-max "hover-vs-tap" rule. Shadows use the
+// design-system-only --ds-shadow-* tokens (see index.css) — never the
+// shared --shadow-* tokens ~114 legacy .fe-* styles still read — so
+// this can be as bold as it wants without touching any live screen.
 const VARIANT_CLASSES = {
-  primary: "bg-primary text-white border border-transparent [@media(hover:hover)]:hover:bg-primary-dark [@media(hover:hover)]:hover:shadow-brand",
-  secondary: "bg-secondary text-white border border-transparent [@media(hover:hover)]:hover:opacity-90",
-  ghost: "bg-white text-stone-900 border border-stone-200 [@media(hover:hover)]:hover:bg-stone-100 [@media(hover:hover)]:hover:border-stone-400 dark:bg-stone-900 dark:text-stone-50 dark:border-stone-600",
-  danger: "bg-error-700 text-white border border-transparent [@media(hover:hover)]:hover:bg-error-800",
-  success: "bg-success-600 text-white border border-transparent [@media(hover:hover)]:hover:bg-success-800",
+  primary: "bg-primary text-white border border-transparent shadow-brand [@media(hover:hover)]:hover:bg-primary-dark [@media(hover:hover)]:hover:shadow-brand-lg [@media(hover:hover)]:hover:-translate-y-px",
+  secondary: "bg-secondary text-white border border-transparent shadow-sm [@media(hover:hover)]:hover:opacity-90 [@media(hover:hover)]:hover:shadow-md [@media(hover:hover)]:hover:-translate-y-px",
+  ghost: "bg-white text-stone-900 border border-stone-300 [@media(hover:hover)]:hover:bg-stone-100 [@media(hover:hover)]:hover:border-stone-900 dark:bg-stone-900 dark:text-stone-50 dark:border-stone-600",
+  danger: "bg-error-700 text-white border border-transparent shadow-sm [@media(hover:hover)]:hover:bg-error-800 [@media(hover:hover)]:hover:shadow-md [@media(hover:hover)]:hover:-translate-y-px",
+  success: "bg-success-600 text-white border border-transparent shadow-sm [@media(hover:hover)]:hover:bg-success-800 [@media(hover:hover)]:hover:shadow-md [@media(hover:hover)]:hover:-translate-y-px",
 };
 
 const SIZE_CLASSES = {
-  sm: "text-xs px-2.5 py-1.5 gap-1.5 rounded-sm",
-  md: "text-[13px] px-3.5 py-2 gap-1.5 rounded-sm",
-  lg: "text-sm px-5 py-2.5 gap-2 rounded-md",
+  sm: "text-[11px] px-3 py-1.5 gap-1.5 rounded-sm",
+  md: "text-[12px] px-4 py-2.5 gap-2 rounded-sm",
+  lg: "text-[13px] px-6 py-3 gap-2 rounded-md",
 };
 
 const ICON_SIZE = { sm: 13, md: 15, lg: 17 };
@@ -52,7 +55,7 @@ const Button = forwardRef(function Button(
       ref={ref}
       disabled={disabled || loading}
       className={[
-        "inline-flex items-center justify-center font-sans font-semibold tracking-tight",
+        "inline-flex items-center justify-center font-sans font-bold uppercase tracking-[0.02em]",
         // Press feedback fires on the transform only (never on color/bg),
         // 120ms — within the skill's 100-160ms button-press range. Colors
         // still use Tailwind's default transition for the hover state.

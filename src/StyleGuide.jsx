@@ -8,24 +8,31 @@ import { Button, Card, Badge, Input, Select, Modal, Tabs, Table, Form } from "./
 // reachable directly at /style-guide while this is being reviewed. Nothing
 // here reads or writes real data, and nothing on any EXISTING screen has
 // been migrated to this yet -- see DESIGN_SYSTEM.md.
+//
+// Layout: an editorial "spec sheet" two-column grid (number + title in the
+// gutter, content against a left rule) rather than a plain vertical stack
+// -- a deliberately distinctive structural choice (frontend-design's
+// "unexpected layouts" guidance), not just new colors on the old shape.
 
-function Section({ title, children }) {
+function Section({ index, title, children }) {
   return (
-    <section className="mb-12">
-      <h2 className="font-serif text-lg font-bold text-stone-900 mb-1">{title}</h2>
-      <div className="h-px bg-stone-200 mb-5" />
-      {children}
+    <section className="mb-16 md:grid md:grid-cols-[130px_1fr] md:gap-10">
+      <div className="mb-4 md:mb-0">
+        <div className="font-mono text-[11px] font-bold text-primary mb-1">{index}</div>
+        <h2 className="font-serif text-xl font-bold text-stone-900 leading-tight">{title}</h2>
+      </div>
+      <div className="md:border-l-2 md:border-stone-200 md:pl-8">{children}</div>
     </section>
   );
 }
 
 function Swatch({ name, note, className }) {
   return (
-    <div className="flex items-center gap-3">
-      <div className={["h-10 w-10 rounded-md border border-stone-200 shrink-0", className].join(" ")} />
+    <div className="flex items-center gap-3.5">
+      <div className={["h-16 w-16 rounded-xl border border-stone-200 shadow-sm shrink-0", className].join(" ")} />
       <div className="text-xs leading-tight font-sans">
-        <div className="font-semibold text-stone-800">{name}</div>
-        <div className="text-stone-400 font-mono">{note}</div>
+        <div className="font-bold text-stone-900">{name}</div>
+        <div className="text-stone-400 font-mono mt-0.5">{note}</div>
       </div>
     </div>
   );
@@ -38,24 +45,41 @@ export default function StyleGuide() {
 
   return (
     <div className="min-h-screen bg-stone-50 p-8 font-sans" dir="ltr">
-      <div className="max-w-5xl mx-auto">
-        <header className="mb-10">
-          <h1 className="font-serif text-3xl font-bold text-stone-900">Fisheye Ops — Design System</h1>
-          <p className="text-sm text-stone-600 mt-1.5 max-w-2xl">
-            "Refined Editorial Enterprise" — a warm operations desk instead of another cold SaaS dashboard.
-            Crimson and Navy are the only two fixed brand colors; everything else here is new. Internal review
-            page — not linked from the app's navigation, and no existing screen has adopted this yet.
-          </p>
+      <div className="max-w-6xl mx-auto">
+        <header className="ds-hero-wash relative mb-16 overflow-hidden rounded-2xl border border-stone-200 px-10 pt-14 pb-12">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-4 -top-10 hidden select-none font-serif italic text-[200px] leading-none text-primary/[0.06] md:block"
+          >
+            Fº
+          </div>
+          <div className="relative max-w-2xl">
+            <div className="mb-4 flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-primary" />
+              <span className="font-mono text-[11px] font-bold uppercase tracking-widest text-stone-500">
+                Fisheye Ops — Design System
+              </span>
+            </div>
+            <h1 className="font-serif text-5xl font-bold leading-[1.05] text-stone-900">
+              Refined Editorial Enterprise
+            </h1>
+            <div className="ds-rule my-5 w-16" />
+            <p className="text-[15px] leading-relaxed text-stone-600">
+              A warm operations desk instead of another cold SaaS dashboard. Crimson and Navy are the
+              only two fixed brand colors — everything else here was rebuilt around them. Internal
+              review page, not linked from the app's navigation; no existing screen has adopted this yet.
+            </p>
+          </div>
         </header>
 
-        <Section title="Color — brand (fixed, never changes)">
+        <Section index="01" title="Color — brand (fixed)">
           <div className="flex flex-wrap gap-6">
             <Swatch name="primary" note="#A02843 — Fisheye Crimson" className="bg-primary" />
             <Swatch name="primary-dark" note="#00293A — Fisheye Navy" className="bg-primary-dark" />
           </div>
         </Section>
 
-        <Section title="Color — warm neutral (new — replaces cold Tailwind gray)">
+        <Section index="02" title="Color — warm neutral">
           <div className="flex flex-wrap gap-6">
             <Swatch name="stone-50" note="page background" className="bg-stone-50" />
             <Swatch name="white" note="card / raised surface" className="bg-white" />
@@ -65,9 +89,13 @@ export default function StyleGuide() {
             <Swatch name="stone-600" note="secondary text" className="bg-stone-600" />
             <Swatch name="stone-900" note="primary text (ink)" className="bg-stone-900" />
           </div>
+          <p className="text-xs text-stone-400 mt-4 max-w-lg">
+            Replaces the app's cold Tailwind gray scale — warm-toned so it sits next to the crimson
+            brand color instead of fighting it.
+          </p>
         </Section>
 
-        <Section title="Color — status (refined, accessible, never color-alone)">
+        <Section index="03" title="Color — status">
           <div className="flex flex-wrap gap-2">
             <Badge color="success" dot>Healthy</Badge>
             <Badge color="warning" dot>At risk</Badge>
@@ -76,17 +104,18 @@ export default function StyleGuide() {
           </div>
           <p className="text-xs text-stone-400 mt-3 max-w-lg">
             Error is a warm terracotta, deliberately shifted away from the crimson brand hue so a danger
-            state and a brand accent are never confused on screen.
+            state and a brand accent are never confused on screen. Always color + text label, never
+            color alone.
           </p>
         </Section>
 
-        <Section title="Typography">
-          <div className="space-y-1.5 mb-6">
+        <Section index="04" title="Typography">
+          <div className="space-y-1.5 mb-7">
             <div className="text-[11px] text-stone-400 font-mono">Piazzolla — page titles, section headers, brand moments only</div>
             <p className="font-serif text-3xl font-bold text-stone-900">Client health, at a glance</p>
             <p className="font-serif italic text-lg text-stone-600">Sela — 509 employees, 3 open items</p>
           </div>
-          <div className="space-y-2 mb-6">
+          <div className="space-y-2 mb-7">
             <div className="text-[11px] text-stone-400 font-mono">Hanken Grotesk — everything else: labels, body, data, buttons</div>
             <p className="text-lg font-bold text-stone-900">Section heading / 18px bold</p>
             <p className="text-sm font-semibold text-stone-800">Card title / 14px semibold</p>
@@ -99,7 +128,7 @@ export default function StyleGuide() {
           </div>
         </Section>
 
-        <Section title="Button">
+        <Section index="05" title="Button">
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <Button variant="primary">Primary</Button>
             <Button variant="secondary">Secondary</Button>
@@ -116,8 +145,8 @@ export default function StyleGuide() {
           </div>
         </Section>
 
-        <Section title="Badge">
-          <div className="flex flex-wrap gap-2">
+        <Section index="06" title="Badge">
+          <div className="flex flex-wrap items-center gap-2 mb-3">
             <Badge color="stone">Draft</Badge>
             <Badge color="success" dot>Healthy</Badge>
             <Badge color="warning" dot>At Risk</Badge>
@@ -125,9 +154,18 @@ export default function StyleGuide() {
             <Badge color="info">Info</Badge>
             <Badge color="primary" icon={Users}>24 employees</Badge>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge color="primary" solid>Primary</Badge>
+            <Badge color="success" solid dot>Approved</Badge>
+            <Badge color="error" solid dot>Overdue</Badge>
+          </div>
+          <p className="text-xs text-stone-400 mt-3 max-w-lg">
+            Solid fills are for a headline moment (a flagged row, a hero status) — dense tables stay
+            with the soft/pale fill above so a busy screen doesn't turn into a wall of color.
+          </p>
         </Section>
 
-        <Section title="Input / Select / Form">
+        <Section index="07" title="Input / Select / Form">
           <div className="max-w-md">
             <Form.Row>
               <Form.Field>
@@ -148,22 +186,25 @@ export default function StyleGuide() {
           </div>
         </Section>
 
-        <Section title="Card">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card header={<h3 className="font-semibold text-sm text-stone-800">Basic card</h3>}>
+        <Section index="08" title="Card">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card header={<h3>Basic card</h3>}>
               <p className="text-sm text-stone-600">Body content goes here.</p>
             </Card>
             <Card
               interactive
-              header={<h3 className="font-semibold text-sm text-stone-800">Interactive card</h3>}
+              header={<h3>Interactive card</h3>}
               footer={<Button size="sm" variant="ghost" fullWidth>View details</Button>}
             >
               <p className="text-sm text-stone-600">Hover to see the lift + shadow.</p>
             </Card>
+            <Card accent="primary" header={<h3>Flagged card</h3>}>
+              <p className="text-sm text-stone-600">The colored edge marks a highlighted or flagged item.</p>
+            </Card>
           </div>
         </Section>
 
-        <Section title="Tabs">
+        <Section index="09" title="Tabs">
           <Tabs
             tabs={[
               { key: "overview", label: "Overview", icon: FileText },
@@ -173,10 +214,10 @@ export default function StyleGuide() {
             active={tab}
             onChange={setTab}
           />
-          <p className="text-sm text-stone-500 mt-3">Active tab: <span className="font-semibold text-stone-800">{tab}</span> — the underline slides to follow it.</p>
+          <p className="text-sm text-stone-500 mt-3">Active tab: <span className="font-semibold text-stone-800">{tab}</span> — the gradient underline slides to follow it.</p>
         </Section>
 
-        <Section title="Table">
+        <Section index="10" title="Table">
           <Table.Root>
             <Table.Head>
               <tr>
@@ -187,17 +228,17 @@ export default function StyleGuide() {
             </Table.Head>
             <tbody>
               {[["Ahmed Al-Saleh","SILQFI","8,500.00"],["Layla Al-Rashid","Batch A","6,200.00"]].map(([n,p,s]) => (
-                <tr key={n} className="[@media(hover:hover)]:hover:bg-stone-50">
+                <Table.Tr key={n}>
                   <Table.Td>{n}</Table.Td>
                   <Table.Td>{p}</Table.Td>
                   <Table.Td align="right" numeric>{s}</Table.Td>
-                </tr>
+                </Table.Tr>
               ))}
             </tbody>
           </Table.Root>
         </Section>
 
-        <Section title="Modal">
+        <Section index="11" title="Modal">
           <Button onClick={() => setModalOpen(true)}>Open modal</Button>
           <Modal
             open={modalOpen}

@@ -1,6 +1,6 @@
 /**
  * Table — a set of thin wrapper components (not a data-grid) that apply the
- * app's existing table look (`.fe-table`: uppercase muted headers, row
+ * app's existing table look (`.fe-table`: bold ledger-line header, row
  * hover, monospace numeric columns) so any screen's <table> markup gets it
  * for free. Deliberately has NO entrance/stagger animation: a table an
  * operator opens dozens of times a day should never move for style (see
@@ -14,31 +14,34 @@
  *   </Table.Head>
  *   <tbody>
  *     {rows.map(r => (
- *       <tr key={r.id}>
+ *       <Table.Tr key={r.id}>
  *         <Table.Td>{r.name}</Table.Td>
  *         <Table.Td align="right" numeric>{r.salary}</Table.Td>
- *       </tr>
+ *       </Table.Tr>
  *     ))}
  *   </tbody>
  * </Table.Root>
  */
 function Root({ className = "", children }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-stone-200 dark:border-stone-700">
+    <div className="overflow-x-auto rounded-lg border border-stone-200 shadow-sm dark:border-stone-700">
       <table className={["w-full text-sm font-sans", className].join(" ")}>{children}</table>
     </div>
   );
 }
 
+// A bold 2px ledger-line under the header (not a soft tint) is the
+// signature table move for this system — an "editorial ledger" feel that
+// reads as considered rather than a default browser table.
 function Head({ children }) {
-  return <thead className="bg-stone-50 dark:bg-stone-800">{children}</thead>;
+  return <thead className="bg-white border-b-2 border-stone-900 dark:bg-stone-900 dark:border-stone-100">{children}</thead>;
 }
 
 function Th({ align = "left", className = "", children }) {
   return (
     <th
       className={[
-        "px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-stone-400",
+        "px-3 py-3 text-[10.5px] font-extrabold uppercase tracking-wider text-stone-500 dark:text-stone-400",
         align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left",
         className,
       ].join(" ")}
@@ -63,5 +66,16 @@ function Td({ align = "left", numeric = false, className = "", children }) {
   );
 }
 
-const Table = { Root, Head, Th, Td };
+// Optional row wrapper with the standard hover-gated fill baked in. Plain
+// <tr> markup still works with Table.Td — this just saves callers from
+// repeating the hover class on every table in the app.
+function Tr({ className = "", children, ...rest }) {
+  return (
+    <tr className={["[@media(hover:hover)]:hover:bg-stone-50 transition-colors duration-100", className].join(" ")} {...rest}>
+      {children}
+    </tr>
+  );
+}
+
+const Table = { Root, Head, Th, Td, Tr };
 export default Table;
