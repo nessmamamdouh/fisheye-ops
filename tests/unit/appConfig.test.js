@@ -6,6 +6,7 @@ import {
   getEffectiveClientsList,
   getEffectiveClientMeta,
   getEffectiveMappingRules,
+  clientRequiresPO,
   DEFAULT_MAPPING_RULES,
   DEFAULT_CLIENT_META,
   CONFIG_KEY,
@@ -184,5 +185,40 @@ describe('removedClients — a deleted/renamed coded default must not resurrect 
     }));
     const merged = getEffectiveClientsList();
     expect(merged).toContain('Pentagram');
+  });
+});
+
+
+describe('clientRequiresPO', () => {
+  it('defaults to true for Sela with no saved config (coded default has requiresPO:true)', () => {
+    expect(clientRequiresPO('Sela')).toBe(true);
+  });
+
+  it('defaults to false for any other known or unknown client with no saved config', () => {
+    expect(clientRequiresPO('SPL')).toBe(false);
+    expect(clientRequiresPO('Channel Play')).toBe(false);
+    expect(clientRequiresPO('Some Brand New Client')).toBe(false);
+  });
+
+  it('respects an explicit saved requiresPO:true override on a client that defaults to false', () => {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({
+      clientMeta: { 'SPL': { requiresPO: true } },
+    }));
+    expect(clientRequiresPO('SPL')).toBe(true);
+  });
+
+  it('respects an explicit saved requiresPO:false override on Sela, overriding its coded default', () => {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({
+      clientMeta: { 'Sela': { requiresPO: false } },
+    }));
+    expect(clientRequiresPO('Sela')).toBe(false);
+  });
+
+  it('falls back to the name === "Sela" default when a saved meta record exists but requiresPO is not a boolean', () => {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({
+      clientMeta: { 'Sela': { phone: '0500000000' }, 'SPL': { phone: '0511111111' } },
+    }));
+    expect(clientRequiresPO('Sela')).toBe(true);
+    expect(clientRequiresPO('SPL')).toBe(false);
   });
 });
