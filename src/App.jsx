@@ -1915,6 +1915,9 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
   const save = async (updated) => {
   const { _id, ...fieldsToUpdate } = updated;
 
+  // Snapshot the old record so we can roll back if the save fails
+  const oldEmp = employees.find(e => e._id === _id);
+
   // تحديث محلي سريع بـ _id الصح
   setEmployees(prev => prev.map(e => (e._id === _id ? updated : e)));
 
@@ -1930,6 +1933,8 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
 
 } catch (err) {
   console.error("Save Error:", err.message);
+  // فشل الحفظ فعليًا -- رجّعي البيانات القديمة عشان الشاشة متوريش تعديل ماتسجلش
+  if (oldEmp) setEmployees(prev => prev.map(e => e._id === _id ? oldEmp : e));
   alert("❌ فشل الحفظ: " + err.message);
 }
 };
@@ -1937,6 +1942,11 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
   // إضافة wfDate تلقائياً لو الـ field هو workflowStatus (نفس منطق handleUpdateField)
   const today = new Date().toISOString().split("T")[0];
   const extraFields = field === "workflowStatus" ? { wfDate: today } : {};
+
+  // Snapshot the affected employees so we can roll back if the save fails
+  const prevById = new Map(
+    employees.filter(e => selected.includes(e._id)).map(e => [e._id, e])
+  );
 
   // 1. تحديث محلي سريع
   setEmployees(prev => prev.map(e =>
@@ -1956,6 +1966,8 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
     showWFToast(`✅ Updated ${selected.length} employee${selected.length !== 1 ? "s" : ""}`);
   } catch (err) {
     console.error("Bulk Save Error:", err.message);
+    // فشل الحفظ فعليًا -- رجّعي كل الموظفين المتأثرين لبياناتهم القديمة
+    setEmployees(prev => prev.map(e => prevById.has(e._id) ? prevById.get(e._id) : e));
     showWFToast(`❌ فشل الحفظ: ${err.message}`, "#dc2626");
   }
   };
@@ -1991,10 +2003,13 @@ const submitRenew = async () => {
       { ts: new Date().toISOString(), action: "Contract renewed" }]
   };
   const { _id, ...fields } = updated;
+  const oldEmp = renewEmp; // snapshot before renewal, in case the save fails
   setEmployees(prev => prev.map(e => e._id === _id ? updated : e));
   const { error } = await supabase.from('employees_master').update(fields).eq('_id', Number(_id));
   setRenewEmp(null);
   if (error) {
+    // فشل الحفظ فعليًا -- رجّعي الموظف للحالة قبل التجديد
+    setEmployees(prev => prev.map(e => e._id === _id ? oldEmp : e));
     showWFToast(`❌ Renewal failed: ${error.message}`, "#dc2626");
   } else {
     showWFToast(`🔄 Contract renewed for ${renewEmp.name}`);
@@ -2239,15 +2254,22 @@ const submitRenew = async () => {
                             Object.entries(fieldsToUpdate).forEach(([k, v]) => {
                               if (EXTENDED_FIELDS.includes(k)) extFields[k] = v; else coreFields[k] = v;
                             });
+                            let coreOk = true;
                             if (Object.keys(coreFields).length > 0) {
                               const { error } = await supabase.from('employees_master').update(coreFields).eq('_id', Number(emp._id));
-                              if (error) { errors++; continue; }
-                              setEmployees(prev => prev.map(e => e._id === emp._id ? { ...e, ...coreFields } : e));
-                              updated++;
+                              if (error) { errors++; coreOk = false; }
+                              else { setEmployees(prev => prev.map(e => e._id === emp._id ? { ...e, ...coreFields } : e)); updated++; }
                             }
                             if (Object.keys(extFields).length > 0) {
                               const { error: extErr } = await supabase.from('employees_master').update(extFields).eq('_id', Number(emp._id));
-                              if (!extErr) setEmployees(prev => prev.map(e => e._id === emp._id ? { ...e, ...extFields } : e));
+                              if (extErr) {
+                                errors++;
+                              } else {
+                                setEmployees(prev => prev.map(e => e._id === emp._id ? { ...e, ...extFields } : e));
+                                // count this row as updated even if it had no core-field
+                                // changes at all (e.g. only the IBAN changed)
+                                if (Object.keys(coreFields).length === 0) updated++;
+                              }
                             }
                           }
                           setPendingCSVDiff(null);
@@ -2639,7 +2661,15 @@ const submitRenew = async () => {
     const clientVal = parseFloat(document.getElementById("clientValue")?.value || 115);
     const partnerType = showProfitMode?.partnerType || "percent";
     const partnerVal = parseFloat(document.getElementById("partnerValue")?.value || 92);
-    
+
+    // احفظي القيم القديمة عشان نرجعلها لو الحفظ فشل
+    const prevById = new Map(
+      employees.filter(emp => selected.includes(emp._id)).map(emp => [emp._id, {
+        clientPrice: emp.clientPrice, clientPriceType: emp.clientPriceType,
+        partnerCost: emp.partnerCost, partnerCostType: emp.partnerCostType, profitMode: emp.profitMode,
+      }])
+    );
+
     // تحديث محلي
     setEmployees(emps => emps.map(emp =>
       selected.includes(emp._id)
@@ -2653,12 +2683,23 @@ const submitRenew = async () => {
       .update({ clientPrice: clientVal, clientPriceType: clientType, partnerCost: partnerVal, partnerCostType: partnerType, profitMode: "partner" })
       .in('_id', selected.map(Number));
 
-    if (error) alert("❌ فشل الحفظ: " + error.message);
+    if (error) {
+      // فشل الحفظ فعليًا -- رجّعي الأرقام القديمة عشان الشاشة متوريش قيم اتسجلتش
+      setEmployees(emps => emps.map(emp => prevById.has(emp._id) ? { ...emp, ...prevById.get(emp._id) } : emp));
+      alert("❌ فشل الحفظ: " + error.message);
+    }
     else alert("✅ تم الحفظ بنجاح");
 
   } else {
     const fisheyeType = showProfitMode?.fisheyeType || "percent";
     const fisheyeVal = parseFloat(document.getElementById("fisheyeValue")?.value || 15);
+
+    // احفظي القيم القديمة عشان نرجعلها لو الحفظ فشل
+    const prevById = new Map(
+      employees.filter(emp => selected.includes(emp._id)).map(emp => [emp._id, {
+        fisheyeMargin: emp.fisheyeMargin, fisheyeMarginType: emp.fisheyeMarginType, profitMode: emp.profitMode,
+      }])
+    );
 
     // تحديث محلي
     setEmployees(emps => emps.map(emp =>
@@ -2673,7 +2714,10 @@ const submitRenew = async () => {
       .update({ fisheyeMargin: fisheyeVal, fisheyeMarginType: fisheyeType, profitMode: "direct" })
       .in('_id', selected.map(Number));
 
-    if (error) alert("❌ فشل الحفظ: " + error.message);
+    if (error) {
+      setEmployees(emps => emps.map(emp => prevById.has(emp._id) ? { ...emp, ...prevById.get(emp._id) } : emp));
+      alert("❌ فشل الحفظ: " + error.message);
+    }
     else alert("✅ تم الحفظ بنجاح");
   }
 }} style={{
