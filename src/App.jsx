@@ -5706,11 +5706,20 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
     setRenamingProject(true);
     try {
       const ids = affected.map(e => e._id);
-      await supabase.from('employees_master').update({ project: to }).in('_id', ids);
+      const { error } = await supabase.from('employees_master').update({ project: to }).in('_id', ids);
+      if (error) throw error;
       const idSet = new Set(ids);
-      const updated = employees.map(e => idSet.has(e._id) ? { ...e, project: to } : e);
-      setEmployees(updated);
-      try { localStorage.setItem("fisheyeData_v3", JSON.stringify(updated)); } catch {}
+      // Functional update: apply against whatever the CURRENT employees
+      // state is when this resolves, not the snapshot from when the
+      // button was clicked -- avoids clobbering a concurrent realtime
+      // update from another tab/user during the (possibly multi-second)
+      // save.
+      let updatedForCache = null;
+      setEmployees(prev => {
+        updatedForCache = prev.map(e => idSet.has(e._id) ? { ...e, project: to } : e);
+        return updatedForCache;
+      });
+      try { if (updatedForCache) localStorage.setItem("fisheyeData_v3", JSON.stringify(updatedForCache)); } catch {}
       setProjectRenameFlash(`✅ اتغيّر الـ Project لـ ${affected.length} موظف (${from} → ${to})`);
       setRenameFromProject("");
       setRenameToProject("");
@@ -5731,15 +5740,22 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
     if (!ok) return;
     setReconciling(true);
     try {
-      let updated = employees;
+      // Apply each group's change against the CURRENT employees state via
+      // the functional setEmployees form, not a snapshot taken before this
+      // (possibly multi-second, multi-group) save started -- see note above
+      // applyProjectRename for why.
+      let updatedForCache = null;
       for (const g of mismatchGroups) {
         const ids = g.items.map(e => e._id);
-        await supabase.from('employees_master').update({ client: g.to }).in('_id', ids);
+        const { error } = await supabase.from('employees_master').update({ client: g.to }).in('_id', ids);
+        if (error) throw error;
         const idSet = new Set(ids);
-        updated = updated.map(e => idSet.has(e._id) ? { ...e, client: g.to } : e);
+        setEmployees(prev => {
+          updatedForCache = prev.map(e => idSet.has(e._id) ? { ...e, client: g.to } : e);
+          return updatedForCache;
+        });
       }
-      setEmployees(updated);
-      try { localStorage.setItem("fisheyeData_v3", JSON.stringify(updated)); } catch {}
+      try { if (updatedForCache) localStorage.setItem("fisheyeData_v3", JSON.stringify(updatedForCache)); } catch {}
       setReconcileFlash(`✅ اتصلح Client لـ ${mismatches.length} موظف`);
       setTimeout(() => setReconcileFlash(""), 4000);
     } catch (err) {
