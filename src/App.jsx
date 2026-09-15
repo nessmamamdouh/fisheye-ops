@@ -3718,12 +3718,20 @@ function ClientHub({ employees, clients, saveClients }) {
   const addRequest=(cid,req)=>save(clients.map(c=>c.id===cid?{...c,requestLog:[...c.requestLog,req]}:c));
   const updReqStatus=(cid,ri,st)=>save(clients.map(c=>c.id===cid?{...c,requestLog:c.requestLog.map((r,i)=>i===ri?{...r,status:st}:r)}:c));
   // Pre-compute health + headcount for ALL clients once — avoids re-computing inside map()
+  // An employee with no Profit Mode set has, by definition, no margin math running for them at
+  // all (Direct/Partner math both key off profitMode) — they contribute 0 SAR to any margin total
+  // downstream (the CRM's "Fill from Fisheye Ops" / Financial Overview, this app's own Finance
+  // tab) even though their contract is real and their salary is on file. That's an unreviewed
+  // gap, not a real zero, so it's worth surfacing per-client rather than only discovering it by
+  // opening every employee one at a time.
+  const hasNoMarginData = e => !e.profitMode;
   const clientStats = useMemo(() => {
     const m = {};
     clients.forEach(c => {
       m[c.id] = {
-        hc:     employees.filter(e => e.client === c.name && !isExcluded(e)).length,
-        health: calcClientHealth(c.name, employees),
+        hc:       employees.filter(e => e.client === c.name && !isExcluded(e)).length,
+        noMargin: employees.filter(e => e.client === c.name && !isExcluded(e) && hasNoMarginData(e)).length,
+        health:   calcClientHealth(c.name, employees),
       };
     });
     return m;
@@ -3741,6 +3749,7 @@ function ClientHub({ employees, clients, saveClients }) {
   // PO issues: include expired (same as Action Center) — expired Sela employees still need PO for invoicing
   const isResignedEmp=e=>["resigned","resigned_ar","مستقيل"].includes((e.status||"").toLowerCase().trim());
   const totalPOIssues=employees.filter(e=>clientRequiresPO(e.client)&&!isResignedEmp(e)&&hasMissingPO(e)).length;
+  const totalNoMargin=Object.values(clientStats).reduce((s,st)=>s+st.noMargin,0);
   const totalOverdue=clients.reduce((s,c)=>s+(c.requestLog||[]).filter(r=>r.status==="Pending"&&Math.floor((Date.now()-new Date(r.ts))/(864e5))>5).length,0);
 
   // ── detail modal data ──
@@ -3759,6 +3768,7 @@ function ClientHub({ employees, clients, saveClients }) {
   const missingPO=selEmpsForPO.filter(hasMissingPO);
   const hasPO=selEmpsForPO.filter(hasValidPO);
   const byProject=useMemo(()=>{const m={};selEmps.forEach(e=>{const p=e.project||"Unassigned";if(!m[p])m[p]=[];m[p].push(e);});return Object.entries(m).sort((a,b)=>b[1].length-a[1].length);},[selEmps]);
+  const noMarginEmps=useMemo(()=>selEmps.filter(hasNoMarginData),[selEmps]);
   const pendingActions=safeClient?safeClient.requestLog.map((r,i)=>({...r,i,dw:Math.floor((Date.now()-new Date(r.ts))/864e5)})).filter(r=>r.status==="Pending").sort((a,b)=>b.dw-a.dw):[];
 
   // Sync local notes value when selected client changes
@@ -3798,11 +3808,12 @@ function ClientHub({ employees, clients, saveClients }) {
             </button>
           </div>
           {/* Mini KPI strip inside header */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:6 }}>
             {[
-              { l:"Clients",  v:clients.filter(c=>c.status==="active").length, alert:false },
-              { l:"Pending",  v:totalPending,  alert:totalOverdue>0 },
-              { l:"No PO",    v:totalPOIssues, alert:totalPOIssues>0 },
+              { l:"Clients",   v:clients.filter(c=>c.status==="active").length, alert:false },
+              { l:"Pending",   v:totalPending,   alert:totalOverdue>0 },
+              { l:"No PO",     v:totalPOIssues,  alert:totalPOIssues>0 },
+              { l:"No Margin", v:totalNoMargin,  alert:totalNoMargin>0 },
             ].map(k => (
               <div key={k.l} style={{ backgroundColor:"rgba(255,255,255,0.13)", borderRadius:8, padding:"7px 8px", textAlign:"center" }}>
                 <div style={{ fontSize:9, color:"rgba(255,210,210,0.85)", fontWeight:700, textTransform:"uppercase", marginBottom:3 }}>{k.l}</div>
@@ -3840,7 +3851,7 @@ function ClientHub({ employees, clients, saveClients }) {
             </div>
           )}
           {displayed.map(c => {
-            const { hc, health } = clientStats[c.id] || { hc: 0, health: { label: "—", color: "#9ca3af", score: 0 } };
+            const { hc, health, noMargin } = clientStats[c.id] || { hc: 0, health: { label: "—", color: "#9ca3af", score: 0 }, noMargin: 0 };
             const pending = (c.requestLog||[]).filter(r=>r.status==="Pending").length;
             const overdue = (c.requestLog||[]).filter(r=>r.status==="Pending"&&Math.floor((Date.now()-new Date(r.ts))/864e5)>5).length;
             const isArchived = c.status === "archived";
@@ -3873,6 +3884,9 @@ function ClientHub({ employees, clients, saveClients }) {
                   <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:2, flexShrink:0 }}>
                     {overdue>0 && <span style={{ fontSize:9, fontWeight:700, padding:"2px 5px", borderRadius:999, backgroundColor:"#fef2f2", color:"#dc2626", border:"1px solid #fecaca" }}>{overdue}!</span>}
                     {pending>0 && overdue===0 && <span style={{ fontSize:9, fontWeight:700, padding:"2px 5px", borderRadius:999, backgroundColor:"#fffbeb", color:"#d97706", border:"1px solid #fde68a" }}>{pending}</span>}
+                    {noMargin>0 && (
+                      <span title={`${noMargin} employee${noMargin!==1?'s':''} with no Profit Mode/margin set`} style={{ fontSize:9, fontWeight:700, padding:"2px 5px", borderRadius:999, backgroundColor:"#faf5ff", color:"#7e22ce", border:"1px solid #e9d5ff" }}>{noMargin} no margin</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -3999,6 +4013,22 @@ function ClientHub({ employees, clients, saveClients }) {
             {/* OVERVIEW */}
             {detailTab==="overview" && (
               <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+                {noMarginEmps.length>0 && (
+                  <div style={{ padding:"10px 14px", borderRadius:10, backgroundColor:"#faf5ff", border:"1px solid #e9d5ff" }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:"#7e22ce", marginBottom:6 }}>
+                      ⚠ {noMarginEmps.length} EMPLOYEE{noMarginEmps.length!==1?"S":""} WITH NO PROFIT MODE / MARGIN SET
+                    </div>
+                    <p style={{ fontSize:11, color:"#6b21a8", margin:"0 0 8px", lineHeight:1.5 }}>
+                      These have a salary on file but no Direct/Partner terms — they count as 0 SAR margin everywhere
+                      (this app's Finance tab, the CRM's Financial Overview) until a real Profit Mode + rate is set.
+                    </p>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                      {noMarginEmps.map(e=>(
+                        <span key={e._id} style={{ fontSize:11, padding:"2px 8px", borderRadius:999, backgroundColor:"white", border:"1px solid #e9d5ff", color:"#6b21a8" }}>{e.name}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div style={{ padding:"10px 14px", borderRadius:10, backgroundColor:"#fefce8", border:"1px solid #fef9c3" }}>
                   <div style={{ fontSize:10, fontWeight:700, color:"#854d0e", marginBottom:6 }}>NOTES</div>
                   <textarea
