@@ -1,6 +1,14 @@
+import { useLayoutEffect, useRef, useState } from "react";
+
 /**
- * Tabs — horizontal tab bar. Matches `.fe-tab` (brand-colored underline for
- * the active tab, hover color shift).
+ * Tabs — horizontal tab bar with an animated sliding underline indicator.
+ *
+ * Purpose: state indication (which tab is active) + spatial consistency
+ * (the indicator visibly travels to the new tab rather than teleporting).
+ * Ingredients: transform only (translateX + scaleX on a 1px-wide bar —
+ * never animates `width` directly, which would trigger layout), the
+ * "moving on screen" ease-in-out curve, 220ms (dropdown/tab range).
+ * Respects prefers-reduced-motion globally (see index.css).
  *
  * @param {{key: string, label: string, icon?: React.ComponentType}[]} tabs
  * @param {string} active - the active tab's key
@@ -11,22 +19,29 @@
  *   active={detailTab} onChange={setDetailTab} />
  */
 export default function Tabs({ tabs, active, onChange, className = "" }) {
+  const btnRefs = useRef({});
+  const [indicator, setIndicator] = useState(null);
+
+  useLayoutEffect(() => {
+    const el = btnRefs.current[active];
+    if (el) setIndicator({ left: el.offsetLeft, width: el.offsetWidth });
+  }, [active, tabs]);
+
   return (
-    <div className={["flex items-center gap-1 border-b border-gray-200 dark:border-gray-700", className].join(" ")} role="tablist">
+    <div className={["relative flex items-center border-b border-stone-200 dark:border-stone-700", className].join(" ")} role="tablist">
       {tabs.map(t => {
         const isActive = t.key === active;
         const Icon = t.icon;
         return (
           <button
             key={t.key}
+            ref={el => { btnRefs.current[t.key] = el; }}
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(t.key)}
             className={[
-              "fe-tab inline-flex items-center gap-1.5 border-b-2 px-1 py-2.5 mx-2 first:ml-0",
-              isActive
-                ? "border-primary text-primary font-semibold"
-                : "border-transparent text-gray-500 hover:text-primary dark:text-gray-400",
+              "font-sans inline-flex items-center gap-1.5 px-3 py-2.5 text-[13.5px] transition-colors duration-150 ease-out",
+              isActive ? "text-primary font-bold" : "text-stone-600 [@media(hover:hover)]:hover:text-primary font-medium",
             ].join(" ")}
           >
             {Icon && <Icon size={13} aria-hidden="true" />}
@@ -34,6 +49,13 @@ export default function Tabs({ tabs, active, onChange, className = "" }) {
           </button>
         );
       })}
+      {indicator && (
+        <div
+          className="absolute bottom-0 left-0 h-[2px] w-px bg-primary transition-transform duration-[220ms] ease-emphasized-in-out"
+          style={{ transform: `translateX(${indicator.left}px) scaleX(${indicator.width})` }}
+          aria-hidden="true"
+        />
+      )}
     </div>
   );
 }

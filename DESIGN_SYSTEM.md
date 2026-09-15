@@ -111,6 +111,73 @@ gzip is what a browser actually downloads.
 - It does not wire up an actual dark-mode toggle — only the groundwork
   (`darkMode: 'class'` + `dark:` classes on every component) is in place.
 
+## Phase 2 — "Refined Editorial Enterprise" (approved aesthetic direction)
+
+Phase 1 above deliberately matched the OLD app's exact colors, so
+migrating a screen later would cause zero visual surprise. Phase 2 is a
+genuine redesign of the token values themselves, using the `ui-ux-pro-max`,
+`apple-design`, `animate` and `frontend-design` skills, previewed first as
+a standalone design canvas (a "Fisheye Ops Design System" mockup) and
+approved before touching any code. The only fixed constraint carried over
+from Phase 1: the two real Fisheye brand colors never change.
+
+**What changed:**
+
+- **A new warm neutral scale, `stone`** (`tailwind.config.js`), oklch-based,
+  replacing the cold blue-gray `gray` scale for anything using the new
+  design system. `gray` itself is untouched (still bound to `--gray-*`,
+  still what the ~1,300 legacy inline styles effectively match) — `stone`
+  is purely additive, so no existing screen's color changed.
+- **Refined semantic colors** — `success`/`warning`/`error`/`info` moved
+  from stock Tailwind green/amber/red/blue (Phase 1's "match the old app
+  exactly" choice) to desaturated, harmonious oklch values. `error` in
+  particular is a warm terracotta, deliberately shifted away from the
+  crimson brand hue so a danger state and a brand accent are never
+  confused. These four color families are only used inside
+  `src/components/ui/` and `/style-guide` — nothing else references them —
+  so this is also zero-impact on any existing screen.
+- **New typography**: Hanken Grotesk (UI body/labels/buttons/data) paired
+  with Piazzolla (page titles, section headers, brand moments only — never
+  dense table/form text) and IBM Plex Mono (numbers, unchanged from
+  Phase 1). Both new fonts are loaded via `@import` in `index.css`, but
+  only apply through Tailwind's `font-sans`/`font-serif` classes, which
+  didn't exist anywhere in the codebase before this project — so, again,
+  no existing screen's font changed.
+- **Motion**, decided with the `animate` skill's gate/purpose/ingredients
+  method rather than added decoratively:
+  - *Modal* entrance: gate = occasional (not a keyboard shortcut or
+    100+/day action) → standard animation is warranted. Purpose = spatial
+    consistency + preventing a jarring teleport-in. `scale(0.96)+opacity`
+    → `scale(1)+opacity`, transform/opacity only, the skill's "emphasized"
+    strong ease-out curve, 200ms (`.ds-modal-box`/`.ds-overlay` in
+    `index.css`).
+  - *Tabs*: an animated underline that slides to the active tab
+    (`translateX`+`scaleX` on a 1px bar — never animates `width`
+    directly), ease-in-out (a "moving on screen" case per the skill), 220ms.
+  - *Button* press: unchanged from Phase 1 (`active:scale-[0.97]`,
+    ~120-150ms) — already correct per the skill's 100-160ms button-press
+    range.
+  - *Table*: explicitly has **no** entrance/stagger animation. A table an
+    operator opens dozens of times a day should never move for style —
+    this is the skill's frequency gate working as intended (an
+    intentional absence, not an oversight).
+  - **Reduced motion**: a global `@media (prefers-reduced-motion: reduce)`
+    rule added to `index.css`, app-wide (legacy `.fe-*` animations
+    included) — this only affects users who've turned that OS setting on,
+    so it's a pure accessibility win with no visual effect for anyone else.
+  - **Hover gated to real pointers**: `Button`, `Card`, and the table row
+    example use `[@media(hover:hover)]:hover:...` instead of a bare
+    `hover:`, so a tap on a touchscreen doesn't leave a phantom hover state
+    stuck on the element (per `ui-ux-pro-max`'s hover-vs-tap rule and
+    `apple-design`'s response principles).
+
+**What did NOT change:** no existing screen's markup, colors, fonts, or
+behavior — same guarantee as Phase 1. `/style-guide` and the
+`src/components/ui/` library are the only places the new look exists right
+now. The design canvas used to get sign-off on the direction is a separate,
+disposable preview; the real, living reference from now on is
+`/style-guide` in the running app.
+
 ## Next steps (pending review of `/style-guide`)
 
 Once the tokens/components above are confirmed to look right, migrate one

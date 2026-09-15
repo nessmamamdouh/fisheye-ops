@@ -1,8 +1,11 @@
 /**
  * Table — a set of thin wrapper components (not a data-grid) that apply the
  * app's existing table look (`.fe-table`: uppercase muted headers, row
- * hover, staggered entrance animation, monospace numeric columns) so any
- * screen's <table> markup gets it for free.
+ * hover, monospace numeric columns) so any screen's <table> markup gets it
+ * for free. Deliberately has NO entrance/stagger animation: a table an
+ * operator opens dozens of times a day should never move for style (see
+ * DESIGN_SYSTEM.md's animation gate) — only real interactions (row hover)
+ * get motion.
  *
  * @example
  * <Table.Root>
@@ -21,21 +24,21 @@
  */
 function Root({ className = "", children }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-      <table className={["fe-table w-full text-sm", className].join(" ")}>{children}</table>
+    <div className="overflow-x-auto rounded-lg border border-stone-200 dark:border-stone-700">
+      <table className={["w-full text-sm font-sans", className].join(" ")}>{children}</table>
     </div>
   );
 }
 
 function Head({ children }) {
-  return <thead className="bg-gray-50 dark:bg-gray-800">{children}</thead>;
+  return <thead className="bg-stone-50 dark:bg-stone-800">{children}</thead>;
 }
 
 function Th({ align = "left", className = "", children }) {
   return (
     <th
       className={[
-        "px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-400",
+        "px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-stone-400",
         align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left",
         className,
       ].join(" ")}
@@ -49,9 +52,9 @@ function Td({ align = "left", numeric = false, className = "", children }) {
   return (
     <td
       className={[
-        "border-b border-gray-100 px-3 py-2.5 dark:border-gray-700",
+        "border-b border-stone-100 px-3 py-2.5 transition-colors duration-100 dark:border-stone-700",
         align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left",
-        numeric ? "fe-num font-mono tabular-nums" : "",
+        numeric ? "font-mono tabular-nums" : "",
         className,
       ].join(" ")}
     >

@@ -1,13 +1,62 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   FISHEYE OPS — DESIGN SYSTEM v2
+   FISHEYE OPS — DESIGN SYSTEM v2 (legacy — still what every existing
+   screen renders with; untouched)
    Brand: Maroon #A02843 · Precision Operations Interface
 ═══════════════════════════════════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
+/* ═══════════════════════════════════════════════════════════════════════
+   FISHEYE OPS — DESIGN SYSTEM v3 "Refined Editorial Enterprise" (new,
+   approved direction — see the Fisheye Ops Design System canvas).
+   Fonts are imported globally here (a @font-face import costs nothing
+   until something actually sets font-family to it), but nothing in the
+   existing app uses Hanken Grotesk/Piazzolla yet — only the new
+   component library (src/components/ui/) and /style-guide do, via
+   Tailwind's font-sans/font-serif classes (see tailwind.config.js).
+   This import does not change any existing screen's rendered font.
+═══════════════════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Piazzolla:ital,wght@0,500;0,600;0,700;1,500&family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Accessibility: reduced motion. Applies app-wide (legacy .fe-* animations
+   included) — this is a strict accessibility improvement with zero visual
+   effect for anyone who hasn't turned on "reduce motion" in their OS, so
+   it's safe to ship globally rather than scoping it to only new
+   components. Per the Design System's animation rules: reduced motion
+   means gentler, not zero — this shortens durations to near-instant
+   rather than deleting opacity/color transitions that aid comprehension. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── New design system motion: Modal entrance ────────────────────────
+   Gate: modals are "occasional" (opened a handful of times per session,
+   not a keyboard shortcut or 100+/day action) -> standard animation is
+   appropriate. Purpose: spatial consistency (it's arriving, not just
+   appearing) + preventing a jarring teleport-in. Ingredients: transform
+   + opacity only, starts from scale(0.96) (never scale(0)), the
+   "emphasized" strong ease-out curve from tailwind.config.js, 200ms —
+   within the skill's 200-500ms modal range, kept toward the low end
+   because this is a frequently-used admin tool, not a marketing moment. */
+@keyframes ds-modal-in {
+  from { opacity: 0; transform: scale(0.96) translateY(4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes ds-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.ds-modal-box { animation: ds-modal-in 200ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.ds-overlay   { animation: ds-overlay-in 160ms ease-out both; }
 
 /* ─── CSS Variables ─────────────────────────────────────────────────── */
 :root {

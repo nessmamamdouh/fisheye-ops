@@ -3,46 +3,33 @@ import { Search, Plus, Trash2, Save, Users, DollarSign, FileText } from "lucide-
 import { Button, Card, Badge, Input, Select, Modal, Tabs, Table, Form } from "./components/ui";
 
 // ─── Live, visual reference for the Fisheye Ops design system ─────────────
-// Not part of the app's real navigation -- reachable directly at /style-guide
-// while this is being reviewed. Nothing here reads or writes real data.
-// See DESIGN_SYSTEM.md for the written reference (tokens, usage snippets,
-// migration plan).
+// "Refined Editorial Enterprise" — the approved direction from the Fisheye
+// Ops Design System canvas. Not part of the app's real navigation --
+// reachable directly at /style-guide while this is being reviewed. Nothing
+// here reads or writes real data, and nothing on any EXISTING screen has
+// been migrated to this yet -- see DESIGN_SYSTEM.md.
 
 function Section({ title, children }) {
   return (
     <section className="mb-12">
-      <h2 className="text-lg font-bold text-gray-900 mb-1 font-sans">{title}</h2>
-      <div className="h-px bg-gray-200 mb-5" />
+      <h2 className="font-serif text-lg font-bold text-stone-900 mb-1">{title}</h2>
+      <div className="h-px bg-stone-200 mb-5" />
       {children}
     </section>
   );
 }
 
-function Swatch({ name, varName, hex }) {
+function Swatch({ name, note, className }) {
   return (
     <div className="flex items-center gap-3">
-      <div className="h-10 w-10 rounded-md border border-gray-200 shrink-0" style={{ background: hex }} />
-      <div className="text-xs leading-tight">
-        <div className="font-semibold text-gray-800">{name}</div>
-        <div className="text-gray-400 font-mono">{varName}</div>
+      <div className={["h-10 w-10 rounded-md border border-stone-200 shrink-0", className].join(" ")} />
+      <div className="text-xs leading-tight font-sans">
+        <div className="font-semibold text-stone-800">{name}</div>
+        <div className="text-stone-400 font-mono">{note}</div>
       </div>
     </div>
   );
 }
-
-const COLOR_GROUPS = [
-  { label: "Primary — Fisheye Crimson", items: [
-    { name: "primary", varName: "--brand · #A02843", hex: "var(--brand)" },
-    { name: "primary-dark", varName: "--brand-dark · #00293A", hex: "var(--brand-dark)" },
-  ]},
-  { label: "Gray (aligned scale — see DESIGN_SYSTEM.md)", items: [50,100,200,300,400,500,600,700,800,900].map(n => ({
-    name: `gray-${n}`, varName: `--gray-${n}`, hex: `var(--gray-${n})`,
-  }))},
-  { label: "Success", items: [100,600,800].map(n => ({ name: `success-${n}`, varName: `success.${n}`, hex: ({100:"#dcfce7",600:"#16a34a",800:"#166534"})[n] }))},
-  { label: "Warning", items: [100,600,800].map(n => ({ name: `warning-${n}`, varName: `warning.${n}`, hex: ({100:"#fef9c3",600:"#d97706",800:"#92400e"})[n] }))},
-  { label: "Error", items: [100,600,800].map(n => ({ name: `error-${n}`, varName: `error.${n}`, hex: ({100:"#fee2e2",600:"#dc2626",800:"#991b1b"})[n] }))},
-  { label: "Info", items: [100,600,800].map(n => ({ name: `info-${n}`, varName: `info.${n}`, hex: ({100:"#dbeafe",600:"#2563eb",800:"#1e40af"})[n] }))},
-];
 
 export default function StyleGuide() {
   const [modalOpen, setModalOpen] = useState(false);
@@ -50,61 +37,65 @@ export default function StyleGuide() {
   const [inputVal, setInputVal] = useState("");
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8 font-sans" dir="ltr">
+    <div className="min-h-screen bg-stone-50 p-8 font-sans" dir="ltr">
       <div className="max-w-5xl mx-auto">
         <header className="mb-10">
-          <h1 className="text-2xl font-extrabold text-gray-900">Fisheye Ops — Design System</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Live reference for design tokens and the reusable component library. Internal review page — not linked from the app's navigation.
+          <h1 className="font-serif text-3xl font-bold text-stone-900">Fisheye Ops — Design System</h1>
+          <p className="text-sm text-stone-600 mt-1.5 max-w-2xl">
+            "Refined Editorial Enterprise" — a warm operations desk instead of another cold SaaS dashboard.
+            Crimson and Navy are the only two fixed brand colors; everything else here is new. Internal review
+            page — not linked from the app's navigation, and no existing screen has adopted this yet.
           </p>
         </header>
 
-        <Section title="Colors">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-6">
-            {COLOR_GROUPS.map(g => (
-              <div key={g.label} className="col-span-full">
-                <div className="text-xs font-semibold text-gray-500 mb-2">{g.label}</div>
-                <div className="flex flex-wrap gap-4">
-                  {g.items.map(it => <Swatch key={it.name} {...it} />)}
-                </div>
-              </div>
-            ))}
+        <Section title="Color — brand (fixed, never changes)">
+          <div className="flex flex-wrap gap-6">
+            <Swatch name="primary" note="#A02843 — Fisheye Crimson" className="bg-primary" />
+            <Swatch name="primary-dark" note="#00293A — Fisheye Navy" className="bg-primary-dark" />
           </div>
+        </Section>
+
+        <Section title="Color — warm neutral (new — replaces cold Tailwind gray)">
+          <div className="flex flex-wrap gap-6">
+            <Swatch name="stone-50" note="page background" className="bg-stone-50" />
+            <Swatch name="white" note="card / raised surface" className="bg-white" />
+            <Swatch name="stone-100" note="subtle fill / hover" className="bg-stone-100" />
+            <Swatch name="stone-200" note="border" className="bg-stone-200" />
+            <Swatch name="stone-400" note="faint text" className="bg-stone-400" />
+            <Swatch name="stone-600" note="secondary text" className="bg-stone-600" />
+            <Swatch name="stone-900" note="primary text (ink)" className="bg-stone-900" />
+          </div>
+        </Section>
+
+        <Section title="Color — status (refined, accessible, never color-alone)">
+          <div className="flex flex-wrap gap-2">
+            <Badge color="success" dot>Healthy</Badge>
+            <Badge color="warning" dot>At risk</Badge>
+            <Badge color="error" dot>Critical</Badge>
+            <Badge color="info" dot>Info</Badge>
+          </div>
+          <p className="text-xs text-stone-400 mt-3 max-w-lg">
+            Error is a warm terracotta, deliberately shifted away from the crimson brand hue so a danger
+            state and a brand accent are never confused on screen.
+          </p>
         </Section>
 
         <Section title="Typography">
-          <div className="space-y-2">
-            <p className="text-2xl font-extrabold text-gray-900">Heading / 24px extrabold</p>
-            <p className="text-lg font-bold text-gray-900">Section title / 18px bold</p>
-            <p className="text-sm font-semibold text-gray-800">Label / 14px semibold</p>
-            <p className="text-sm text-gray-700">Body text / 14px regular — Plus Jakarta Sans</p>
-            <p className="text-xs text-gray-500">Meta / caption / 12px</p>
-            <p className="font-mono text-sm text-gray-700">42,500.00 SAR — numeric values use IBM Plex Mono</p>
+          <div className="space-y-1.5 mb-6">
+            <div className="text-[11px] text-stone-400 font-mono">Piazzolla — page titles, section headers, brand moments only</div>
+            <p className="font-serif text-3xl font-bold text-stone-900">Client health, at a glance</p>
+            <p className="font-serif italic text-lg text-stone-600">Sela — 509 employees, 3 open items</p>
           </div>
-        </Section>
-
-        <Section title="Spacing (Tailwind default 4px scale)">
-          <div className="flex items-end gap-3">
-            {[1,2,3,4,6,8,12,16].map(n => (
-              <div key={n} className="text-center">
-                <div className="bg-primary/70 rounded-sm" style={{ width: n * 4, height: 24 }} />
-                <div className="text-[10px] text-gray-400 mt-1">{n} = {n*4}px</div>
-              </div>
-            ))}
+          <div className="space-y-2 mb-6">
+            <div className="text-[11px] text-stone-400 font-mono">Hanken Grotesk — everything else: labels, body, data, buttons</div>
+            <p className="text-lg font-bold text-stone-900">Section heading / 18px bold</p>
+            <p className="text-sm font-semibold text-stone-800">Card title / 14px semibold</p>
+            <p className="text-sm text-stone-600">Body text at 14px — the ERP-appropriate density for dense screens.</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">Meta label / 12px uppercase</p>
           </div>
-        </Section>
-
-        <Section title="Shadows & Radius">
-          {/* Literal class names on purpose -- Tailwind's build-time scanner
-             greps this file's raw text for class-name-shaped strings, so a
-             dynamically-built `shadow-${s}` string would never actually be
-             emitted in the compiled CSS. */}
-          <div className="flex flex-wrap gap-6">
-            <div className="h-16 w-16 bg-white rounded-md flex items-center justify-center text-[10px] text-gray-400 shadow-xs">xs</div>
-            <div className="h-16 w-16 bg-white rounded-md flex items-center justify-center text-[10px] text-gray-400 shadow-sm">sm</div>
-            <div className="h-16 w-16 bg-white rounded-md flex items-center justify-center text-[10px] text-gray-400 shadow-md">md</div>
-            <div className="h-16 w-16 bg-white rounded-md flex items-center justify-center text-[10px] text-gray-400 shadow-lg">lg</div>
-            <div className="h-16 w-16 bg-white rounded-md flex items-center justify-center text-[10px] text-gray-400 shadow-xl">xl</div>
+          <div className="space-y-1.5">
+            <div className="text-[11px] text-stone-400 font-mono">IBM Plex Mono — every numeric value, tabular so columns align</div>
+            <p className="font-mono text-xl font-semibold text-stone-900 tabular-nums">42,500.00 SAR</p>
           </div>
         </Section>
 
@@ -127,7 +118,7 @@ export default function StyleGuide() {
 
         <Section title="Badge">
           <div className="flex flex-wrap gap-2">
-            <Badge color="gray">Draft</Badge>
+            <Badge color="stone">Draft</Badge>
             <Badge color="success" dot>Healthy</Badge>
             <Badge color="warning" dot>At Risk</Badge>
             <Badge color="error" dot>Critical</Badge>
@@ -159,15 +150,15 @@ export default function StyleGuide() {
 
         <Section title="Card">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card header={<h3 className="font-semibold text-sm text-gray-800">Basic card</h3>}>
-              <p className="text-sm text-gray-600">Body content goes here.</p>
+            <Card header={<h3 className="font-semibold text-sm text-stone-800">Basic card</h3>}>
+              <p className="text-sm text-stone-600">Body content goes here.</p>
             </Card>
             <Card
               interactive
-              header={<h3 className="font-semibold text-sm text-gray-800">Interactive card</h3>}
+              header={<h3 className="font-semibold text-sm text-stone-800">Interactive card</h3>}
               footer={<Button size="sm" variant="ghost" fullWidth>View details</Button>}
             >
-              <p className="text-sm text-gray-600">Hover to see the lift + shadow.</p>
+              <p className="text-sm text-stone-600">Hover to see the lift + shadow.</p>
             </Card>
           </div>
         </Section>
@@ -182,7 +173,7 @@ export default function StyleGuide() {
             active={tab}
             onChange={setTab}
           />
-          <p className="text-sm text-gray-500 mt-3">Active tab: <span className="font-semibold text-gray-800">{tab}</span></p>
+          <p className="text-sm text-stone-500 mt-3">Active tab: <span className="font-semibold text-stone-800">{tab}</span> — the underline slides to follow it.</p>
         </Section>
 
         <Section title="Table">
@@ -196,7 +187,7 @@ export default function StyleGuide() {
             </Table.Head>
             <tbody>
               {[["Ahmed Al-Saleh","SILQFI","8,500.00"],["Layla Al-Rashid","Batch A","6,200.00"]].map(([n,p,s]) => (
-                <tr key={n}>
+                <tr key={n} className="[@media(hover:hover)]:hover:bg-stone-50">
                   <Table.Td>{n}</Table.Td>
                   <Table.Td>{p}</Table.Td>
                   <Table.Td align="right" numeric>{s}</Table.Td>
@@ -217,7 +208,7 @@ export default function StyleGuide() {
               <Button variant="primary" onClick={() => setModalOpen(false)}>Confirm</Button>
             </>}
           >
-            <p className="text-sm text-gray-600">This is the modal body. Escape key, backdrop click, and the × button all close it.</p>
+            <p className="text-sm text-stone-600">This is the modal body. Escape key, backdrop click, and the × button all close it.</p>
           </Modal>
         </Section>
       </div>

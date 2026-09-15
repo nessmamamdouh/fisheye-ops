@@ -16,7 +16,7 @@ function Field({ className = "", children }) {
 
 function Label({ required = false, className = "", children }) {
   return (
-    <label className={["text-xs font-semibold text-gray-600 dark:text-gray-300", className].join(" ")}>
+    <label className={["font-sans text-xs font-semibold text-stone-600 dark:text-stone-300", className].join(" ")}>
       {children}
       {required && <span className="text-error-600 ml-0.5">*</span>}
     </label>
@@ -24,11 +24,11 @@ function Label({ required = false, className = "", children }) {
 }
 
 function HelperText({ className = "", children }) {
-  return <p className={["text-[11px] text-gray-400", className].join(" ")}>{children}</p>;
+  return <p className={["font-sans text-[11px] text-stone-400", className].join(" ")}>{children}</p>;
 }
 
 function ErrorText({ className = "", children }) {
-  return <p className={["text-[11px] font-medium text-error-600", className].join(" ")}>{children}</p>;
+  return <p className={["font-sans text-[11px] font-medium text-error-600", className].join(" ")}>{children}</p>;
 }
 
 function Row({ className = "", children }) {

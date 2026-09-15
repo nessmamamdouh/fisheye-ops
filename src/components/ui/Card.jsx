@@ -1,5 +1,5 @@
 /**
- * Card — Fisheye Ops design system.
+ * Card — Fisheye Ops design system ("Refined Editorial Enterprise").
  *
  * A bordered, shadowed surface. Matches the existing `.fe-card` look
  * (see index.css) but as a composable component with header/footer slots.
@@ -27,21 +27,21 @@ export default function Card({
   return (
     <div
       className={[
-        "bg-white border border-gray-200 rounded-lg shadow-sm",
-        "dark:bg-gray-800 dark:border-gray-700",
+        "bg-white border border-stone-200 rounded-lg shadow-sm",
+        "dark:bg-stone-900 dark:border-stone-700",
         interactive
-          ? "cursor-pointer transition-[box-shadow,transform] duration-200 hover:shadow-md hover:-translate-y-px hover:border-gray-300 dark:hover:border-gray-600"
+          ? "cursor-pointer transition-[box-shadow,transform] duration-200 ease-out [@media(hover:hover)]:hover:shadow-md [@media(hover:hover)]:hover:-translate-y-px [@media(hover:hover)]:hover:border-stone-400 dark:hover:border-stone-600"
           : "",
         className,
       ].join(" ")}
       {...rest}
     >
       {header && (
-        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">{header}</div>
+        <div className="px-4 py-3 border-b border-stone-100 dark:border-stone-700">{header}</div>
       )}
       <div className={padding}>{children}</div>
       {footer && (
-        <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700">{footer}</div>
+        <div className="px-4 py-3 border-t border-stone-100 dark:border-stone-700">{footer}</div>
       )}
     </div>
   );

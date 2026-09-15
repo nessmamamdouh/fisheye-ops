@@ -2,8 +2,10 @@ import { useEffect } from "react";
 import { X } from "lucide-react";
 
 /**
- * Modal — centered dialog with backdrop blur, matching `.fe-overlay` /
- * `.fe-modal-box` (spring-in animation, blurred backdrop).
+ * Modal — centered dialog with backdrop blur. Entrance: scale(0.96)+opacity
+ * -> scale(1)+opacity over 200ms on the "emphasized" strong ease-out curve
+ * (see .ds-modal-box / .ds-overlay in index.css) — respects
+ * prefers-reduced-motion globally (see index.css).
  *
  * @param {boolean} open
  * @param {() => void} onClose - called on backdrop click, Escape key, or the × button
@@ -31,12 +33,12 @@ export default function Modal({ open, onClose, title, size = "md", footer, child
 
   return (
     <div
-      className="fe-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="ds-overlay fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4"
       onClick={onClose}
     >
       <div
         className={[
-          "fe-modal-box w-full rounded-lg bg-white shadow-xl dark:bg-gray-800",
+          "ds-modal-box w-full rounded-lg bg-white shadow-xl dark:bg-stone-900",
           SIZE_CLASSES[size] || SIZE_CLASSES.md,
         ].join(" ")}
         role="dialog"
@@ -45,20 +47,20 @@ export default function Modal({ open, onClose, title, size = "md", footer, child
         onClick={e => e.stopPropagation()}
       >
         {title && (
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-            <h3 className="font-sans font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-stone-700">
+            <h3 className="font-serif font-semibold text-stone-900 dark:text-stone-50">{title}</h3>
             <button
               onClick={onClose}
               aria-label="Close"
-              className="rounded-sm p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700"
+              className="rounded-sm p-1 text-stone-400 transition-colors duration-150 ease-out hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-700"
             >
               <X size={16} />
             </button>
           </div>
         )}
-        <div className="px-5 py-4 max-h-[70vh] overflow-y-auto">{children}</div>
+        <div className="px-5 py-4 max-h-[70vh] overflow-y-auto font-sans">{children}</div>
         {footer && (
-          <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-100 dark:border-gray-700">
+          <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-stone-100 dark:border-stone-700">
             {footer}
           </div>
         )}

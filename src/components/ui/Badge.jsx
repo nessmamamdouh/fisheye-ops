@@ -1,8 +1,10 @@
 /**
  * Badge — small status/label pill. Matches the `.fe-pill` look used across
  * the app for workflow status, client health, and PO/payroll flags.
+ * Always pairs color with a text label (and optionally an icon/dot) —
+ * never color alone, per the ERP accessibility rule.
  *
- * @param {"gray"|"success"|"warning"|"error"|"info"|"primary"} [color="gray"]
+ * @param {"stone"|"success"|"warning"|"error"|"info"|"primary"} [color="stone"]
  * @param {React.ComponentType} [icon] - optional leading icon
  * @param {boolean} [dot=false] - render a small status dot instead of an icon
  *
@@ -11,7 +13,7 @@
  * <Badge color="error" dot>Critical</Badge>
  */
 const COLOR_CLASSES = {
-  gray: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200",
+  stone: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-200",
   success: "bg-success-100 text-success-800",
   warning: "bg-warning-100 text-warning-800",
   error: "bg-error-100 text-error-800",
@@ -20,7 +22,7 @@ const COLOR_CLASSES = {
 };
 
 const DOT_CLASSES = {
-  gray: "bg-gray-400",
+  stone: "bg-stone-400",
   success: "bg-success-600",
   warning: "bg-warning-600",
   error: "bg-error-600",
@@ -28,12 +30,12 @@ const DOT_CLASSES = {
   primary: "bg-primary",
 };
 
-export default function Badge({ color = "gray", icon: Icon, dot = false, className = "", children }) {
+export default function Badge({ color = "stone", icon: Icon, dot = false, className = "", children }) {
   return (
     <span
       className={[
-        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold tracking-tight whitespace-nowrap",
-        COLOR_CLASSES[color] || COLOR_CLASSES.gray,
+        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold tracking-tight whitespace-nowrap font-sans",
+        COLOR_CLASSES[color] || COLOR_CLASSES.stone,
         className,
       ].join(" ")}
     >

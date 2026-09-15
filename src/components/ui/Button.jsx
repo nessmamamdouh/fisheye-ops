@@ -1,7 +1,7 @@
 import { forwardRef } from "react";
 
 /**
- * Button — Fisheye Ops design system.
+ * Button — Fisheye Ops design system ("Refined Editorial Enterprise").
  *
  * @param {"primary"|"secondary"|"ghost"|"danger"|"success"} [variant="primary"]
  * @param {"sm"|"md"|"lg"} [size="md"]
@@ -14,12 +14,15 @@ import { forwardRef } from "react";
  * <Button variant="danger" size="sm" icon={Trash2}>Delete</Button>
  * <Button variant="ghost" loading>Saving…</Button>
  */
+// hover: gated to real pointers (`[@media(hover:hover)]:`) so a tap on
+// touch doesn't leave a phantom hover state stuck on the button — see the
+// apple-design / ui-ux-pro-max "hover-vs-tap" rule.
 const VARIANT_CLASSES = {
-  primary: "bg-primary text-white border border-transparent hover:bg-primary-dark hover:shadow-brand",
-  secondary: "bg-secondary text-white border border-transparent hover:opacity-90",
-  ghost: "bg-white text-gray-700 border border-gray-200 hover:bg-gray-100 hover:border-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700",
-  danger: "bg-error-700 text-white border border-transparent hover:bg-error-800",
-  success: "bg-success-600 text-white border border-transparent hover:bg-success-700",
+  primary: "bg-primary text-white border border-transparent [@media(hover:hover)]:hover:bg-primary-dark [@media(hover:hover)]:hover:shadow-brand",
+  secondary: "bg-secondary text-white border border-transparent [@media(hover:hover)]:hover:opacity-90",
+  ghost: "bg-white text-stone-900 border border-stone-200 [@media(hover:hover)]:hover:bg-stone-100 [@media(hover:hover)]:hover:border-stone-400 dark:bg-stone-900 dark:text-stone-50 dark:border-stone-600",
+  danger: "bg-error-700 text-white border border-transparent [@media(hover:hover)]:hover:bg-error-800",
+  success: "bg-success-600 text-white border border-transparent [@media(hover:hover)]:hover:bg-success-800",
 };
 
 const SIZE_CLASSES = {
@@ -50,9 +53,12 @@ const Button = forwardRef(function Button(
       disabled={disabled || loading}
       className={[
         "inline-flex items-center justify-center font-sans font-semibold tracking-tight",
-        "transition-colors duration-150 whitespace-nowrap select-none",
+        // Press feedback fires on the transform only (never on color/bg),
+        // 120ms — within the skill's 100-160ms button-press range. Colors
+        // still use Tailwind's default transition for the hover state.
+        "transition-[background-color,box-shadow,transform] duration-150 ease-out whitespace-nowrap select-none",
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2",
-        "disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.97]",
+        "disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.97] active:duration-[120ms]",
         VARIANT_CLASSES[variant] || VARIANT_CLASSES.primary,
         SIZE_CLASSES[size] || SIZE_CLASSES.md,
         fullWidth ? "w-full" : "",
