@@ -5553,6 +5553,10 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
   const [savedFlash, setSavedFlash] = useState(false);
   const [reconciling, setReconciling] = useState(false);
   const [reconcileFlash, setReconcileFlash] = useState("");
+  const [renameFromProject, setRenameFromProject] = useState("");
+  const [renameToProject, setRenameToProject] = useState("");
+  const [renamingProject, setRenamingProject] = useState(false);
+  const [projectRenameFlash, setProjectRenameFlash] = useState("");
 
   const empCountFor = (name) => employees.filter(e => e.client === name).length;
 
@@ -5596,6 +5600,43 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
     });
     return Object.values(g);
   }, [mismatches]);
+
+  const distinctProjects = useMemo(
+    () => [...new Set(employees.map(e => (e.project || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [employees]
+  );
+  const projectRenameAffectedCount = renameFromProject
+    ? employees.filter(e => (e.project || "").trim() === renameFromProject).length
+    : 0;
+  const applyProjectRename = async () => {
+    const from = renameFromProject;
+    const to = renameToProject.trim();
+    if (!from || !to) return;
+    if (from === to) return alert("الاسم الجديد لازم يكون مختلف عن الاسم الحالي.");
+    const affected = employees.filter(e => (e.project || "").trim() === from);
+    if (!affected.length) return alert(`مفيش موظفين بمشروع "${from}" حاليًا.`);
+    const ok = window.confirm(
+      `هيتم تعديل حقل الـ Project بس (من "${from}" لـ "${to}") لـ ${affected.length} موظف — من غير أي تعديل على Client أو بارتنر أو مارجن أو أي بيانات تانية:\n\nمتابعة؟`
+    );
+    if (!ok) return;
+    setRenamingProject(true);
+    try {
+      const ids = affected.map(e => e._id);
+      await supabase.from('employees_master').update({ project: to }).in('_id', ids);
+      const idSet = new Set(ids);
+      const updated = employees.map(e => idSet.has(e._id) ? { ...e, project: to } : e);
+      setEmployees(updated);
+      try { localStorage.setItem("fisheyeData_v3", JSON.stringify(updated)); } catch {}
+      setProjectRenameFlash(`✅ اتغيّر الـ Project لـ ${affected.length} موظف (${from} → ${to})`);
+      setRenameFromProject("");
+      setRenameToProject("");
+      setTimeout(() => setProjectRenameFlash(""), 5000);
+    } catch (err) {
+      alert("حصل خطأ أثناء تعديل الـ Project: " + err.message);
+    } finally {
+      setRenamingProject(false);
+    }
+  };
 
   const applyReconcile = async () => {
     if (!mismatchGroups.length) return;
@@ -5810,6 +5851,24 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
             {reconcileFlash && <span style={{ marginInlineStart: 10, fontSize: 12, fontWeight: 700, color: "#16a34a" }}>{reconcileFlash}</span>}
           </div>
         )}
+
+        <div style={{ marginTop: 12, padding: "10px 12px", backgroundColor: "#f9fafb", borderRadius: 10 }}>
+          <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: "#6b7280" }}>
+            ✏️ تغيير اسم Project لكل الموظفين اللي عليه (مفيدة بعد ما توحّدي/تغيّري اسم عميل قديم)
+          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <select value={renameFromProject} onChange={e => setRenameFromProject(e.target.value)} style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 160 }}>
+              <option value="">— اختاري Project الحالي —</option>
+              {distinctProjects.map(p => <option key={p} value={p}>{p} ({employees.filter(e => (e.project||"").trim() === p).length})</option>)}
+            </select>
+            <span style={{ fontSize: 12, color: "#9ca3af" }}>→</span>
+            <input value={renameToProject} onChange={e => setRenameToProject(e.target.value)} placeholder="الاسم الجديد" style={{ flex: "1 1 140px", padding: "6px 10px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12 }}/>
+            <Btn onClick={applyProjectRename} disabled={renamingProject || !renameFromProject || !renameToProject.trim()} style={{ ...s.btnPrimary, opacity: (renamingProject || !renameFromProject || !renameToProject.trim()) ? 0.6 : 1 }}>
+              {renamingProject ? "جاري التعديل..." : `غيّري (${projectRenameAffectedCount} موظف)`}
+            </Btn>
+          </div>
+          {projectRenameFlash && <span style={{ display: "inline-block", marginTop: 6, fontSize: 12, fontWeight: 700, color: "#16a34a" }}>{projectRenameFlash}</span>}
+        </div>
       </Card>
 
       <Card style={{ padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
