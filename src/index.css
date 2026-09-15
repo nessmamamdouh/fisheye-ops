@@ -22,6 +22,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tailwind's preflight is off (tailwind.config.js) to protect ~1,300
+   legacy inline-style elements, but that also drops preflight's universal
+   `border-style: solid` reset -- so EVERY Tailwind border utility used by
+   the new component library (Card, Button's ghost variant + loading
+   spinner, Input, Select, Table, Tabs) was setting border-width/color with
+   no border-style, which the CSS spec treats as `none` and collapses the
+   rendered border to 0px regardless of the width/color set. That's why
+   Card's `accent` edge, and even the plain default card border, weren't
+   showing at all. This single universal rule has zero specificity, so it
+   never overrides any real selector (including every legacy `.fe-*` class,
+   which already sets border style itself via the `border: 1px solid ...`
+   shorthand) -- it only fills in the gap Tailwind's own utilities left. */
+*, ::before, ::after {
+  border-style: solid;
+}
+
 /* Accessibility: reduced motion. Applies app-wide (legacy .fe-* animations
    included) — this is a strict accessibility improvement with zero visual
    effect for anyone who hasn't turned on "reduce motion" in their OS, so
