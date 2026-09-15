@@ -22,7 +22,7 @@ import {
   Edit3, Save, Hash, Zap, ClipboardList, Briefcase, Archive, Globe, Link, Inbox, UserPlus, Database,
   Target, CalendarDays, Receipt, AlertTriangle, RefreshCw, GitBranch, Award
 } from "lucide-react";
-import { ActionCenter, OperationsCalendar, ClientCommandCenter } from './ActionCenterV2';
+import { ActionCenter, ClientCommandCenter } from './ActionCenterV2';
 import AuthGate, { useAuth } from './AuthGate';
 
 // ملاحظة: إضافة الموظفين تتم من خلال handleAddSingle داخل WorkforceView
@@ -4695,208 +4695,6 @@ function PartnerHub({ employees, partners, savePartners }) {
   );
 }
 
-// ─── TICKETS ────────────────────────────────────────────────────────────
-const DEF_TICKETS=[
-  {id:"TKT-001",subject:"Iqama renewal — SILQFI batch",category:"Legal",priority:"High",status:"Open",requesterName:"Mohammed Al-Rashidi",requesterPhone:"+966501234567",requesterType:"Partner",created:"2026-04-28",messages:[{sender:"Admin",text:"MOL request submitted. Awaiting approval.",ts:"2026-04-28T09:00:00Z"}]},
-  {id:"TKT-002",subject:"April payroll discrepancy — SPL",category:"Payroll",priority:"Medium",status:"In Progress",requesterName:"HR Manager",requesterPhone:"+966509876543",requesterType:"Client",created:"2026-04-29",messages:[]},
-];
-
-function TicketingView() {
-  const [tickets,setTickets]=useState(DEF_TICKETS);
-  const [active,setActive]=useState(null);
-  const [msg,setMsg]=useState("");
-  const [showNew,setShowNew]=useState(false);
-  const [showLink,setShowLink]=useState(false);
-  const [showPublic,setShowPublic]=useState(false);
-  const [pubForm,setPubForm]=useState({name:"",phone:"",email:"",type:"Employee",category:"HR",priority:"Medium",subject:"",description:""});
-  const [nt,setNt]=useState({subject:"",category:"Legal",priority:"Medium",requesterName:"",requesterPhone:"",requesterType:"Employee"});
-  const msgRef=useRef();
-
-  const ticket=tickets.find(t=>t.id===active);
-  const send=()=>{if(!msg.trim())return;setTickets(prev=>prev.map(t=>t.id===active?{...t,messages:[...t.messages,{sender:"Admin",text:msg,ts:new Date().toISOString()}]}:t));setMsg("");setTimeout(()=>msgRef.current?.scrollTo(0,99999),80);};
-  const changeStatus=(id,status)=>setTickets(prev=>prev.map(t=>t.id===id?{...t,status}:t));
-  const create=()=>{const id=`TKT-${String(tickets.length+3).padStart(3,"0")}`;setTickets(prev=>[...prev,{...nt,id,status:"Open",created:new Date().toISOString().split("T")[0],messages:[]}]);setShowNew(false);};
-  const submitPublic=()=>{const id=`TKT-EXT-${Date.now().toString().slice(-4)}`;const newT={id,subject:pubForm.subject,category:pubForm.category,priority:pubForm.priority,status:"Open",requesterName:pubForm.name,requesterPhone:pubForm.phone,requesterType:pubForm.type,created:new Date().toISOString().split("T")[0],messages:[{sender:"System",text:`External: ${pubForm.description}`,ts:new Date().toISOString()}]};setTickets(prev=>[newT,...prev]);setShowPublic(false);setPubForm({name:"",phone:"",email:"",type:"Employee",category:"HR",priority:"Medium",subject:"",description:""});};
-
-  const pc={High:["#fee2e2","#991b1b"],Medium:["#fef9c3","#854d0e"],Low:["#dbeafe","#1e40af"]};
-  const sc={Open:["#fee2e2","#991b1b"],"In Progress":["#fef9c3","#854d0e"],Closed:["#dcfce7","#166534"]};
-  const rtc={Employee:["#dbeafe","#1e40af"],Client:["#f3e8ff","#581c87"],Partner:["#ffedd5","#7c2d12"]};
-
-  return (
-    <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <div style={{...s.flexBetween,flexWrap:"wrap",gap:12}}>
-        <div>
-          <h2 style={{margin:0,fontSize:20,fontWeight:700}}>Support Tickets</h2>
-          <p style={{margin:"2px 0 0",fontSize:13,color:"#6b7280"}}>{tickets.length} total · {tickets.filter(t=>t.status==="Open").length} open</p>
-        </div>
-        <div style={{display:"flex",gap:8}}>
-          <Btn variant="ghost" onClick={()=>setShowPublic(true)} style={s.btnSm}><Globe size={13}/> Preview Portal</Btn>
-          <Btn variant="ghost" onClick={()=>setShowLink(true)} style={s.btnSm}><Link size={13}/> External Link</Btn>
-        </div>
-      </div>
-
-      <div style={{display:"flex",gap:16,height:"calc(100vh - 280px)",minHeight:520}}>
-        {/* List */}
-        <div style={{width:300,flexShrink:0,display:"flex",flexDirection:"column",gap:12}}>
-          <div style={{...s.flexBetween}}>
-            <p style={{fontWeight:700,fontSize:14,margin:0,display:"flex",alignItems:"center",gap:6}}><Inbox size={14} style={{color:M}}/> Inbox</p>
-            <Btn style={s.btnSm} onClick={()=>setShowNew(t=>!t)}><Plus size={12}/> New</Btn>
-          </div>
-          <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:8}}>
-            {tickets.map(t=>(
-              <button key={t.id} onClick={()=>setActive(t.id)} style={{textAlign:"left",padding:16,borderRadius:12,border:`2px solid ${active===t.id?M:"#e5e7eb"}`,backgroundColor:active===t.id?`${M}06`:"white",cursor:"pointer",transition:"all 0.15s"}}>
-                <div style={{...s.flexBetween,marginBottom:8}}>
-                  <span style={{fontSize:11,fontFamily:"monospace",color:"#9ca3af"}}>{t.id}</span>
-                  <span style={{fontSize:11,fontWeight:600,padding:"2px 6px",borderRadius:999,backgroundColor:pc[t.priority]?.[0],color:pc[t.priority]?.[1]}}>{t.priority}</span>
-                </div>
-                <p style={{fontWeight:600,fontSize:13,margin:"0 0 8px",color:"#1f2937"}}>{t.subject}</p>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                  <span style={{fontSize:11,fontWeight:600,padding:"2px 6px",borderRadius:999,backgroundColor:sc[t.status]?.[0],color:sc[t.status]?.[1]}}>{t.status}</span>
-                  <span style={{fontSize:11,color:"#9ca3af"}}>{t.category}</span>
-                  {t.requesterType&&<span style={{fontSize:11,fontWeight:600,padding:"2px 6px",borderRadius:999,backgroundColor:rtc[t.requesterType]?.[0]||"#f3f4f6",color:rtc[t.requesterType]?.[1]||"#374151"}}>{t.requesterType}</span>}
-                </div>
-                {t.requesterName&&<p style={{fontSize:11,color:"#9ca3af",margin:"6px 0 0",display:"flex",alignItems:"center",gap:4}}><User size={10}/>{t.requesterName}</p>}
-              </button>
-            ))}
-          </div>
-          {showNew&&(
-            <Card style={{padding:16,flexShrink:0}}>
-              <div style={{...s.flexBetween,marginBottom:12}}><span style={{fontWeight:700,fontSize:13}}>New Ticket</span><button onClick={()=>setShowNew(false)} style={{background:"none",border:"none",cursor:"pointer"}}><X size={13} style={{color:"#9ca3af"}}/></button></div>
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                <Inp label="Subject" value={nt.subject} onChange={v=>setNt(p=>({...p,subject:v}))}/>
-                <Inp label="Requester Name" value={nt.requesterName} onChange={v=>setNt(p=>({...p,requesterName:v}))}/>
-                <Inp label="Requester Phone" value={nt.requesterPhone} onChange={v=>setNt(p=>({...p,requesterPhone:v}))}/>
-                <div style={s.grid2}>
-                  <Sel value={nt.requesterType} onChange={v=>setNt(p=>({...p,requesterType:v}))} options={["Employee","Client","Partner"]}/>
-                  <Sel value={nt.category} onChange={v=>setNt(p=>({...p,category:v}))} options={["Legal","Payroll","Docs","HR","IT","Iqama"]}/>
-                </div>
-                <Sel value={nt.priority} onChange={v=>setNt(p=>({...p,priority:v}))} options={["High","Medium","Low"]}/>
-                <Btn full onClick={create} disabled={!nt.subject}>Create</Btn>
-              </div>
-            </Card>
-          )}
-        </div>
-
-        {/* Chat */}
-        <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
-          {ticket?(
-            <Card style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-              <div style={{padding:"12px 20px",borderBottom:"1px solid #f3f4f6",backgroundColor:`${M}08`,flexShrink:0}}>
-                <div style={{...s.flexBetween,flexWrap:"wrap",gap:8}}>
-                  <div>
-                    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                      <span style={{fontWeight:700,fontSize:14}}>{ticket.subject}</span>
-                      <span style={{fontSize:11,fontWeight:600,padding:"2px 6px",borderRadius:999,backgroundColor:sc[ticket.status]?.[0],color:sc[ticket.status]?.[1]}}>{ticket.status}</span>
-                      <span style={{fontSize:11,fontWeight:600,padding:"2px 6px",borderRadius:999,backgroundColor:pc[ticket.priority]?.[0],color:pc[ticket.priority]?.[1]}}>{ticket.priority}</span>
-                    </div>
-                    <div style={{fontSize:11,color:"#9ca3af",marginTop:4,display:"flex",alignItems:"center",gap:12}}>
-                      <span>{ticket.id} · {ticket.category} · {ticket.created}</span>
-                      {ticket.requesterName&&<span style={{display:"flex",alignItems:"center",gap:4}}><User size={10}/>{ticket.requesterName}</span>}
-                      {ticket.requesterPhone&&<WABtn phone={ticket.requesterPhone} label="Notify"/>}
-                    </div>
-                  </div>
-                  <div style={{display:"flex",gap:6}}>
-                    {["Open","In Progress","Closed"].map(st=>(
-                      <button key={st} onClick={()=>changeStatus(ticket.id,st)} style={{padding:"6px 12px",borderRadius:8,fontSize:12,fontWeight:600,border:`1px solid ${ticket.status===st?M:"#e5e7eb"}`,backgroundColor:ticket.status===st?M:"white",color:ticket.status===st?"white":"#6b7280",cursor:"pointer"}}>{st}</button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div ref={msgRef} style={{flex:1,overflowY:"auto",padding:20,display:"flex",flexDirection:"column",gap:16,backgroundColor:"#f9fafb"}}>
-                {!ticket.messages.length&&<div style={{textAlign:"center",color:"#9ca3af",marginTop:48}}><MessageCircle size={32} style={{margin:"0 auto 8px",opacity:0.2,display:"block"}}/>No messages.</div>}
-                {ticket.messages.map((m,i)=>{
-                  const isAdmin=m.sender==="Admin";
-                  return (
-                    <div key={i} style={{display:"flex",justifyContent:isAdmin?"flex-end":"flex-start"}}>
-                      <div style={{maxWidth:400,padding:"12px 16px",borderRadius:16,backgroundColor:isAdmin?M:"white",border:isAdmin?"none":"1px solid #e5e7eb",borderBottomRightRadius:isAdmin?4:16,borderBottomLeftRadius:isAdmin?16:4}}>
-                        <p style={{fontSize:11,fontWeight:700,margin:"0 0 4px",color:isAdmin?"rgba(255,200,200,0.8)":"#9ca3af"}}>{m.sender}</p>
-                        <p style={{fontSize:13,margin:0,color:isAdmin?"white":"#1f2937",lineHeight:1.5}}>{m.text}</p>
-                        <p style={{fontSize:11,margin:"6px 0 0",color:isAdmin?"rgba(255,200,200,0.6)":"#9ca3af"}}>{new Date(m.ts).toLocaleTimeString("en-SA",{hour:"2-digit",minute:"2-digit"})}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div style={{padding:16,borderTop:"1px solid #f3f4f6",backgroundColor:"white",display:"flex",gap:12,flexShrink:0}}>
-                <input style={{...s.inp,flex:1}} placeholder="Type message… (Enter to send)" value={msg} onChange={e=>setMsg(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()}/>
-                <Btn onClick={send} disabled={!msg.trim()}><Send size={14}/></Btn>
-              </div>
-            </Card>
-          ):(
-            <Card style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <div style={{textAlign:"center",color:"#9ca3af"}}>
-                <Inbox size={48} style={{margin:"0 auto 12px",opacity:0.2,display:"block"}}/>
-                <p style={{fontWeight:600,margin:0}}>Select a ticket</p>
-                <p style={{fontSize:13,margin:"4px 0 0"}}>Or create a new one</p>
-              </div>
-            </Card>
-          )}
-        </div>
-      </div>
-
-      {showLink&&(
-        <Modal title="External Ticket Link" onClose={()=>setShowLink(false)}>
-          <div style={{display:"flex",flexDirection:"column",gap:16}}>
-            <div style={{padding:16,backgroundColor:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:12}}>
-              <p style={{fontSize:12,fontWeight:700,color:"#166534",margin:"0 0 8px"}}>Public submission URL</p>
-              <code style={{fontSize:11,fontFamily:"monospace",color:"#15803d",wordBreak:"break-all"}}>{`https://fisheye-ops.sa/submit-ticket?token=${btoa("fisheye-public")}`}</code>
-            </div>
-            <div style={{padding:16,backgroundColor:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,fontSize:12,color:"#92400e"}}>
-              <p style={{fontWeight:700,margin:"0 0 6px"}}>⚡ Zapier Integration</p>
-              <p style={{margin:"0 0 8px"}}>Paste your Zapier webhook URL to auto-notify Gmail when a ticket is submitted:</p>
-              <input placeholder="https://hooks.zapier.com/…" style={{...s.inp,border:"1px solid #fde68a",backgroundColor:"white"}}/>
-            </div>
-            <div style={{display:"flex",gap:8}}>
-              <Btn variant="ghost" style={s.btnSm} onClick={()=>navigator.clipboard?.writeText("https://fisheye-ops.sa/submit-ticket")}><Copy size={12}/> Copy Link</Btn>
-              <Btn style={s.btnSm} onClick={()=>{setShowLink(false);setShowPublic(true);}}><Globe size={12}/> Preview Portal</Btn>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {showPublic&&(
-        <Modal title="Public Ticket Portal" subtitle="Preview — how submitters see it" onClose={()=>setShowPublic(false)} wide>
-          <div style={{backgroundColor:"#f9fafb",borderRadius:16,padding:32,border:"1px solid #e5e7eb"}}>
-            <div style={{maxWidth:480,margin:"0 auto"}}>
-              <div style={{textAlign:"center",marginBottom:24}}>
-                <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:48,height:48,backgroundColor:"white",borderRadius:16,boxShadow:"0 2px 8px rgba(0,0,0,0.1)",marginBottom:12}}><Eye size={22} style={{color:M}}/></div>
-                <h3 style={{fontSize:22,fontWeight:900,color:MD,margin:0}}>Fisheye Ops</h3>
-                <p style={{color:"#6b7280",fontSize:13,margin:"4px 0 0"}}>Submit a support request</p>
-              </div>
-              <div style={{backgroundColor:"white",borderRadius:16,boxShadow:"0 4px 24px rgba(0,0,0,0.08)",padding:24,display:"flex",flexDirection:"column",gap:16}}>
-                <div style={s.grid2}>
-                  <Inp label="Your Name" value={pubForm.name} onChange={v=>setPubForm(p=>({...p,name:v}))} placeholder="Full name"/>
-                  <div>
-                    <label style={s.label}>I am a…</label>
-                    <select value={pubForm.type} onChange={e=>setPubForm(p=>({...p,type:e.target.value}))} style={s.sel}>
-                      {["Employee","Client","Partner"].map(t=><option key={t}>{t}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div style={s.grid2}>
-                  <Inp label="Phone / WhatsApp" value={pubForm.phone} onChange={v=>setPubForm(p=>({...p,phone:v}))} placeholder="+966…"/>
-                  <Inp label="Email (optional)" value={pubForm.email} onChange={v=>setPubForm(p=>({...p,email:v}))} placeholder="you@email.com"/>
-                </div>
-                <div style={s.grid2}>
-                  <Sel label="Category" value={pubForm.category} onChange={v=>setPubForm(p=>({...p,category:v}))} options={["HR","Legal","Payroll","Docs","Iqama","IT","Other"]}/>
-                  <Sel label="Priority" value={pubForm.priority} onChange={v=>setPubForm(p=>({...p,priority:v}))} options={["High","Medium","Low"]}/>
-                </div>
-                <Inp label="Subject" value={pubForm.subject} onChange={v=>setPubForm(p=>({...p,subject:v}))} placeholder="Brief description…"/>
-                <div>
-                  <label style={s.label}>Details</label>
-                  <textarea rows={4} value={pubForm.description} onChange={e=>setPubForm(p=>({...p,description:e.target.value}))} style={{...s.inp,resize:"none"}} placeholder="Describe your request…"/>
-                </div>
-                <Btn full disabled={!pubForm.name||!pubForm.subject} onClick={submitPublic}><Send size={14}/> Submit Request</Btn>
-                <p style={{fontSize:11,color:"#9ca3af",textAlign:"center",margin:0}}>You'll receive a ticket ID to track your request</p>
-              </div>
-            </div>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
 // ─── SETTINGS ───────────────────────────────────────────────────────────
 function NotificationsSettings({ employees }) {
   const [phone,    setPhone]    = useState(() => localStorage.getItem('fisheye_ops_phone')    || '');
@@ -6916,10 +6714,8 @@ function FisheyeOpsPro({ employees, setEmployees }) {
           />}
 
           {/* ── DEEP LINKS (accessible via URL/nav programmatically, not in sidebar) ── */}
-          {nav==="calendar"    && <OperationsCalendar employees={employees}/>}
           {nav==="weeklyreport"&& <WeeklyReportGenerator employees={employees}/>}
           {nav==="reports"     && <WeeklyMonthlyReports employees={employees}/>}
-          {nav==="tickets"     && <TicketingView/>}
           </div>
         </div>
       </div>
