@@ -5540,7 +5540,16 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
   const [rows, setRows] = useState(() => {
     const list = getEffectiveClientsList();
     const meta = getEffectiveClientMeta();
-    return list.map((name, i) => ({
+    const registered = new Set(list);
+    // Any client name that actually appears on employee records but was
+    // never formally registered (imported directly before this page existed,
+    // or added via a bulk edit that only touched employees_master) still
+    // needs a row here, otherwise it's invisible and un-renameable even
+    // though real employees sit under it.
+    const unregistered = [...new Set(employees.map(e => (e.client || "").trim()).filter(Boolean))]
+      .filter(c => !registered.has(c));
+    const allNames = [...list, ...unregistered];
+    return allNames.map((name, i) => ({
       id: `row-${i}-${name}`,
       origName: name,
       name,
@@ -5692,7 +5701,9 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
   const doSave = async () => {
     const finalNames = rows.map(r => r.name.trim()).filter(Boolean);
     if (!finalNames.length) return alert("لازم يفضل عميل واحد على الأقل في الليستة.");
-    if (new Set(finalNames).size !== finalNames.length) return alert("في اسمين عملاء نفس بعض — لازم كل اسم يكون فريد.");
+    // NOTE: duplicate final names are allowed on purpose -- that's a merge
+    // (see BUG 2 note above), not an error. Uniqueness is enforced later when
+    // clientsList/clientMeta are built, by collapsing duplicates to one entry.
     if (nonDefaultRules.some(r => !r.value.trim())) return alert("في قاعدة تصنيف من غير كلمة مفتاحية — املاها أو امسحيها.");
     if (!defaultRule.client) return alert("لازم تختاري عميل افتراضي (آخر قاعدة).");
 
@@ -5728,14 +5739,27 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
         saveClients && saveClients(newClients);
       }
 
+      // Collapse rows that share a final name (a merge) into one entry each,
+      // preferring the row that already had that exact name so its existing
+      // color/phone/requiresPO settings survive the merge.
+      const dedupedByName = new Map();
+      rows.forEach(r => {
+        const n = r.name.trim();
+        if (!n) return;
+        const existing = dedupedByName.get(n);
+        if (!existing || (r.origName === n && existing.origName !== n)) {
+          dedupedByName.set(n, r);
+        }
+      });
+      const dedupedFinalNames = [...dedupedByName.keys()];
       const clientMeta = {};
-      rows.forEach(r => { const n = r.name.trim(); if (n) clientMeta[n] = r.meta; });
+      dedupedByName.forEach((r, n) => { clientMeta[n] = r.meta; });
       const renameLookup = Object.fromEntries(pendingRenames.map(r => [r.origName, r.name.trim()]));
       const mappingRules = [
         ...nonDefaultRules.map(r => ({ client: renameLookup[r.client] || r.client, matchType: r.matchType, value: r.value.trim() })),
         { client: renameLookup[defaultRule.client] || defaultRule.client, matchType: "default", value: "" },
       ];
-      const finalCfg = { clientsList: finalNames, clientMeta, mappingRules };
+      const finalCfg = { clientsList: dedupedFinalNames, clientMeta, mappingRules };
       localStorage.setItem(CONFIG_KEY, JSON.stringify(finalCfg));
       const { error } = await supabase.from('fisheye_app_data').upsert({ key: CONFIG_KEY, data: finalCfg }, { onConflict: 'key' });
       if (error) console.warn('config sync error:', error.message);
