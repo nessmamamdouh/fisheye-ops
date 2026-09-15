@@ -1,7 +1,20 @@
 import { createClient } from '@supabase/supabase-js'; // تم التغيير من client إلى js
 
-const supabaseUrl = 'https://noutbupdtbqdheyhlmdm.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5vdXRidXBkdGJxZGhleWhsbWRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MzI2NDQsImV4cCI6MjA5MzIwODY0NH0.yLBTuS_DO322I2e0QjbLBHIUk6_k8tkMGCKBDUlQLLo'
+// Credentials load from environment variables (Vite: import.meta.env.VITE_*),
+// set in .env.local for local dev and in the Vercel project settings for
+// production/preview deployments. See .env.example for the required keys.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  // Fail loudly at build/boot time instead of silently shipping a client
+  // that can't reach the database — a missing env var should never look
+  // like a network outage to the user.
+  console.error(
+    '[supabase] Missing VITE_SUPABASE_URL / VITE_SUPABASE_KEY. ' +
+    'Set them in .env.local (dev) or the Vercel project environment variables (prod).'
+  );
+}
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 // onboarding-supabase.js
