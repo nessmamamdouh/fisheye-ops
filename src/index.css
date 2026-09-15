@@ -35,6 +35,16 @@
    which already sets border style itself via the `border: 1px solid ...`
    shorthand) -- it only fills in the gap Tailwind's own utilities left. */
 *, ::before, ::after {
+  /* border-width: 0 is essential here, not optional -- without it every
+     element with no explicit Tailwind border-width utility falls back to
+     the browser's own default border-width ("medium", ~3px) the moment
+     border-style stops being "none", which is exactly what just happened
+     live: thick black borders appeared around every heading, input and
+     section on the page. Resetting width to 0 here means an element only
+     gets a visible border where a Tailwind utility (.border, .border-l-4,
+     etc) explicitly sets its own width, same as Tailwind's real preflight
+     does for both properties together. */
+  border-width: 0;
   border-style: solid;
 }
 
