@@ -36,7 +36,7 @@ export default function Card({
   return (
     <div
       className={[
-        "bg-white border border-stone-200 rounded-lg shadow-sm overflow-hidden",
+        "ds-scope bg-white border border-stone-200 rounded-lg shadow-sm overflow-hidden",
         "dark:bg-stone-900 dark:border-stone-700",
         accent ? ACCENT_CLASSES[accent] : "",
         interactive

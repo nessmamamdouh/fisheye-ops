@@ -40,7 +40,7 @@ export default function Modal({ open, onClose, title, size = "md", footer, child
     >
       <div
         className={[
-          "ds-modal-box w-full overflow-hidden rounded-lg bg-white shadow-xl dark:bg-stone-900",
+          "ds-modal-box ds-scope w-full overflow-hidden rounded-lg bg-white shadow-xl dark:bg-stone-900",
           SIZE_CLASSES[size] || SIZE_CLASSES.md,
         ].join(" ")}
         role="dialog"
@@ -55,7 +55,7 @@ export default function Modal({ open, onClose, title, size = "md", footer, child
             <button
               onClick={onClose}
               aria-label="Close"
-              className="rounded-sm p-1 text-stone-400 transition-colors duration-150 ease-out hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-700"
+              className="appearance-none border-none bg-transparent cursor-pointer rounded-sm p-1 text-stone-400 transition-colors duration-150 ease-out hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-700"
             >
               <X size={16} />
             </button>

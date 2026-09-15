@@ -30,18 +30,18 @@ function Root({ className = "", children }) {
   );
 }
 
-// A bold 2px ledger-line under the header (not a soft tint) is the
-// signature table move for this system — an "editorial ledger" feel that
-// reads as considered rather than a default browser table.
+// A dark "masthead" header (not a soft tint) is the signature table move
+// for this system -- a considered, premium-ledger feel instead of a
+// default browser table -- with a thin brand-crimson rule underneath it.
 function Head({ children }) {
-  return <thead className="bg-white border-b-2 border-stone-900 dark:bg-stone-900 dark:border-stone-100">{children}</thead>;
+  return <thead className="bg-stone-900 border-b-2 border-primary">{children}</thead>;
 }
 
 function Th({ align = "left", className = "", children }) {
   return (
     <th
       className={[
-        "px-3 py-3 text-[10.5px] font-extrabold uppercase tracking-wider text-stone-500 dark:text-stone-400",
+        "px-3 py-3 text-[10.5px] font-extrabold uppercase tracking-wider text-stone-300",
         align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left",
         className,
       ].join(" ")}

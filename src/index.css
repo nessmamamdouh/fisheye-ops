@@ -78,6 +78,20 @@
     var(--paper-raised, #fff);
 }
 
+/* Tailwind preflight is off (tailwind.config.js) to protect ~1,300 legacy
+   inline-style elements, so p/h1-h6/label/etc. keep their browser default
+   margins everywhere -- including inside the new component library, where
+   those un-reset defaults silently stacked on top of deliberate Tailwind
+   spacing (gap-*, space-y-*, mt-*) and produced inconsistent, undesigned-
+   looking gaps (e.g. a modal body's lone <p> picking up a ~14px default
+   margin on top of the modal's own padding). .ds-scope zeroes just these
+   elements so spacing inside the new system comes ONLY from explicit
+   Tailwind classes -- legacy screens never carry this class, so nothing
+   there is affected. */
+.ds-scope :where(h1, h2, h3, h4, h5, h6, p, label, ul, ol, dl, blockquote, figure) {
+  margin: 0;
+}
+
 /* ─── CSS Variables ─────────────────────────────────────────────────── */
 :root {
   /* Brand */

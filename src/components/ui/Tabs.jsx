@@ -43,6 +43,12 @@ export default function Tabs({ tabs, active, onChange, className = "" }) {
             aria-selected={isActive}
             onClick={() => onChange(t.key)}
             className={[
+              // preflight is off (tailwind.config.js), so a bare <button>
+              // keeps its native OS border + gray background unless told
+              // otherwise -- explicit reset here, not just on Button.jsx,
+              // is what was rendering these as boxed Windows-95-style
+              // buttons instead of a flat editorial tab bar.
+              "appearance-none border-none bg-transparent cursor-pointer",
               "font-sans inline-flex items-center gap-1.5 px-3.5 py-3 text-[11.5px] uppercase tracking-wide transition-colors duration-150 ease-out",
               isActive ? "text-primary font-extrabold" : "text-stone-500 [@media(hover:hover)]:hover:text-stone-900 font-bold",
             ].join(" ")}

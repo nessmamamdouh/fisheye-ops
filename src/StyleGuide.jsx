@@ -44,7 +44,7 @@ export default function StyleGuide() {
   const [inputVal, setInputVal] = useState("");
 
   return (
-    <div className="min-h-screen bg-stone-50 p-8 font-sans" dir="ltr">
+    <div className="ds-scope min-h-screen bg-stone-50 p-8 font-sans" dir="ltr">
       <div className="max-w-6xl mx-auto">
         <header className="ds-hero-wash relative mb-16 overflow-hidden rounded-2xl border border-stone-200 px-10 pt-14 pb-12">
           <div

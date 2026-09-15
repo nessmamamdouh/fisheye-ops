@@ -24,11 +24,11 @@ function Label({ required = false, className = "", children }) {
 }
 
 function HelperText({ className = "", children }) {
-  return <p className={["font-sans text-[11px] text-stone-400", className].join(" ")}>{children}</p>;
+  return <p className={["m-0 font-sans text-[11px] text-stone-400", className].join(" ")}>{children}</p>;
 }
 
 function ErrorText({ className = "", children }) {
-  return <p className={["font-sans text-[11px] font-medium text-error-600", className].join(" ")}>{children}</p>;
+  return <p className={["m-0 font-sans text-[11px] font-medium text-error-600", className].join(" ")}>{children}</p>;
 }
 
 function Row({ className = "", children }) {
