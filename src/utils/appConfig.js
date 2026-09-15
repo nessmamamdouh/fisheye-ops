@@ -20,6 +20,7 @@ export const DEFAULT_CLIENT_META = {
   "Channel Play":       { badge: "#bfdbfe", text: "#1e3a8a", dot: "#2563eb", phone: "" },
   "Riva Engineering 2": { badge: "#fecdd3", text: "#881337", dot: "#A02843", phone: "" },
   "Combuzz HR":         { badge: "#fed7aa", text: "#7c2d12", dot: "#ea580c", phone: "" },
+  "Pentagram":          { badge: "#ccfbf1", text: "#134e4a", dot: "#0d9488", phone: "" },
 };
 
 // Ordered, first match wins. The last rule MUST be matchType:"default".
@@ -31,6 +32,7 @@ export const DEFAULT_MAPPING_RULES = [
   { client: "Combuzz HR",         matchType: "contains", value: "C5I" },
   { client: "Combuzz HR",         matchType: "contains", value: "INSPIRING MINDS" },
   { client: "Combuzz HR",         matchType: "contains", value: "SAUDI FRANSI" },
+  { client: "Pentagram",           matchType: "contains", value: "PENTAGRAM" },
   { client: "Sela",               matchType: "default",  value: "" },
 ];
 
@@ -115,6 +117,20 @@ export function getEffectiveMappingRules() {
 
 // Pure classification function shared by the live App (mapClient) and the
 // Configuration page's "test a project name" preview — keep them identical.
+export function classifyProjectStrict(project = "", rules = null) {
+  const p = (project || "").trim().toUpperCase();
+  if (!p) return null;
+  const activeRules = rules || getEffectiveMappingRules();
+  for (const r of activeRules) {
+    if (r.matchType === "default") return null; // no specific rule matched
+    const v = (r.value || "").trim().toUpperCase();
+    if (!v) continue;
+    if (r.matchType === "exact" && p === v) return r.client;
+    if (r.matchType === "contains" && p.includes(v)) return r.client;
+  }
+  return null;
+}
+
 export function classifyProject(project = "", rules = null) {
   const p = (project || "").trim().toUpperCase();
   const activeRules = rules || getEffectiveMappingRules();

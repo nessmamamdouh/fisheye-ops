@@ -11,7 +11,7 @@ import WeeklyReportGenerator from './Weeklyreportgenerator';
 import { useSupabaseSync } from './hooks/useSupabaseSync';
 import { supabase, testConnection } from './utils/supabase';
 import { isExcluded, isWFDone, hasMissingPO, hasValidPO, getClientsList } from './utils/helpers';
-import { getEffectiveClientsList, getEffectiveClientMeta, getEffectiveMappingRules, CLIENT_COLOR_PALETTE, CONFIG_KEY, classifyProject, sanitizeClientName, clientRequiresPO } from './utils/appConfig';
+import { getEffectiveClientsList, getEffectiveClientMeta, getEffectiveMappingRules, CLIENT_COLOR_PALETTE, CONFIG_KEY, classifyProject, classifyProjectStrict, sanitizeClientName, clientRequiresPO } from './utils/appConfig';
 import {
   LayoutDashboard, Users, DollarSign, Ticket, Settings, Building2,
   Bell, Clock, FileText, Upload, Plus, X, Send, Eye,
@@ -1799,14 +1799,20 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
     records.forEach(r => {
       const proj = (r.project || "").trim().toLowerCase();
       const mapped = projectClientMap[proj];
+      const ruleMatch = mapped ? null : classifyProjectStrict(r.project);
       if (mapped) {
         resolved.push({ ...r, client: mapped });
+      } else if (ruleMatch) {
+        // A configured mapping rule (Settings > Configuration) explicitly
+        // recognizes this project — e.g. "contains SPL" -> SPL — so this
+        // isn't really an unknown project, just one with no employees yet.
+        resolved.push({ ...r, client: ruleMatch });
       } else {
-        // Unknown project — NEVER silently assign it to whichever
-        // Workforce tab happens to be open. Always surface it in the
-        // "Assign Client to Projects" popup so a new client/project
-        // requires an explicit, visible confirmation instead of quietly
-        // being filed under the active tab's client.
+        // Truly unknown project, no rule covers it either — NEVER silently
+        // assign it to whichever Workforce tab happens to be open. Always
+        // surface it in the "Assign Client to Projects" popup so a new
+        // client/project requires an explicit, visible confirmation
+        // instead of quietly being filed under the active tab's client.
         needsClient.push(r);
       }
     });
@@ -5519,6 +5525,8 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
   const [testProject, setTestProject] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileFlash, setReconcileFlash] = useState("");
 
   const empCountFor = (name) => employees.filter(e => e.client === name).length;
 
@@ -5541,6 +5549,55 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
   const defaultRule     = rules.find(r => r.matchType === "default") || { id: "rule-default", client: clientOptions[0] || "", matchType: "default", value: "" };
   const updateRule = (id, patch) => setRules(rs => rs.map(r => r.id === id ? { ...r, ...patch } : r));
   const removeRule = (id) => setRules(rs => rs.filter(r => r.id !== id));
+
+  const activeRulesForReconcile = useMemo(
+    () => [...nonDefaultRules, defaultRule],
+    [nonDefaultRules, defaultRule]
+  );
+  const mismatches = useMemo(() => {
+    const out = [];
+    employees.forEach(e => {
+      const suggested = classifyProjectStrict(e.project, activeRulesForReconcile);
+      if (suggested && suggested !== e.client) out.push({ emp: e, suggested });
+    });
+    return out;
+  }, [employees, activeRulesForReconcile]);
+  const mismatchGroups = useMemo(() => {
+    const g = {};
+    mismatches.forEach(({ emp, suggested }) => {
+      const key = `${emp.project} | ${emp.client} → ${suggested}`;
+      (g[key] = g[key] || { project: emp.project, from: emp.client, to: suggested, items: [] }).items.push(emp);
+    });
+    return Object.values(g);
+  }, [mismatches]);
+
+  const applyReconcile = async () => {
+    if (!mismatchGroups.length) return;
+    const summary = mismatchGroups.map(g => `• ${g.project}: ${g.items.length} موظف — ${g.from} → ${g.to}`).join("\n");
+    const ok = window.confirm(
+      `هيتم تعديل حقل الـ Client بس لـ ${mismatches.length} موظف (من غير أي تعديل على بارتنر أو مارجن أو أي بيانات تانية):\n\n${summary}\n\nمتابعة؟`
+    );
+    if (!ok) return;
+    setReconciling(true);
+    try {
+      let updated = employees;
+      for (const g of mismatchGroups) {
+        const ids = g.items.map(e => e._id);
+        await supabase.from('employees_master').update({ client: g.to }).in('_id', ids);
+        const idSet = new Set(ids);
+        updated = updated.map(e => idSet.has(e._id) ? { ...e, client: g.to } : e);
+      }
+      setEmployees(updated);
+      try { localStorage.setItem("fisheyeData_v3", JSON.stringify(updated)); } catch {}
+      setReconcileFlash(`✅ اتصلح Client لـ ${mismatches.length} موظف`);
+      setTimeout(() => setReconcileFlash(""), 4000);
+    } catch (err) {
+      alert("حصل خطأ أثناء التصحيح: " + err.message);
+    } finally {
+      setReconciling(false);
+    }
+  };
+
   const addRule = () => setRules(rs => {
     const idx = rs.findIndex(r => r.matchType === "default");
     const newRule = { id: `rule-new-${Date.now()}`, client: clientOptions[0] || "", matchType: "contains", value: "" };
@@ -5708,6 +5765,25 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
           <input value={testProject} onChange={e => setTestProject(e.target.value)} placeholder="مثال: SILQFI Batch 2" style={{ flex: "1 1 160px", padding: "6px 10px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12 }}/>
           {testResult && <ClientBadge client={testResult}/>}
         </div>
+
+        {mismatchGroups.length > 0 && (
+          <div style={{ marginTop: 12, padding: "10px 12px", backgroundColor: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10 }}>
+            <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: "#9a3412" }}>
+              ⚠️ {mismatches.length} موظف الـ Client بتاعهم مش متطابق مع قواعد التصنيف فوق:
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
+              {mismatchGroups.map(g => (
+                <div key={`${g.project}|${g.from}|${g.to}`} style={{ fontSize: 11, color: "#7c2d12" }}>
+                  {g.project}: {g.items.length} موظف — {g.from} → {g.to}
+                </div>
+              ))}
+            </div>
+            <Btn onClick={applyReconcile} disabled={reconciling} style={{ ...s.btnPrimary, backgroundColor: "#ea580c", opacity: reconciling ? 0.6 : 1 }}>
+              {reconciling ? "جاري التصحيح..." : `✅ صحّح Client لـ ${mismatches.length} موظف`}
+            </Btn>
+            {reconcileFlash && <span style={{ marginInlineStart: 10, fontSize: 12, fontWeight: 700, color: "#16a34a" }}>{reconcileFlash}</span>}
+          </div>
+        )}
       </Card>
 
       <Card style={{ padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
