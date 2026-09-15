@@ -121,25 +121,56 @@ export function clientRequiresPO(clientName) {
   return clientName === "Sela";
 }
 
-export function getEffectiveClientsList() {
-  const cfg = loadAppConfig();
-  return (cfg && Array.isArray(cfg.clientsList) && cfg.clientsList.length)
-    ? cfg.clientsList
-    : DEFAULT_CLIENTS_LIST;
-}
-
 export function getEffectiveClientMeta() {
   const cfg = loadAppConfig();
-  return (cfg && cfg.clientMeta && typeof cfg.clientMeta === "object")
-    ? cfg.clientMeta
-    : DEFAULT_CLIENT_META;
+  const saved = (cfg && cfg.clientMeta && typeof cfg.clientMeta === "object") ? cfg.clientMeta : {};
+  // Defaults first so a client added later in code (e.g. a newly-registered
+  // real client) always has a meta record, even on accounts whose saved
+  // config predates it. Saved entries are spread last so anything the user
+  // actually customized here (color, phone, requiresPO, a rename) still wins.
+  return { ...DEFAULT_CLIENT_META, ...saved };
+}
+
+export function getEffectiveClientsList() {
+  const cfg = loadAppConfig();
+  const saved = (cfg && Array.isArray(cfg.clientsList)) ? cfg.clientsList : [];
+  const meta = getEffectiveClientMeta();
+  // Union of: whatever the user's saved list has, the coded base list, and
+  // every client that has a meta record (coded default OR saved custom).
+  // Deriving from clientMeta keys too means a client can never again "fall
+  // out" of the selectable roster just because clientsList itself is stale —
+  // this is what was hiding newly-registered clients from the sidebar list
+  // and from the CSV-import "assign client" popup.
+  const merged = [...saved];
+  DEFAULT_CLIENTS_LIST.forEach(c => { if (!merged.includes(c)) merged.push(c); });
+  Object.keys(meta).forEach(c => { if (!merged.includes(c)) merged.push(c); });
+  return merged;
 }
 
 export function getEffectiveMappingRules() {
   const cfg = loadAppConfig();
-  return (cfg && Array.isArray(cfg.mappingRules) && cfg.mappingRules.length)
-    ? cfg.mappingRules
-    : DEFAULT_MAPPING_RULES;
+  const saved = (cfg && Array.isArray(cfg.mappingRules) && cfg.mappingRules.length) ? cfg.mappingRules : null;
+  if (!saved) return DEFAULT_MAPPING_RULES;
+
+  // Merge instead of replace: keep every saved rule first (these are the
+  // user's own edits/reconciliations from the Configuration page and must
+  // keep taking priority), then append any DEFAULT_MAPPING_RULES rule whose
+  // (matchType + value) isn't already covered by a saved rule. This is what
+  // lets a mapping rule added later in code for a newly-registered client
+  // take effect even on an account that already has an older saved rule set
+  // — without it, that account would never auto-classify or Reconcile that
+  // client's projects, no matter how many rules get added going forward.
+  const savedNonDefault = saved.filter(r => r.matchType !== "default");
+  const savedKeys = new Set(
+    savedNonDefault.map(r => `${r.matchType}:${(r.value || "").trim().toUpperCase()}`)
+  );
+  const missingDefaults = DEFAULT_MAPPING_RULES.filter(r =>
+    r.matchType !== "default" &&
+    !savedKeys.has(`${r.matchType}:${(r.value || "").trim().toUpperCase()}`)
+  );
+  const savedDefaultRule = saved.find(r => r.matchType === "default");
+  const fallbackRule = savedDefaultRule || DEFAULT_MAPPING_RULES[DEFAULT_MAPPING_RULES.length - 1];
+  return [...savedNonDefault, ...missingDefaults, fallbackRule];
 }
 
 // Pure classification function shared by the live App (mapClient) and the
