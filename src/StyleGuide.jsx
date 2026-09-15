@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Plus, Trash2, Save, Users, DollarSign, FileText } from "lucide-react";
+import { Search, Plus, Trash2, Save, Users, Wallet, FileText } from "lucide-react";
 import { Button, Card, Badge, Input, Select, Modal, Tabs, Table, Form } from "./components/ui";
 
 // ─── Live, visual reference for the Fisheye Ops design system ─────────────
@@ -209,7 +209,7 @@ export default function StyleGuide() {
             tabs={[
               { key: "overview", label: "Overview", icon: FileText },
               { key: "employees", label: "Employees", icon: Users },
-              { key: "billing", label: "Billing", icon: DollarSign },
+              { key: "billing", label: "Billing", icon: Wallet },
             ]}
             active={tab}
             onChange={setTab}

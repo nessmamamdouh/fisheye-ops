@@ -60,7 +60,12 @@ export default function Tabs({ tabs, active, onChange, className = "" }) {
       })}
       {indicator && (
         <div
-          className="absolute bottom-0 left-0 h-[3px] w-px rounded-full bg-gradient-to-r from-primary to-secondary transition-transform duration-[220ms] ease-emphasized-in-out"
+          // origin-left is load-bearing: translateX+scaleX with the
+          // default center transform-origin scales around the bar's own
+          // midpoint, not its left edge, so the indicator lands shifted
+          // and no longer spans the active tab -- exactly the "not lined
+          // up, sitting off to the side" misalignment reported.
+          className="absolute bottom-0 left-0 h-[3px] w-px origin-left rounded-full bg-gradient-to-r from-primary to-secondary transition-transform duration-[220ms] ease-emphasized-in-out"
           style={{ transform: `translateX(${indicator.left}px) scaleX(${indicator.width})` }}
           aria-hidden="true"
         />
