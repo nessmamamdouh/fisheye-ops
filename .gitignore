@@ -32,3 +32,7 @@ build/
 # Logs
 logs/
 *.log
+
+# Playwright test artifacts (regenerated locally on each run)
+test-results/
+playwright-report/
