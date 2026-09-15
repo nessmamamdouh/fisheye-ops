@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import StyleGuide from './StyleGuide.jsx';
 import { FinanceModule } from './FinanceModule';
 import ClientPortal from './ClientPortal';
 import PartnerPortal from './PartnerPortal';
@@ -231,21 +232,21 @@ const s = {
   topbar: { backgroundColor:"rgba(255,255,255,0.88)", borderBottom:"1px solid rgba(228,228,231,0.7)", padding:"11px 24px", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, backdropFilter:"blur(14px)", WebkitBackdropFilter:"blur(14px)" },
   content: { flex:1, overflowY:"auto", padding:"20px 24px", background:"var(--surface-sub,#f8f8f9)" },
   // Cards
-  card: { backgroundColor:"white", borderRadius:13, border:"1px solid var(--border,#e4e4e7)", boxShadow:"0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04)" },
-  statCard: { backgroundColor:"white", borderRadius:13, border:"1px solid var(--border,#e4e4e7)", boxShadow:"0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04)", padding:16 },
+  card: { backgroundColor:"white", borderRadius:13, border:"1px solid var(--border,#e5e7eb)", boxShadow:"0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04)" },
+  statCard: { backgroundColor:"white", borderRadius:13, border:"1px solid var(--border,#e5e7eb)", boxShadow:"0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04)", padding:16 },
   // Buttons
   btnPrimary: { display:"inline-flex", alignItems:"center", gap:6, padding:"8px 16px", backgroundColor:M, color:"white", border:"none", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", letterSpacing:"-0.01em", fontFamily:"var(--font-sans)" },
-  btnGhost:   { display:"inline-flex", alignItems:"center", gap:6, padding:"8px 16px", backgroundColor:"white", color:"#3f3f46", border:"1px solid var(--border,#e4e4e7)", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", letterSpacing:"-0.01em", fontFamily:"var(--font-sans)" },
+  btnGhost:   { display:"inline-flex", alignItems:"center", gap:6, padding:"8px 16px", backgroundColor:"white", color:"#374151", border:"1px solid var(--border,#e5e7eb)", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", letterSpacing:"-0.01em", fontFamily:"var(--font-sans)" },
   btnDanger:  { display:"inline-flex", alignItems:"center", gap:6, padding:"8px 16px", backgroundColor:"#b91c1c", color:"white", border:"none", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", letterSpacing:"-0.01em", fontFamily:"var(--font-sans)" },
   btnSm: { padding:"5px 11px", fontSize:12 },
   // Table
   table: { width:"100%", borderCollapse:"collapse", fontSize:13 },
-  th: { padding:"11px 12px", textAlign:"left", fontSize:10, fontWeight:700, color:"#a1a1aa", textTransform:"uppercase", letterSpacing:"0.07em", backgroundColor:"#fafafa", borderBottom:"1px solid #f0eff1", whiteSpace:"nowrap" },
-  td: { padding:"11px 12px", borderBottom:"1px solid #f5f5f6", verticalAlign:"middle", fontSize:13, color:"#27272a" },
+  th: { padding:"11px 12px", textAlign:"left", fontSize:10, fontWeight:700, color:"#9ca3af", textTransform:"uppercase", letterSpacing:"0.07em", backgroundColor:"#f9fafb", borderBottom:"1px solid #f0eff1", whiteSpace:"nowrap" },
+  td: { padding:"11px 12px", borderBottom:"1px solid #f5f5f6", verticalAlign:"middle", fontSize:13, color:"#1f2937" },
   // Form
-  inp: { width:"100%", border:"1px solid var(--border,#e4e4e7)", borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", boxSizing:"border-box", fontFamily:"var(--font-sans)", color:"#18181b" },
-  sel: { width:"100%", border:"1px solid var(--border,#e4e4e7)", borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", backgroundColor:"white", boxSizing:"border-box", fontFamily:"var(--font-sans)", color:"#18181b" },
-  label: { display:"block", fontSize:10, fontWeight:700, color:"#a1a1aa", textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:4, fontFamily:"var(--font-sans)" },
+  inp: { width:"100%", border:"1px solid var(--border,#e5e7eb)", borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", boxSizing:"border-box", fontFamily:"var(--font-sans)", color:"#111827" },
+  sel: { width:"100%", border:"1px solid var(--border,#e5e7eb)", borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", backgroundColor:"white", boxSizing:"border-box", fontFamily:"var(--font-sans)", color:"#111827" },
+  label: { display:"block", fontSize:10, fontWeight:700, color:"#9ca3af", textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:4, fontFamily:"var(--font-sans)" },
   // Modal
   overlay: { position:"fixed", inset:0, backgroundColor:"rgba(0,0,0,0.45)", display:"flex", alignItems:"center", justifyContent:"center", padding:16, zIndex:50 },
   modalBox: (wide) => ({ backgroundColor:"white", borderRadius:18, boxShadow:"0 24px 64px rgba(0,0,0,0.16),0 8px 24px rgba(0,0,0,0.08)", display:"flex", flexDirection:"column", maxHeight:"92vh", width:"100%", maxWidth: wide ? 900 : 520 }),
@@ -321,8 +322,8 @@ function StatCard({ icon:Icon, label, value, sub, color }) {
         <div style={{padding:10,borderRadius:11,backgroundColor:`${c}12`,flexShrink:0}}><Icon size={18} style={{color:c}}/></div>
         <div>
           <p className="fe-label" style={{margin:0}}>{label}</p>
-          <p className="fe-kpi-value" style={{fontSize:24,fontWeight:800,color:"#18181b",margin:"5px 0 0",lineHeight:1}}>{value}</p>
-          {sub&&<p style={{fontSize:11,color:"#a1a1aa",margin:"5px 0 0",fontFamily:"var(--font-sans)"}}>{sub}</p>}
+          <p className="fe-kpi-value" style={{fontSize:24,fontWeight:800,color:"#111827",margin:"5px 0 0",lineHeight:1}}>{value}</p>
+          {sub&&<p style={{fontSize:11,color:"#9ca3af",margin:"5px 0 0",fontFamily:"var(--font-sans)"}}>{sub}</p>}
         </div>
       </div>
     </div>
@@ -912,7 +913,7 @@ function EmployeeTable({ rows, onSelect, selected, setSelected, onUpdateField, o
       <div style={{overflowX:"auto", maxHeight:"calc(100vh - 280px)", overflowY:"auto"}}>
         <table className="fe-table" style={{...s.table,minWidth:900}}>
           <thead style={{position:"sticky",top:0,zIndex:2}}>
-            <tr style={{backgroundColor:"#fafafa"}}>
+            <tr style={{backgroundColor:"#f9fafb"}}>
               <th style={{...s.th,width:36,paddingRight:0}}>
                 <input type="checkbox" checked={allChk} onChange={()=>setSelected(allChk?[]:sorted.map(r=>r._id))}/>
               </th>
@@ -945,7 +946,7 @@ function EmployeeTable({ rows, onSelect, selected, setSelected, onUpdateField, o
                     borderLeft:`3px solid ${isActive?M:isSelected?`${M}40`:"transparent"}`,
                     transition:"background 0.12s",
                   }}
-                  onMouseEnter={ev=>{ if(!isActive) ev.currentTarget.style.backgroundColor=isSelected?"#fff0f0":"#fafafa"; }}
+                  onMouseEnter={ev=>{ if(!isActive) ev.currentTarget.style.backgroundColor=isSelected?"#fff0f0":"#f9fafb"; }}
                   onMouseLeave={ev=>{ ev.currentTarget.style.backgroundColor=isActive?`${M}08`:isSelected?"#fff5f5":"white"; }}>
 
                   {/* Checkbox */}
@@ -4048,7 +4049,7 @@ function ClientHub({ employees, clients, saveClients }) {
                   />
                 </div>
                 {(showAllProjects ? byProject : byProject.slice(0,4)).map(([prj,emps])=>(
-                  <div key={prj} style={{ padding:"10px 14px", borderRadius:10, border:"1px solid #f3f4f6", backgroundColor:"#fafafa" }}>
+                  <div key={prj} style={{ padding:"10px 14px", borderRadius:10, border:"1px solid #f3f4f6", backgroundColor:"#f9fafb" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
                       <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{prj}</span>
                       <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:`${M}15`, color:M }}>{emps.length}</span>
@@ -4095,7 +4096,7 @@ function ClientHub({ employees, clients, saveClients }) {
                         </div>
                       )}
                       {shown.map(r=>(
-                        <div key={r.i} style={{ padding:"12px 14px", borderRadius:12, border:`1px solid ${r.status==="Completed"?"#bbf7d0":r.dw>5?"#fecaca":"#f3f4f6"}`, backgroundColor:r.status==="Completed"?"#f0fdf4":r.dw>5?"#fef2f2":"#fafafa", display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
+                        <div key={r.i} style={{ padding:"12px 14px", borderRadius:12, border:`1px solid ${r.status==="Completed"?"#bbf7d0":r.dw>5?"#fecaca":"#f3f4f6"}`, backgroundColor:r.status==="Completed"?"#f0fdf4":r.dw>5?"#fef2f2":"#f9fafb", display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
                           <div style={{ flex:1, minWidth:0 }}>
                             <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:4 }}>
                               <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#e0f2fe", color:"#0369a1" }}>{r.type}</span>
@@ -4133,7 +4134,7 @@ function ClientHub({ employees, clients, saveClients }) {
                       const d=daysUntil(e.endDate);
                       const urg=d>=0&&d<=30;
                       return (
-                        <div key={e._id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", borderRadius:9, border:`1px solid ${urg?"#fed7aa":"#f3f4f6"}`, backgroundColor:urg?"#fffbf5":"#fafafa", marginBottom:4 }}>
+                        <div key={e._id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", borderRadius:9, border:`1px solid ${urg?"#fed7aa":"#f3f4f6"}`, backgroundColor:urg?"#fffbf5":"#f9fafb", marginBottom:4 }}>
                           <div>
                             <span style={{ fontSize:12, fontWeight:600, color:"#1f2937" }}>{e.name}</span>
                             <span style={{ fontSize:11, color:"#9ca3af", marginLeft:7 }}>{e.position||"—"}</span>
@@ -4690,7 +4691,7 @@ function PartnerHub({ employees, partners, savePartners }) {
                 )}
                 {/* By client */}
                 {byClient.map(([client,emps])=>(
-                  <div key={client} style={{ padding:"10px 14px", borderRadius:10, border:"1px solid #f3f4f6", backgroundColor:"#fafafa" }}>
+                  <div key={client} style={{ padding:"10px 14px", borderRadius:10, border:"1px solid #f3f4f6", backgroundColor:"#f9fafb" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
                       <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{client}</span>
                       <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#ede9fe", color:PC }}>{emps.length}</span>
@@ -4727,7 +4728,7 @@ function PartnerHub({ employees, partners, savePartners }) {
                         </div>
                       )}
                       {shown.map(r=>(
-                        <div key={r.i} style={{ padding:"12px 14px", borderRadius:12, border:`1px solid ${r.status==="Completed"?"#bbf7d0":r.dw>5?"#fecaca":"#f3f4f6"}`, backgroundColor:r.status==="Completed"?"#f0fdf4":r.dw>5?"#fef2f2":"#fafafa", display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
+                        <div key={r.i} style={{ padding:"12px 14px", borderRadius:12, border:`1px solid ${r.status==="Completed"?"#bbf7d0":r.dw>5?"#fecaca":"#f3f4f6"}`, backgroundColor:r.status==="Completed"?"#f0fdf4":r.dw>5?"#fef2f2":"#f9fafb", display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
                           <div style={{ flex:1, minWidth:0 }}>
                             <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:4 }}>
                               <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#ede9fe", color:"#6d28d9" }}>{r.type}</span>
@@ -4757,7 +4758,7 @@ function PartnerHub({ employees, partners, savePartners }) {
                   const d=daysUntil(e.endDate);
                   const urg=d>=0&&d<=30;
                   return (
-                    <div key={e._id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"9px 12px", borderRadius:10, border:`1px solid ${urg?"#fed7aa":"#f3f4f6"}`, backgroundColor:urg?"#fffbf5":"#fafafa" }}>
+                    <div key={e._id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"9px 12px", borderRadius:10, border:`1px solid ${urg?"#fed7aa":"#f3f4f6"}`, backgroundColor:urg?"#fffbf5":"#f9fafb" }}>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontWeight:600, fontSize:12, color:"#1f2937" }}>{e.name}</div>
                         <div style={{ fontSize:11, color:"#9ca3af" }}>{e.client||"—"} · {e.project||"—"}</div>
@@ -4986,7 +4987,7 @@ function TicketingView() {
                   </div>
                 </div>
               </div>
-              <div ref={msgRef} style={{flex:1,overflowY:"auto",padding:20,display:"flex",flexDirection:"column",gap:16,backgroundColor:"#fafafa"}}>
+              <div ref={msgRef} style={{flex:1,overflowY:"auto",padding:20,display:"flex",flexDirection:"column",gap:16,backgroundColor:"#f9fafb"}}>
                 {!ticket.messages.length&&<div style={{textAlign:"center",color:"#9ca3af",marginTop:48}}><MessageCircle size={32} style={{margin:"0 auto 8px",opacity:0.2,display:"block"}}/>No messages.</div>}
                 {ticket.messages.map((m,i)=>{
                   const isAdmin=m.sender==="Admin";
@@ -6003,7 +6004,7 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
               </button>
             </div>
           ))}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 8px", border: "1px dashed #d1d5db", borderRadius: 8, backgroundColor: "#fafafa" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 8px", border: "1px dashed #d1d5db", borderRadius: 8, backgroundColor: "#f9fafb" }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280" }}>Default (no match) →</span>
             <select value={defaultRule.client} onChange={e => updateRule(defaultRule.id, { client: e.target.value })} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11, fontWeight: 600 }}>
               {clientOptions.map(c => <option key={c} value={c}>{c}</option>)}
@@ -7343,7 +7344,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
               <div style={{
                 position:"absolute", top:"calc(100% + 4px)", left:9, right:9, zIndex:999,
                 background:"white", borderRadius:11, boxShadow:"0 12px 32px rgba(0,0,0,0.18)",
-                border:"1px solid var(--border,#e4e4e7)", overflow:"hidden",
+                border:"1px solid var(--border,#e5e7eb)", overflow:"hidden",
               }}>
                 {searchResults.map(r => {
                   const typeIcon = r.type === "employee" ? "👤" : r.type === "client" ? "🏢" : r.type === "po" ? "📋" : "🧾";
@@ -7361,8 +7362,8 @@ function FisheyeOpsPro({ employees, setEmployees }) {
                     >
                       <span style={{fontSize:14, flexShrink:0}}>{typeIcon}</span>
                       <div style={{minWidth:0}}>
-                        <p style={{margin:0,fontSize:12,fontWeight:700,color:"#18181b",letterSpacing:"-0.01em",fontFamily:"var(--font-sans)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</p>
-                        <p style={{margin:"1px 0 0",fontSize:11,color:"#71717a",fontFamily:"var(--font-sans)"}}>{r.sub}</p>
+                        <p style={{margin:0,fontSize:12,fontWeight:700,color:"#111827",letterSpacing:"-0.01em",fontFamily:"var(--font-sans)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</p>
+                        <p style={{margin:"1px 0 0",fontSize:11,color:"#6b7280",fontFamily:"var(--font-sans)"}}>{r.sub}</p>
                       </div>
                       <span style={{marginLeft:"auto",fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,backgroundColor:`${typeColor}12`,color:typeColor,flexShrink:0,textTransform:"uppercase"}}>{r.type}</span>
                     </button>
@@ -7374,9 +7375,9 @@ function FisheyeOpsPro({ employees, setEmployees }) {
               <div style={{
                 position:"absolute", top:"calc(100% + 4px)", left:9, right:9, zIndex:999,
                 background:"white", borderRadius:11, boxShadow:"0 12px 32px rgba(0,0,0,0.18)",
-                border:"1px solid var(--border,#e4e4e7)", padding:"14px 13px", textAlign:"center",
+                border:"1px solid var(--border,#e5e7eb)", padding:"14px 13px", textAlign:"center",
               }}>
-                <p style={{margin:0,fontSize:12,color:"#a1a1aa",fontFamily:"var(--font-sans)"}}>No results found</p>
+                <p style={{margin:0,fontSize:12,color:"#9ca3af",fontFamily:"var(--font-sans)"}}>No results found</p>
               </div>
             )}
           </div>
@@ -7425,7 +7426,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
         <div style={s.topbar} className="fe-topbar">
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             {!["action","finance","billing","analytics","weeklyreport","report","tickets"].includes(nav) && (
-              <h1 style={{margin:0,fontSize:15,fontWeight:700,color:"#18181b",letterSpacing:"-0.02em",fontFamily:"var(--font-sans)"}}>{labels[nav] || nav}</h1>
+              <h1 style={{margin:0,fontSize:15,fontWeight:700,color:"#111827",letterSpacing:"-0.02em",fontFamily:"var(--font-sans)"}}>{labels[nav] || nav}</h1>
             )}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:16}}>
@@ -7582,6 +7583,8 @@ export default function App() {
         <Route path="/client/:clientName"  element={<ClientPortal/>}/>
         {/* Internal — requires an @fisheye.sa login (see AuthGate.jsx) */}
         <Route path="/my-bonus" element={<AuthGate><BonusSIP employees={employees}/></AuthGate>}/>
+        {/* Design system review page — internal only, no real data. See DESIGN_SYSTEM.md. */}
+        <Route path="/style-guide" element={<AuthGate><StyleGuide/></AuthGate>}/>
         <Route path="/*" element={<AuthGate><FisheyeOpsPro employees={employees} setEmployees={setEmployees}/></AuthGate>}/>
       </Routes>
     </BrowserRouter>

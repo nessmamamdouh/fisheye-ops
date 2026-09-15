@@ -1680,7 +1680,7 @@ export function OperationsCalendar({ employees }) {
         <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
           {/* Empty cells before month start */}
           {Array.from({length:firstDay}).map((_,i) => (
-            <div key={`e${i}`} style={{minHeight:80,borderRight:"1px solid #f9fafb",borderBottom:"1px solid #f9fafb",backgroundColor:"#fafafa"}}/>
+            <div key={`e${i}`} style={{minHeight:80,borderRight:"1px solid #f9fafb",borderBottom:"1px solid #f9fafb",backgroundColor:"#f9fafb"}}/>
           ))}
           {/* Day cells */}
           {Array.from({length:daysInMonth},(_,i)=>i+1).map(day => {

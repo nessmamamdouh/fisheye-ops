@@ -174,7 +174,7 @@ export default function ClientPortal({ clientName: propClientName }) {
                   <tr><td colSpan={6} style={{ padding: 60, textAlign: 'center', color: '#A3AED0', fontSize: 14 }}>No active records found for this client.</td></tr>
                 ) : clientData.map(emp => (
                   <tr key={emp._id} style={{ borderBottom: '1px solid #F4F7FE' }}
-                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fafafa'}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f9fafb'}
                     onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}>
                     <td style={{ padding: '14px 16px', color: '#1B2559', fontWeight: 700, fontSize: 13 }}>{emp.name}</td>
                     <td style={{ padding: '14px 16px' }}>

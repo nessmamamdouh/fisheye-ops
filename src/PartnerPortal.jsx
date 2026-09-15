@@ -237,7 +237,7 @@ export default function PartnerPortal({ partnerName: propPartnerName }) {
                   const urgent = days >= 0 && days <= 30;
                   return (
                     <tr key={e._id} style={{ borderBottom: '1px solid #F4F7FE' }}
-                      onMouseEnter={ev => ev.currentTarget.style.backgroundColor = '#fafafa'}
+                      onMouseEnter={ev => ev.currentTarget.style.backgroundColor = '#f9fafb'}
                       onMouseLeave={ev => ev.currentTarget.style.backgroundColor = 'white'}>
                       <td style={{ padding: '14px 16px', color: '#1B2559', fontWeight: 700, fontSize: 13 }}>{e.name}</td>
                       <td style={{ padding: '14px 16px' }}>

@@ -1163,7 +1163,7 @@ function PayrollTab({ employees, setEmployees, flows, onSaveFlows }) {
                 const isSela = (emp.client||"").toLowerCase() === "sela";
                 const rowBg  = filterPO === "no_po"
                   ? (rowIdx % 2 === 0 ? "#fffbf7" : "#fff7ed22")
-                  : (rowIdx % 2 === 0 ? "white" : "#fafafa");
+                  : (rowIdx % 2 === 0 ? "white" : "#f9fafb");
                 const accentColor = filterPO === "no_po" ? "#f97316"
                   : isExp ? "#dc2626"
                   : isJ   ? "#16a34a"
@@ -1729,7 +1729,7 @@ function ProfitPerClientTab({ employees }) {
                   <>
                     <tr key={r.client}
                       onClick={() => setExpandedClient(isExp ? null : r.client)}
-                      style={{ borderBottom: isExp ? "none" : "1px solid #f3f4f6", cursor: "pointer", backgroundColor: r.netProfit < 0 ? "#fff1f2" : isExp ? col.light : i % 2 === 0 ? "white" : "#fafafa", transition: "background 0.15s" }}>
+                      style={{ borderBottom: isExp ? "none" : "1px solid #f3f4f6", cursor: "pointer", backgroundColor: r.netProfit < 0 ? "#fff1f2" : isExp ? col.light : i % 2 === 0 ? "white" : "#f9fafb", transition: "background 0.15s" }}>
                       <td style={{ ...td, borderLeft: `3px solid ${col.accent}`, fontWeight: 700, paddingLeft: 10 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <span style={{ fontSize: 10, color: col.accent, transition: "transform 0.2s", display: "inline-block", transform: isExp ? "rotate(90deg)" : "none" }}>▶</span>
@@ -1922,7 +1922,7 @@ function MonthlyPLTrend({ employees, clientRows }) {
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
           <thead>
-            <tr style={{ backgroundColor: "#fafafa" }}>
+            <tr style={{ backgroundColor: "#f9fafb" }}>
               <th style={{ padding: "8px 14px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textAlign: "left", borderBottom: "1px solid #f3f4f6", width: 160 }}>Client</th>
               {months.map(m => (
                 <th key={m.key} style={{ padding: "8px 10px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textAlign: "right", borderBottom: "1px solid #f3f4f6" }}>{m.label}</th>
@@ -2268,7 +2268,7 @@ function PayrollFlowTracker({ employees, sharedFlows, onSaveFlows }) {
                 {displayedEmps.map((e, rowIdx) => {
                   const done      = allDone(e);
                   const doneCount = PAYROLL_STEPS.filter(st => getFlow(e)[st.k]).length;
-                  const rowBg     = done ? '#f0fdf4' : rowIdx % 2 === 0 ? 'white' : '#fafafa';
+                  const rowBg     = done ? '#f0fdf4' : rowIdx % 2 === 0 ? 'white' : '#f9fafb';
                   return (
                     <tr key={e._id} style={{ borderBottom: '1px solid #f3f4f6', backgroundColor: rowBg }}>
                       <td style={{ ...td, borderLeft: `4px solid ${done ? '#16a34a' : 'transparent'}` }}>
@@ -3686,7 +3686,7 @@ export function FinanceModule({ employees = [], setEmployees = () => {}, operati
           {/* Header — collapsed by default */}
           <button
             onClick={() => setAttOpen(p => !p)}
-            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", background: "#fafafa", border: "none", borderBottom: attOpen ? "1px solid #e5e7eb" : "none", cursor: "pointer" }}
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", background: "#f9fafb", border: "none", borderBottom: attOpen ? "1px solid #e5e7eb" : "none", cursor: "pointer" }}
           >
             <AlertTriangle size={12} style={{ color: "#d97706", flexShrink: 0 }} />
             <span style={{ fontWeight: 700, fontSize: 11, color: "#1f2937", flex: 1, textAlign: "left" }}>

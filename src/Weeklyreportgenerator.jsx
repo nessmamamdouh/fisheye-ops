@@ -436,7 +436,7 @@ function buildEmailHTML({ report, weekStart, weekEnd, includeTable, includeAlert
           <!-- Employees table -->
           <table style="width:100%;border-collapse:collapse;background:white;">
             <thead>
-              <tr style="background:#fafafa;">
+              <tr style="background:#f9fafb;">
                 <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #f3f4f6;width:28%;">Employee</th>
                 <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #f3f4f6;">Status detail</th>
                 <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #f3f4f6;width:18%;">Contract</th>
@@ -445,7 +445,7 @@ function buildEmailHTML({ report, weekStart, weekEnd, includeTable, includeAlert
             <tbody>${rows}</tbody>
           </table>
           <!-- Hint row -->
-          <div style="padding:8px 14px;background:#fafafa;border-top:1px solid #f3f4f6;">
+          <div style="padding:8px 14px;background:#f9fafb;border-top:1px solid #f3f4f6;">
             <span style="font-size:11px;color:${stage.color};">💡 ${stage.hint}</span>
           </div>
         </div>`;
@@ -1057,7 +1057,7 @@ export default function WeeklyReportGenerator({ employees }) {
                 <div key={name} style={{
                   display:"flex",alignItems:"center",gap:12,padding:"10px 14px",
                   borderRadius:10, border:`1px solid ${done?"#86efac":checked?"#e5e7eb":"#f3f4f6"}`,
-                  backgroundColor: done?"#f0fdf4":checked?"white":"#fafafa",
+                  backgroundColor: done?"#f0fdf4":checked?"white":"#f9fafb",
                   transition:"all 0.2s",
                 }}>
                   <input type="checkbox" checked={checked} onChange={ev=>{
@@ -1217,7 +1217,7 @@ export default function WeeklyReportGenerator({ employees }) {
                 </div>
 
                 {/* ── Send entire client summary ── */}
-                <div style={{padding:"12px 18px",borderBottom:"1px solid #f3f4f6",backgroundColor:"#fafafa"}}>
+                <div style={{padding:"12px 18px",borderBottom:"1px solid #f3f4f6",backgroundColor:"#f9fafb"}}>
                   <p style={{fontSize:11,fontWeight:700,color:"#374151",margin:"0 0 8px",textTransform:"uppercase",letterSpacing:"0.05em"}}>
                     Full client summary
                   </p>
