@@ -124,33 +124,47 @@ export function clientRequiresPO(clientName) {
 export function getEffectiveClientMeta() {
   const cfg = loadAppConfig();
   const saved = (cfg && cfg.clientMeta && typeof cfg.clientMeta === "object") ? cfg.clientMeta : {};
+  const removed = new Set((cfg && Array.isArray(cfg.removedClients)) ? cfg.removedClients : []);
   // Defaults first so a client added later in code (e.g. a newly-registered
   // real client) always has a meta record, even on accounts whose saved
-  // config predates it. Saved entries are spread last so anything the user
-  // actually customized here (color, phone, requiresPO, a rename) still wins.
-  return { ...DEFAULT_CLIENT_META, ...saved };
+  // config predates it. A coded default the user explicitly deleted or
+  // renamed away from (tracked in cfg.removedClients -- see doSave in
+  // App.jsx) is dropped here BEFORE the spread, so it can't silently
+  // resurrect itself on the next load/save the way a plain object spread
+  // would (a spread can only add/override keys, never remove one). Saved
+  // entries are spread last so anything the user actually customized here
+  // (color, phone, requiresPO, a rename) still wins.
+  const base = { ...DEFAULT_CLIENT_META };
+  removed.forEach(name => { delete base[name]; });
+  return { ...base, ...saved };
 }
 
 export function getEffectiveClientsList() {
   const cfg = loadAppConfig();
   const saved = (cfg && Array.isArray(cfg.clientsList)) ? cfg.clientsList : [];
+  const removed = new Set((cfg && Array.isArray(cfg.removedClients)) ? cfg.removedClients : []);
   const meta = getEffectiveClientMeta();
   // Union of: whatever the user's saved list has, the coded base list, and
   // every client that has a meta record (coded default OR saved custom).
   // Deriving from clientMeta keys too means a client can never again "fall
   // out" of the selectable roster just because clientsList itself is stale —
   // this is what was hiding newly-registered clients from the sidebar list
-  // and from the CSV-import "assign client" popup.
+  // and from the CSV-import "assign client" popup. A name the user has
+  // explicitly deleted or renamed away from (cfg.removedClients) is skipped
+  // here too, otherwise a coded default name could never actually be
+  // removed from the Configuration page -- it would just get merged back in
+  // on the very next save/reload.
   const merged = [...saved];
-  DEFAULT_CLIENTS_LIST.forEach(c => { if (!merged.includes(c)) merged.push(c); });
-  Object.keys(meta).forEach(c => { if (!merged.includes(c)) merged.push(c); });
+  DEFAULT_CLIENTS_LIST.forEach(c => { if (!removed.has(c) && !merged.includes(c)) merged.push(c); });
+  Object.keys(meta).forEach(c => { if (!removed.has(c) && !merged.includes(c)) merged.push(c); });
   return merged;
 }
 
 export function getEffectiveMappingRules() {
   const cfg = loadAppConfig();
   const saved = (cfg && Array.isArray(cfg.mappingRules) && cfg.mappingRules.length) ? cfg.mappingRules : null;
-  if (!saved) return DEFAULT_MAPPING_RULES;
+  const removed = new Set((cfg && Array.isArray(cfg.removedClients)) ? cfg.removedClients : []);
+  if (!saved) return DEFAULT_MAPPING_RULES.filter(r => !removed.has(r.client));
 
   // Merge instead of replace: keep every saved rule first (these are the
   // user's own edits/reconciliations from the Configuration page and must
@@ -160,12 +174,16 @@ export function getEffectiveMappingRules() {
   // take effect even on an account that already has an older saved rule set
   // — without it, that account would never auto-classify or Reconcile that
   // client's projects, no matter how many rules get added going forward.
+  // A rule whose client was explicitly deleted/renamed away from
+  // (cfg.removedClients) is excluded from that append, otherwise deleting a
+  // coded-default client would leave its old classification rule behind.
   const savedNonDefault = saved.filter(r => r.matchType !== "default");
   const savedKeys = new Set(
     savedNonDefault.map(r => `${r.matchType}:${(r.value || "").trim().toUpperCase()}`)
   );
   const missingDefaults = DEFAULT_MAPPING_RULES.filter(r =>
     r.matchType !== "default" &&
+    !removed.has(r.client) &&
     !savedKeys.has(`${r.matchType}:${(r.value || "").trim().toUpperCase()}`)
   );
   const savedDefaultRule = saved.find(r => r.matchType === "default");

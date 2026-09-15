@@ -11,7 +11,7 @@ import WeeklyReportGenerator from './Weeklyreportgenerator';
 import { useSupabaseSync } from './hooks/useSupabaseSync';
 import { supabase, testConnection } from './utils/supabase';
 import { isExcluded, isWFDone, hasMissingPO, hasValidPO, getClientsList } from './utils/helpers';
-import { getEffectiveClientsList, getEffectiveClientMeta, getEffectiveMappingRules, CLIENT_COLOR_PALETTE, CONFIG_KEY, classifyProject, classifyProjectStrict, sanitizeClientName, clientRequiresPO } from './utils/appConfig';
+import { getEffectiveClientsList, getEffectiveClientMeta, getEffectiveMappingRules, CLIENT_COLOR_PALETTE, CONFIG_KEY, classifyProject, classifyProjectStrict, sanitizeClientName, clientRequiresPO, DEFAULT_CLIENTS_LIST, DEFAULT_CLIENT_META, loadAppConfig } from './utils/appConfig';
 import {
   LayoutDashboard, Users, DollarSign, Ticket, Settings, Building2,
   Bell, Clock, FileText, Upload, Plus, X, Send, Eye,
@@ -5895,7 +5895,25 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
         ...nonDefaultRules.map(r => ({ client: renameLookup[r.client] || r.client, matchType: r.matchType, value: r.value.trim() })),
         { client: renameLookup[defaultRule.client] || defaultRule.client, matchType: "default", value: "" },
       ];
-      const finalCfg = { clientsList: dedupedFinalNames, clientMeta, mappingRules };
+      // A coded default (DEFAULT_CLIENTS_LIST / DEFAULT_CLIENT_META in
+      // appConfig.js) that the user just deleted or renamed away from would
+      // otherwise reappear on its own: getEffectiveClientsList/
+      // getEffectiveClientMeta union the saved config with those coded
+      // defaults, and a union can only add keys back, never remove one --
+      // which is exactly why a deleted/renamed default client used to come
+      // right back after Save's auto-reload below. Record it as "removed"
+      // instead so it stays gone (a real employee later using that same
+      // name still reintroduces it normally, via the unregistered-row path
+      // in this component's initial state).
+      const keptNames = new Set(dedupedFinalNames);
+      const priorCfg = loadAppConfig();
+      const priorRemoved = (priorCfg && Array.isArray(priorCfg.removedClients)) ? priorCfg.removedClients : [];
+      const allDefaultNames = new Set([...DEFAULT_CLIENTS_LIST, ...Object.keys(DEFAULT_CLIENT_META)]);
+      const removedClients = [...new Set([
+        ...priorRemoved.filter(n => !keptNames.has(n)),
+        ...[...allDefaultNames].filter(n => !keptNames.has(n)),
+      ])];
+      const finalCfg = { clientsList: dedupedFinalNames, clientMeta, mappingRules, removedClients };
       localStorage.setItem(CONFIG_KEY, JSON.stringify(finalCfg));
       const { error } = await supabase.from('fisheye_app_data').upsert({ key: CONFIG_KEY, data: finalCfg }, { onConflict: 'key' });
       setSaving(false);

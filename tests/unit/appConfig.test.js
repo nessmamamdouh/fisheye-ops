@@ -133,3 +133,56 @@ describe('getEffectiveClientsList — merge, not replace', () => {
     expect(new Set(merged).size).toBe(merged.length); // no duplicates
   });
 });
+
+describe('removedClients — a deleted/renamed coded default must not resurrect itself (regression test)', () => {
+  // Reproduces the real bug: "Riva Engineering 2" and "Pentagram" are coded
+  // defaults (DEFAULT_CLIENTS_LIST / DEFAULT_CLIENT_META). Deleting or
+  // renaming them from the Configuration page saved clientsList/clientMeta
+  // correctly, but getEffectiveClientsList/getEffectiveClientMeta always
+  // re-merged the coded defaults back in on the very next load -- a union
+  // can only add keys, never remove one -- so the deletion silently
+  // reverted after Save's auto-reload, no matter how many times it was
+  // retried.
+  it('a removed coded-default name is excluded from getEffectiveClientsList', () => {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({
+      clientsList: ['Sela'],
+      removedClients: ['Riva Engineering 2', 'Pentagram'],
+    }));
+    const merged = getEffectiveClientsList();
+    expect(merged).not.toContain('Riva Engineering 2');
+    expect(merged).not.toContain('Pentagram');
+    expect(merged).toContain('Sela');
+  });
+
+  it('a removed coded-default name is excluded from getEffectiveClientMeta', () => {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({
+      clientMeta: { Sela: DEFAULT_CLIENT_META.Sela },
+      removedClients: ['Riva Engineering 2'],
+    }));
+    const merged = getEffectiveClientMeta();
+    expect(merged['Riva Engineering 2']).toBeUndefined();
+    expect(merged.Sela).toBeTruthy();
+  });
+
+  it('a removed coded-default client\'s classification rule is excluded from getEffectiveMappingRules', () => {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({
+      removedClients: ['Pentagram'],
+    }));
+    const merged = getEffectiveMappingRules();
+    expect(merged.some(r => r.client === 'Pentagram')).toBe(false);
+    expect(classifyProjectStrict('PENTAGRAM Batch 1', merged)).toBeNull();
+  });
+
+  it('a client name later reused by a real employee is not permanently blocked -- only Save re-derives removedClients', () => {
+    // removedClients is recomputed fresh on every Configuration Save (see
+    // doSave in App.jsx) from whichever coded defaults are absent from the
+    // final saved list, so a name coming back via a normal saved clientsList
+    // entry is unaffected by an older removedClients tombstone.
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({
+      clientsList: ['Sela', 'Pentagram'],
+      removedClients: ['Pentagram'],
+    }));
+    const merged = getEffectiveClientsList();
+    expect(merged).toContain('Pentagram');
+  });
+});
