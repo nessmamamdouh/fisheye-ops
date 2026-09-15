@@ -3641,8 +3641,16 @@ function PayrollFlowTracker({ employees }) {
 
 
 // ─── CLIENT HEALTH SCORE ────────────────────────────────────────────────
+// A client's PROFILE record (name/color/contacts, in the `clients` table) and an employee's
+// `client` free-text field are two independently-edited values that happen to usually agree —
+// but "SELA" (the profile) vs "Sela" (what's actually on employee records) is exactly the kind of
+// drift that silently breaks every `===` comparison between them and makes a client with hundreds
+// of real employees look like it has none ("No Data"). Case/whitespace-insensitive on purpose;
+// still exact otherwise (this is not the "contains" fuzzy matching classifyProject does).
+const sameClientName = (a, b) => (a || "").trim().toLowerCase() === (b || "").trim().toLowerCase();
+
 function calcClientHealth(clientName, employees) {
-  const clientEmps = employees.filter(e => e.client === clientName && !isExcluded(e));
+  const clientEmps = employees.filter(e => sameClientName(e.client, clientName) && !isExcluded(e));
   if (!clientEmps.length) return { score: 100, label: "No Data", color: "#9ca3af" };
 
   let score = 100;
@@ -3729,8 +3737,8 @@ function ClientHub({ employees, clients, saveClients }) {
     const m = {};
     clients.forEach(c => {
       m[c.id] = {
-        hc:       employees.filter(e => e.client === c.name && !isExcluded(e)).length,
-        noMargin: employees.filter(e => e.client === c.name && !isExcluded(e) && hasNoMarginData(e)).length,
+        hc:       employees.filter(e => sameClientName(e.client, c.name) && !isExcluded(e)).length,
+        noMargin: employees.filter(e => sameClientName(e.client, c.name) && !isExcluded(e) && hasNoMarginData(e)).length,
         health:   calcClientHealth(c.name, employees),
       };
     });
@@ -3760,11 +3768,11 @@ function ClientHub({ employees, clients, saveClients }) {
     contacts:   Array.isArray(openClient.contacts)   ? openClient.contacts   : [],
     requestLog: Array.isArray(openClient.requestLog) ? openClient.requestLog : [],
   } : null;
-  const selEmps=safeClient?employees.filter(e=>e.client===safeClient.name&&!isExcluded(e)):[];
+  const selEmps=safeClient?employees.filter(e=>sameClientName(e.client,safeClient.name)&&!isExcluded(e)):[];
   const selHealth=safeClient ? (clientStats[safeClient.id]?.health || calcClientHealth(safeClient.name,employees)) : null;
   const isSela=safeClient?.name==="Sela";
   // For PO tab: include expired (can't invoice without PO) — exclude only resigned
-  const selEmpsForPO=safeClient?employees.filter(e=>e.client===safeClient.name&&!isResignedEmp(e)):[];
+  const selEmpsForPO=safeClient?employees.filter(e=>sameClientName(e.client,safeClient.name)&&!isResignedEmp(e)):[];
   const missingPO=selEmpsForPO.filter(hasMissingPO);
   const hasPO=selEmpsForPO.filter(hasValidPO);
   const byProject=useMemo(()=>{const m={};selEmps.forEach(e=>{const p=e.project||"Unassigned";if(!m[p])m[p]=[];m[p].push(e);});return Object.entries(m).sort((a,b)=>b[1].length-a[1].length);},[selEmps]);
@@ -6824,6 +6832,36 @@ function FisheyeOpsPro({ employees, setEmployees }) {
         }
       });
   };
+
+  // `clients` here is Client Hub's PROFILE list (name/region/contacts/notes) -- a totally
+  // separate, manually-curated array from CLIENTS_LIST/employees_master.client (see
+  // syncClientRosterWithEmployees above). Nothing ever auto-added a profile record here, so a
+  // real client only ever showed up in Client Hub if someone had clicked "+Add Client" for it
+  // by hand -- which is why clients with hundreds of real employees (SPL, Combuzz, ...) were
+  // simply missing from the list, not filtered out. Auto-create a bare stub profile (empty
+  // contacts/notes, still fully editable in the UI) for every real client name on an employee
+  // record that doesn't already match an existing profile via sameClientName. Additive only:
+  // this never edits or removes an existing profile, so manually-entered contacts/notes/colors
+  // are never touched.
+  useEffect(() => {
+    if (!Array.isArray(employees) || !employees.length) return;
+    const distinctNames = [...new Set(employees.map(e => (e.client || "").trim()).filter(Boolean))];
+    const missing = distinctNames.filter(name => !clients.some(c => sameClientName(c.name, name)));
+    if (!missing.length) return;
+    const stamp = Date.now().toString(36).toUpperCase();
+    const stubs = missing.map((name, i) => ({
+      id: `C-AUTO-${stamp}-${i}`,
+      name,
+      region: "",
+      email: "",
+      status: "active",
+      contacts: [],
+      notes: "",
+      requestLog: [],
+    }));
+    saveClients([...clients, ...stubs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employees]);
 
   const [partners, setPartners] = useState(() => {
     try { return JSON.parse(localStorage.getItem("fisheyePartners_v1")) || DEF_PARTNERS; }
