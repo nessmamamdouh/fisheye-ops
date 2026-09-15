@@ -6391,6 +6391,21 @@ function FisheyeOpsPro({ employees, setEmployees }) {
     employees.filter(e => !isExcluded(e) && ["onboarding", "اونبوردينج", "تأهيل"].includes((e.workflowStatus || "").toLowerCase().trim())).length
   , [employees]);
 
+  // Guard against a stale/removed nav value left over in localStorage from a
+  // previous app version (e.g. a tab that no longer exists) — without this,
+  // the page renders a blank content area with a stale header. Must run
+  // unconditionally, before the isLoading/no-data early returns below, so
+  // its hook call order never changes between renders. Keep this key list
+  // in sync with navItems' k values below.
+  useEffect(() => {
+    const validNavKeys = ["action","workforce","clients","partners","onboarding","finance","bonus","weeklyreport","settings"];
+    if (!validNavKeys.includes(nav)) {
+      setNav("action");
+      localStorage.setItem("fisheye_nav", "action");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── جاري التحميل من Supabase ──
   if (isLoading) return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: 16, backgroundColor: "#0f172a" }}>
@@ -6427,18 +6442,6 @@ function FisheyeOpsPro({ employees, setEmployees }) {
     { k:"weeklyreport", l:"Reports",        i:FileText,    section:null      },
     { k:"settings",     l:"Settings",       i:Settings,    section:"SYSTEM"  },
   ];
-
-  // Guard against a stale/removed nav value left over in localStorage from a
-  // previous app version (e.g. a tab that no longer exists) — without this,
-  // the page renders a blank content area with a stale header. Runs once on
-  // mount and falls back to the Action Center.
-  useEffect(() => {
-    if (!navItems.some(item => item.k === nav)) {
-      setNav("action");
-      localStorage.setItem("fisheye_nav", "action");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const labels = {
     action:      "⚡ Action Center",
