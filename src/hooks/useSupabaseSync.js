@@ -55,23 +55,27 @@ export const useSupabaseSync = (employees, setEmployees, extraData = {}) => {
       }
       setSyncProgress(40);
 
-      // 2. Clients
+      // 2. Clients -- same fisheye_app_data key-value store that
+      // saveClients() uses for every normal edit, so Upload can never
+      // diverge from what ClientHub/Configuration actually saved.
       const rawClients = localStorage.getItem('fisheyeClients_v1');
       if (rawClients) {
         const clients = JSON.parse(rawClients);
         if (clients.length > 0) {
-          const { error } = await upsertInChunks('fisheye_clients', clients, 'id');
+          const { error } = await supabase.from('fisheye_app_data')
+            .upsert({ key: 'fisheyeClients_v1', data: clients }, { onConflict: 'key' });
           if (error) throw new Error('clients: ' + error.message);
         }
       }
       setSyncProgress(65);
 
-      // 3. Partners
+      // 3. Partners -- same fisheye_app_data key-value store savePartners() uses.
       const rawPartners = localStorage.getItem('fisheyePartners_v1');
       if (rawPartners) {
         const partners = JSON.parse(rawPartners);
         if (partners.length > 0) {
-          const { error } = await upsertInChunks('fisheye_partners', partners, 'id');
+          const { error } = await supabase.from('fisheye_app_data')
+            .upsert({ key: 'fisheyePartners_v1', data: partners }, { onConflict: 'key' });
           if (error) throw new Error('partners: ' + error.message);
         }
       }
@@ -118,17 +122,20 @@ export const useSupabaseSync = (employees, setEmployees, extraData = {}) => {
       }
       setSyncProgress(40);
 
-      // 2. Clients
-      const { data: clients, error: clErr } = await supabase.from('fisheye_clients').select('*');
-      if (!clErr && clients && clients.length > 0) {
-        localStorage.setItem('fisheyeClients_v1', JSON.stringify(clients));
+      // 2. Clients -- read back from the same fisheye_app_data key everything
+      // else writes to, instead of a separate table nothing else populates.
+      const { data: clientsRow, error: clErr } = await supabase
+        .from('fisheye_app_data').select('data').eq('key', 'fisheyeClients_v1').maybeSingle();
+      if (!clErr && Array.isArray(clientsRow?.data) && clientsRow.data.length > 0) {
+        localStorage.setItem('fisheyeClients_v1', JSON.stringify(clientsRow.data));
       }
       setSyncProgress(65);
 
-      // 3. Partners
-      const { data: partners, error: pErr } = await supabase.from('fisheye_partners').select('*');
-      if (!pErr && partners && partners.length > 0) {
-        localStorage.setItem('fisheyePartners_v1', JSON.stringify(partners));
+      // 3. Partners -- same fix.
+      const { data: partnersRow, error: pErr } = await supabase
+        .from('fisheye_app_data').select('data').eq('key', 'fisheyePartners_v1').maybeSingle();
+      if (!pErr && Array.isArray(partnersRow?.data) && partnersRow.data.length > 0) {
+        localStorage.setItem('fisheyePartners_v1', JSON.stringify(partnersRow.data));
       }
       setSyncProgress(85);
 

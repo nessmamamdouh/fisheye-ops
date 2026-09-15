@@ -5762,9 +5762,15 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
       const finalCfg = { clientsList: dedupedFinalNames, clientMeta, mappingRules };
       localStorage.setItem(CONFIG_KEY, JSON.stringify(finalCfg));
       const { error } = await supabase.from('fisheye_app_data').upsert({ key: CONFIG_KEY, data: finalCfg }, { onConflict: 'key' });
-      if (error) console.warn('config sync error:', error.message);
-
       setSaving(false);
+      if (error) {
+        // Do NOT show success and do NOT reload -- reloading would re-fetch
+        // the OLD config from Supabase and silently overwrite the edit that
+        // (correctly) made it into localStorage. Leave everything as-is so
+        // the user can just press Save again once the network issue clears.
+        alert("❌ اتسجل التعديل عندك بس فشل رفعه للسحابة (" + error.message + ") — التعديل لسه موجود على الشاشة، جرّبي تضغطي Save تاني. متعمليش Refresh للصفحة دلوقتي عشان متفقديش التعديل.");
+        return;
+      }
       setSavedFlash(true);
       setTimeout(() => window.location.reload(), 700);
     } catch (err) {
@@ -6603,7 +6609,16 @@ function FisheyeOpsPro({ employees, setEmployees }) {
     setClients(c);
     localStorage.setItem("fisheyeClients_v1", JSON.stringify(c));
     supabase.from('fisheye_app_data').upsert({ key: 'fisheyeClients_v1', data: c }, { onConflict: 'key' })
-      .then(({ error }) => { if (error) console.warn('saveClients sync error:', error.message); });
+      .then(({ error }) => {
+        if (error) {
+          console.warn('saveClients sync error:', error.message);
+          // The edit is safe in this tab (state + localStorage), but it
+          // hasn't reached the cloud -- if this tab is refreshed before a
+          // retry succeeds, the startup load will silently pull the old
+          // copy back down. Make that risk visible instead of hiding it.
+          alert("⚠️ التعديل محفوظ على الشاشة دي بس مارفعش للسحابة (" + error.message + ") — متعمليش Refresh دلوقتي، وجرّبي تاني كمان شوية.");
+        }
+      });
   };
 
   const [partners, setPartners] = useState(() => {
@@ -6614,7 +6629,12 @@ function FisheyeOpsPro({ employees, setEmployees }) {
     setPartners(p);
     localStorage.setItem("fisheyePartners_v1", JSON.stringify(p));
     supabase.from('fisheye_app_data').upsert({ key: 'fisheyePartners_v1', data: p }, { onConflict: 'key' })
-      .then(({ error }) => { if (error) console.warn('savePartners sync error:', error.message); });
+      .then(({ error }) => {
+        if (error) {
+          console.warn('savePartners sync error:', error.message);
+          alert("⚠️ التعديل محفوظ على الشاشة دي بس مارفعش للسحابة (" + error.message + ") — متعمليش Refresh دلوقتي، وجرّبي تاني كمان شوية.");
+        }
+      });
   };
 
   const [morningReportChecks, setMorningReportChecks] = useState({});

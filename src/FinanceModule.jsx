@@ -668,13 +668,23 @@ function PayrollTab({ employees, setEmployees, flows, onSaveFlows }) {
                   onClick={async () => {
                     if (!bulkDate) return;
                     const toUpdate = expiredNeedsPODate.filter(e => selectedPOIds.has(e._id));
+                    const prevDates = new Map(toUpdate.map(e => [e._id, e.poAddedDate ?? null]));
                     setEmployees(prev => prev.map(emp => {
                       if (selectedPOIds.has(emp._id)) return { ...emp, poAddedDate: bulkDate };
                       return emp;
                     }));
                     setSelectedPOIds(new Set());
+                    const failedIds = [];
                     for (const emp of toUpdate) {
-                      try { await supabase.from('employees_master').update({ poAddedDate: bulkDate }).eq('_id', emp._id); } catch {}
+                      const { error } = await supabase.from('employees_master').update({ poAddedDate: bulkDate }).eq('_id', emp._id);
+                      if (error) failedIds.push(emp._id);
+                    }
+                    if (failedIds.length) {
+                      const failedSet = new Set(failedIds);
+                      setEmployees(prev => prev.map(emp => failedSet.has(emp._id) ? { ...emp, poAddedDate: prevDates.get(emp._id) } : emp));
+                      showFinToast(`❌ فشل حفظ تاريخ PO لـ ${failedIds.length} موظف — جرّبي تاني`, "#dc2626");
+                    } else {
+                      showFinToast(`✅ اتحفظ تاريخ PO لـ ${toUpdate.length} موظف`);
                     }
                   }}
                   style={{ fontSize: 11, fontWeight: 800, padding: "4px 14px", backgroundColor: "#d97706", color: "white", border: "none", borderRadius: 6, cursor: "pointer", whiteSpace: "nowrap" }}
@@ -753,9 +763,15 @@ function PayrollTab({ employees, setEmployees, flows, onSaveFlows }) {
                           ev.stopPropagation();
                           const poDate = poDateValues[e._id] ?? new Date().toISOString().split("T")[0];
                           if (!poDate) return;
+                          const prevDate = e.poAddedDate ?? null;
                           setEmployees(prev => prev.map(emp => emp._id === e._id ? { ...emp, poAddedDate: poDate } : emp));
-                          try { await supabase.from('employees_master').update({ poAddedDate: poDate }).eq('_id', e._id); } catch {}
-                          showFinToast(`✅ تم حفظ تاريخ PO لـ ${e.name}`);
+                          const { error } = await supabase.from('employees_master').update({ poAddedDate: poDate }).eq('_id', e._id);
+                          if (error) {
+                            setEmployees(prev => prev.map(emp => emp._id === e._id ? { ...emp, poAddedDate: prevDate } : emp));
+                            showFinToast(`❌ فشل حفظ تاريخ PO لـ ${e.name} — ${error.message}`, "#dc2626");
+                          } else {
+                            showFinToast(`✅ تم حفظ تاريخ PO لـ ${e.name}`);
+                          }
                         }}
                         style={{ fontSize: 11, fontWeight: 700, padding: "4px 12px", backgroundColor: "#d97706", color: "white", border: "none", borderRadius: 6, cursor: "pointer", flexShrink: 0 }}
                       >
@@ -807,10 +823,16 @@ function PayrollTab({ employees, setEmployees, flows, onSaveFlows }) {
                         onClick={async () => {
                           const newDate = poDateValues[`edit_${e._id}`] ?? (e.poAddedDate ? e.poAddedDate.slice(0, 10) : '');
                           if (!newDate) return;
+                          const prevDate = e.poAddedDate ?? null;
                           setEmployees(prev => prev.map(emp => emp._id === e._id ? { ...emp, poAddedDate: newDate } : emp));
                           setEditingPODateId(null);
-                          try { await supabase.from('employees_master').update({ poAddedDate: newDate }).eq('_id', e._id); } catch {}
-                          showFinToast(`✅ تم تحديث تاريخ PO لـ ${e.name}`);
+                          const { error } = await supabase.from('employees_master').update({ poAddedDate: newDate }).eq('_id', e._id);
+                          if (error) {
+                            setEmployees(prev => prev.map(emp => emp._id === e._id ? { ...emp, poAddedDate: prevDate } : emp));
+                            showFinToast(`❌ فشل تحديث تاريخ PO لـ ${e.name} — ${error.message}`, "#dc2626");
+                          } else {
+                            showFinToast(`✅ تم تحديث تاريخ PO لـ ${e.name}`);
+                          }
                         }}
                         style={{ fontSize: 11, fontWeight: 800, padding: "4px 12px", backgroundColor: "#0284c7", color: "white", border: "none", borderRadius: 6, cursor: "pointer" }}
                       >حفظ</button>
@@ -820,10 +842,16 @@ function PayrollTab({ employees, setEmployees, flows, onSaveFlows }) {
                       >إلغاء</button>
                       <button
                         onClick={async () => {
+                          const prevDate = e.poAddedDate ?? null;
                           setEmployees(prev => prev.map(emp => emp._id === e._id ? { ...emp, poAddedDate: null } : emp));
                           setEditingPODateId(null);
-                          try { await supabase.from('employees_master').update({ poAddedDate: null }).eq('_id', e._id); } catch {}
-                          showFinToast(`🗑 تم مسح تاريخ PO لـ ${e.name}`, "#dc2626");
+                          const { error } = await supabase.from('employees_master').update({ poAddedDate: null }).eq('_id', e._id);
+                          if (error) {
+                            setEmployees(prev => prev.map(emp => emp._id === e._id ? { ...emp, poAddedDate: prevDate } : emp));
+                            showFinToast(`❌ فشل مسح تاريخ PO لـ ${e.name} — ${error.message}`, "#dc2626");
+                          } else {
+                            showFinToast(`🗑 تم مسح تاريخ PO لـ ${e.name}`, "#dc2626");
+                          }
                         }}
                         style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", backgroundColor: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 6, cursor: "pointer" }}
                       >🗑 مسح</button>
