@@ -30,18 +30,19 @@ function Root({ className = "", children }) {
   );
 }
 
-// A dark "masthead" header (not a soft tint) is the signature table move
-// for this system -- a considered, premium-ledger feel instead of a
-// default browser table -- with a thin brand-crimson rule underneath it.
+// A crimson "masthead" header (not a soft tint) is the signature table
+// move for this system -- a considered, premium-ledger feel instead of a
+// default browser table -- with a navy rule underneath it (the recurring
+// crimson-to-navy pairing used across Tabs/Modal too).
 function Head({ children }) {
-  return <thead className="bg-stone-900 border-b-2 border-primary">{children}</thead>;
+  return <thead className="bg-primary border-b-2 border-primary-dark">{children}</thead>;
 }
 
 function Th({ align = "left", className = "", children }) {
   return (
     <th
       className={[
-        "px-3 py-3 text-[10.5px] font-extrabold uppercase tracking-wider text-stone-300",
+        "px-3 py-3 text-[10.5px] font-extrabold uppercase tracking-wider text-white/85",
         align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left",
         className,
       ].join(" ")}
