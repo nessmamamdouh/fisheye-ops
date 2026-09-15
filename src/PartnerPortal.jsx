@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { isExcluded } from './utils/helpers';
+import { supabase } from './utils/supabase';
 
 const fmt = d => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 const daysUntil = d => d ? Math.ceil((new Date(d) - new Date()) / 86400000) : 9999;
@@ -48,7 +49,7 @@ function StatusPill({ value, map }) {
   );
 }
 
-export default function PartnerPortal({ employees = [], partnerName: propPartnerName }) {
+export default function PartnerPortal({ partnerName: propPartnerName }) {
   const [partner, setPartner] = useState(null);
   const [escalations, setEscalations] = useState(() => {
     try {
@@ -68,9 +69,39 @@ export default function PartnerPortal({ employees = [], partnerName: propPartner
     }
   }, [partnerName]);
 
-  const active = useMemo(() => 
-    (employees || []).filter(e => !isExcluded(e) && e.partnerName === partnerName), 
-    [employees, partnerName]
+  // Public portal: fetches ONLY this partner's rows, and only the safe
+  // (non-sensitive) columns exposed by employees_portal_safe — no IBAN,
+  // salary breakdown, iqama, bank, margin, or other partners'/clients'
+  // data ever reaches this page. See
+  // supabase/migrations/003_public_portal_safe_view.sql.
+  //
+  // Note: this previously matched on `e.partnerName`, a field that never
+  // actually existed on employees_master (only `partnerAssigned` does),
+  // so this page always showed zero employees for every partner — fixed
+  // here as part of moving the fetch to the scoped view.
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!partnerName) { setLoading(false); return; }
+    setLoading(true);
+    supabase
+      .from('employees_portal_safe')
+      .select('*')
+      .eq('partnerAssigned', partnerName)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) console.error('PartnerPortal fetch error:', error.message);
+        setRows(data || []);
+        setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [partnerName]);
+
+  const active = useMemo(() =>
+    rows.filter(e => !isExcluded(e)),
+    [rows]
   );
 
   const expiring = useMemo(() => 
@@ -110,6 +141,10 @@ export default function PartnerPortal({ employees = [], partnerName: propPartner
 
       <div style={{ padding: '28px 32px', maxWidth: 1200, margin: '0 auto', paddingBottom: 80 }}>
 
+        {loading ? (
+          <div style={{ padding: 80, textAlign: 'center', color: '#A3AED0', fontSize: 14 }}>Loading…</div>
+        ) : (
+        <>
         {/* Main Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
           <StatCard title="Active Workforce" value={stats.active} icon="👥" color="#A02843" />
@@ -231,6 +266,8 @@ export default function PartnerPortal({ employees = [], partnerName: propPartner
         <p style={{ textAlign: 'center', marginTop: 24, fontSize: 11, color: '#d1d5db' }}>
           Powered by Fisheye Ops · Read-only view · Last updated: {new Date().toLocaleDateString()}
         </p>
+        </>
+        )}
       </div>
     </div>
   );

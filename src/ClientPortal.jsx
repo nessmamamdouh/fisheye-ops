@@ -1,8 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { isExcluded } from './utils/helpers';
-
-const WORKFLOW_OPTS = ["Agreement Signed","Pending","Complete","Rejected","Qiwa Submitted","Qiwa Approved","Onboarding"];
-const ONBOARDING_STEPS = ["Docs Requested", "Docs Received", "Docs Received +"];
+import { supabase } from './utils/supabase';
 
 function StatCard({ title, value, icon, color = "#A02843" }) {
   return (
@@ -48,16 +46,37 @@ const WF_MAP = {
   'Rejected':        { bg: '#fee2e2', color: '#991b1b' },
 };
 
-export default function ClientPortal({ employees, clientName: propClientName }) {
+const ONBOARDING_STEPS = ["Docs Requested", "Docs Received", "Docs Received +"];
+
+export default function ClientPortal({ clientName: propClientName }) {
   // Support both URL params and props
   const clientName = propClientName || new URLSearchParams(window.location.search).get('client');
 
-  const clientData = useMemo(() => {
-    return (employees || []).filter(emp =>
-      emp.client?.toLowerCase() === clientName?.toLowerCase() &&
-      !isExcluded(emp)
-    );
-  }, [employees, clientName]);
+  // Public portal: fetches ONLY this client's rows, and only the safe
+  // (non-sensitive) columns exposed by employees_portal_safe — no IBAN,
+  // salary breakdown, iqama, bank, margin, or other clients' data ever
+  // reaches this page. See supabase/migrations/003_public_portal_safe_view.sql.
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!clientName) { setLoading(false); return; }
+    setLoading(true);
+    supabase
+      .from('employees_portal_safe')
+      .select('*')
+      .ilike('client', clientName)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) console.error('ClientPortal fetch error:', error.message);
+        setRows(data || []);
+        setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [clientName]);
+
+  const clientData = useMemo(() => rows.filter(emp => !isExcluded(emp)), [rows]);
 
   const stats = {
     active:        clientData.filter(e => e.status?.toLowerCase() === 'active').length,
@@ -89,6 +108,10 @@ export default function ClientPortal({ employees, clientName: propClientName }) 
 
       <div style={{ padding: '28px 32px', maxWidth: 1200, margin: '0 auto', paddingBottom: 80 }}>
 
+        {loading ? (
+          <div style={{ padding: 80, textAlign: 'center', color: '#A3AED0', fontSize: 14 }}>Loading…</div>
+        ) : (
+        <>
         {/* Main Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
           <StatCard title="Active Workforce" value={stats.active} icon="👥" color="#A02843" />
@@ -176,14 +199,9 @@ export default function ClientPortal({ employees, clientName: propClientName }) 
         <p style={{ textAlign: 'center', marginTop: 24, fontSize: 11, color: '#d1d5db' }}>
           Powered by Fisheye Ops · Read-only view · Last updated: {new Date().toLocaleDateString()}
         </p>
+        </>
+        )}
       </div>
     </div>
   );
-}
-import { useOperationalIssues } from './useOperationalIssues';
-
-function ClientView({ employees, clientName }) {
-  const issues = useOperationalIssues(employees);
-  const clientIssues = issues.byClient[clientName] || [];
-  // Show only issues relevant to this client
 }

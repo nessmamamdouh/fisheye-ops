@@ -22,6 +22,7 @@ import {
   Target, CalendarDays, Receipt, AlertTriangle, RefreshCw, GitBranch, Award
 } from "lucide-react";
 import { ActionCenter, OperationsCalendar, ClientCommandCenter } from './ActionCenterV2';
+import AuthGate, { useAuth } from './AuthGate';
 
 // ملاحظة: إضافة الموظفين تتم من خلال handleAddSingle داخل WorkforceView
 // WhatsApp Helper for Client Communications
@@ -1569,6 +1570,8 @@ const saveWFFilter = (key, val) => {
 };
 
 function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV, pendingOpenEmpId, onPendingOpenHandled}) {
+  const { profile: __profile } = useAuth();
+  const isViewer = __profile?.role === 'viewer';
   const _f = loadWFFilters(); // read once at mount
   const [client, setClient] = useState(_f.client || "All");
   const [search, setSearch] = useState("");   // search is intentionally not persisted
@@ -2127,9 +2130,11 @@ const submitRenew = async () => {
                 </div>
               </div>
               {/* Primary action */}
+              {!isViewer && (
               <Btn onClick={handleAddSingle} style={{ backgroundColor: M, color: "white" }}>
                 <UserPlus size={14} /> New Employee
               </Btn>
+              )}
             </div>
 
             {/* KPI strip */}
@@ -5612,6 +5617,8 @@ function NotificationsSettings({ employees }) {
 // to existing employee records and Client Hub records, then persists + reloads.
 // ═══════════════════════════════════════════════════════════════════════════════
 function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
+  const { profile: __profile } = useAuth();
+  const isViewer = __profile?.role === 'viewer';
   const [rows, setRows] = useState(() => {
     const list = getEffectiveClientsList();
     const meta = getEffectiveClientMeta();
@@ -5996,9 +6003,13 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
         <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>عايزة تعدّلي أسماء الـ Partners؟ ده متاح من صفحة <b>Partner Hub</b> نفسها (إضافة/تعديل/حذف partner).</p>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {savedFlash && <span style={{ fontSize: 12, fontWeight: 700, color: "#16a34a" }}>✅ محفوظ — بيتم تحديث الصفحة...</span>}
-          <Btn onClick={doSave} disabled={saving} style={{ ...s.btnPrimary, opacity: saving ? 0.6 : 1 }}>
-            <Save size={13}/> {saving ? "جاري الحفظ..." : "Save Configuration"}
-          </Btn>
+          {isViewer ? (
+            <span style={{ fontSize: 12, color: "#9ca3af" }}>👁️ Viewer — read only</span>
+          ) : (
+            <Btn onClick={doSave} disabled={saving} style={{ ...s.btnPrimary, opacity: saving ? 0.6 : 1 }}>
+              <Save size={13}/> {saving ? "جاري الحفظ..." : "Save Configuration"}
+            </Btn>
+          )}
         </div>
       </Card>
     </div>
@@ -6022,9 +6033,12 @@ function SettingsView({
   clients,
   saveClients,
 }) {
+  const { profile: __profile } = useAuth();
+  const isAdmin = __profile?.role === 'admin';
   const [tab,setTab]=useState("general");
   const [confirmClear,setConfirmClear]=useState(false);
   const stabs=[{k:"general",l:"General"},{k:"notifications",l:"🔔 Notifications"},{k:"config",l:"🗂️ Configuration"},{k:"integration",l:"Integration Guide"},{k:"mapping",l:"Client Mapping"},{k:"logic",l:"Report Logic"}];
+  if (isAdmin) stabs.push({k:"team",l:"👥 Team"});
   return (
     <div style={{maxWidth:720,display:"flex",flexDirection:"column",gap:20}}>
       <h2 style={{margin:0,fontSize:20,fontWeight:700}}>Settings</h2>
@@ -6135,7 +6149,69 @@ function SettingsView({
           ))}
         </Card>
       )}
+      {tab==="team" && isAdmin && (<TeamPanel/>)}
     </div>
+  );
+}
+
+// ─── Team / Users panel (admin only) — promote/demote @fisheye.sa accounts ──
+function TeamPanel() {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
+  const [err, setErr] = useState("");
+
+  const load = () => {
+    setLoading(true);
+    supabase.from('profiles').select('id,email,role,created_at').order('created_at', { ascending: true })
+      .then(({ data, error }) => {
+        if (error) setErr(error.message);
+        setRows(data || []);
+        setLoading(false);
+      });
+  };
+  useEffect(() => { load(); }, []);
+
+  const toggleRole = async (row) => {
+    const newRole = row.role === 'admin' ? 'viewer' : 'admin';
+    setBusyId(row.id); setErr("");
+    const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', row.id);
+    if (error) {
+      setErr(error.message);
+    } else {
+      setRows(prev => prev.map(r => r.id === row.id ? { ...r, role: newRole } : r));
+    }
+    setBusyId(null);
+  };
+
+  return (
+    <Card style={{ padding: 20 }}>
+      <h3 style={{ fontWeight: 700, fontSize: 14, margin: "0 0 4px" }}>👥 فريق العمل</h3>
+      <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 16px" }}>
+        كل الحسابات اللي عملت تسجيل دخول بإيميل @fisheye.sa. Admin يقدر يعدّل ويحذف، Viewer يشوف بس.
+      </p>
+      {err && <p style={{ fontSize: 12, color: "#dc2626", margin: "0 0 10px" }}>{err}</p>}
+      {loading ? (
+        <p style={{ fontSize: 13, color: "#9ca3af" }}>جاري التحميل...</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {rows.map(row => (
+            <div key={row.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", border: "1px solid #f0f2f5", borderRadius: 10 }}>
+              <span style={{ fontSize: 13, color: "#1B2559", fontWeight: 600 }}>{row.email}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: row.role === 'admin' ? '#A02843' : '#6b7280' }}>
+                  {row.role === 'admin' ? '🛡️ Admin' : '👁️ Viewer'}
+                </span>
+                <Btn onClick={() => toggleRole(row)} disabled={busyId === row.id} style={{ ...s.btnGhost, fontSize: 11, padding: "5px 10px" }}>
+                  {busyId === row.id ? '...' : (row.role === 'admin' ? 'خليه Viewer' : 'خليه Admin')}
+                </Btn>
+              </div>
+            </div>
+          ))}
+          {rows.length === 0 && <p style={{ fontSize: 13, color: "#9ca3af" }}>مفيش حسابات لسه.</p>}
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -6690,6 +6766,8 @@ function PartnerFlowTab({ flows, saveFlows, employees }) {
 
 // ─── MAIN APP ────────────────────────────────────────────────────────────
 function FisheyeOpsPro({ employees, setEmployees }) {
+  const { session, profile } = useAuth();
+  const isViewer = profile?.role === 'viewer';
   const [isLoading, setIsLoading] = useState(true);
 
   // Keep the CLIENTS_LIST/CLIENT_META roster in sync with real employee data
@@ -7267,7 +7345,17 @@ function FisheyeOpsPro({ employees, setEmployees }) {
           <div style={{display:"flex",alignItems:"center",gap:16}}>
             {/* Notifications Bell */}
             <div style={{position:"relative"}}>
-              <Bell size={17}
+              <div style={{display:"flex",alignItems:"center",gap:8,marginRight:4,paddingRight:12,borderRight:"1px solid #e5e7eb"}}>
+              <span style={{fontSize:11,fontWeight:700,color:"#6b7280",fontFamily:"var(--font-sans)"}} title={session?.user?.email}>
+                {isViewer ? "👁️ Viewer" : "🛡️ Admin"}
+              </span>
+              <button
+                onClick={() => supabase.auth.signOut()}
+                title="تسجيل خروج"
+                style={{border:"none",background:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#A02843",fontFamily:"var(--font-sans)"}}
+              >خروج</button>
+            </div>
+            <Bell size={17}
                 style={{color: notifications.length > 0 ? M : "#9ca3af", cursor:"pointer"}}
                 onClick={() => setShowNotifications(p => !p)}/>
               {notifications.length > 0 && (
@@ -7403,10 +7491,12 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/partner/:partnerId" element={<PartnerPortal employees={employees} partners={partners}/>}/>
-        <Route path="/client/:clientName"  element={<ClientPortal employees={employees}/>}/>
-        <Route path="/my-bonus" element={<BonusSIP employees={employees}/>}/>
-        <Route path="/*" element={<FisheyeOpsPro employees={employees} setEmployees={setEmployees}/>}/>
+        {/* Public — no login required, but scoped to safe fields only (see ClientPortal.jsx / PartnerPortal.jsx) */}
+        <Route path="/partner/:partnerId" element={<PartnerPortal/>}/>
+        <Route path="/client/:clientName"  element={<ClientPortal/>}/>
+        {/* Internal — requires an @fisheye.sa login (see AuthGate.jsx) */}
+        <Route path="/my-bonus" element={<AuthGate><BonusSIP employees={employees}/></AuthGate>}/>
+        <Route path="/*" element={<AuthGate><FisheyeOpsPro employees={employees} setEmployees={setEmployees}/></AuthGate>}/>
       </Routes>
     </BrowserRouter>
   );
