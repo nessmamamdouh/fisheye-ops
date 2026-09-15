@@ -6,7 +6,6 @@ import ClientPortal from './ClientPortal';
 import PartnerPortal from './PartnerPortal';
 import BonusSIP from './BonusSIP';
 import { OnboardingModule } from './modules/onboarding';
-import { AnalyticsDashboard } from './Analyticsdashboard';
 import WeeklyMonthlyReports from './Weeklymonthlyreports';
 import WeeklyReportGenerator from './Weeklyreportgenerator';
 import { useSupabaseSync } from './hooks/useSupabaseSync';
@@ -17,7 +16,7 @@ import {
   LayoutDashboard, Users, DollarSign, Ticket, Settings, Building2,
   Bell, Clock, FileText, Upload, Plus, X, Send, Eye,
   Search, Shield, User, TrendingUp, CheckCircle,
-  Download, MessageCircle, Calendar, AlertCircle, Trash2, BarChart2,
+  Download, MessageCircle, Calendar, AlertCircle, Trash2,
   Menu, ChevronDown, Copy, Check, Mail, Filter, FileUp,
   Edit3, Save, Hash, Zap, ClipboardList, Briefcase, Archive, Globe, Link, Inbox, UserPlus, Database,
   Target, CalendarDays, Receipt, AlertTriangle, RefreshCw, GitBranch, Award
@@ -6425,7 +6424,6 @@ function FisheyeOpsPro({ employees, setEmployees }) {
     { k:"onboarding",   l:"Onboarding",     i:UserPlus,    section:"OPS"     },
     { k:"finance",      l:"Finance",        i:DollarSign,  section:null      },
     { k:"bonus",        l:"My Bonus",       i:Award,       section:null      },
-    { k:"analytics",    l:"Analytics",      i:BarChart2,   section:"INSIGHTS"},
     { k:"weeklyreport", l:"Reports",        i:FileText,    section:null      },
     { k:"settings",     l:"Settings",       i:Settings,    section:"SYSTEM"  },
   ];
@@ -6598,7 +6596,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
         {/* Topbar */}
         <div style={s.topbar} className="fe-topbar">
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            {!["action","finance","billing","analytics","weeklyreport","report","tickets"].includes(nav) && (
+            {!["action","finance","billing","weeklyreport"].includes(nav) && (
               <h1 style={{margin:0,fontSize:15,fontWeight:700,color:"#111827",letterSpacing:"-0.02em",fontFamily:"var(--font-sans)"}}>{labels[nav] || nav}</h1>
             )}
           </div>
@@ -6692,7 +6690,6 @@ function FisheyeOpsPro({ employees, setEmployees }) {
           {nav==="onboarding" && <OnboardingModule employees={employees} setEmployees={setEmployees} partners={partners}/>}
 
           {/* ── ANALYTICS ── */}
-          {nav==="analytics" && <AnalyticsDashboard employees={employees}/>}
 
           {/* ── SETTINGS ── */}
           {nav==="settings" && <SettingsView
