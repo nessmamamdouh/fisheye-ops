@@ -1837,30 +1837,52 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
       // Strip temp _id so Supabase auto-generates the real one
       const clean = records.map(({ _id, ...rest }) => rest);
 
-      // ── Guard: never create a duplicate Contract ID ──────────────────
-      // A Contract ID must belong to exactly one employee. If the CSV reuses
-      // a Contract ID that already exists (or repeats one within the same
-      // file), inserting it would make two different people share one
-      // Contract ID — and any later "Update from CSV" or PO/contract lookup
-      // can then silently land on the wrong person. Block those rows instead.
-      const existingContractIds = new Set(
-        employees.map(e => String(e.contractId || '').trim()).filter(Boolean)
-      );
-      const seenInBatch = new Set();
+      // ── Guard: never silently create TWO RECORDS FOR THE SAME PERSON ──
+      // A Contract ID should belong to exactly one employee. But Fisheye's
+      // own manually-added Contract IDs and getonboarded.net's Contract IDs
+      // are two independent numbering sequences (each starts from ~1), so
+      // the SAME number can coincidentally land on two completely different
+      // real people — that's a numbering coincidence, not a duplicate. Only
+      // block a row when the Contract ID matches AND the name also matches
+      // (a real re-upload of the same person). getonboarded.net is the
+      // source of truth for numbering (per Nessma), so a coincidental clash
+      // with an older, independently-numbered Fisheye record does not block
+      // the new, correct employee — it goes in, tagged with a note so the
+      // clash is visible instead of silently risking a future PO/contract
+      // lookup landing on the wrong person.
+      const normName = (n) => String(n || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const existingByContractId = new Map();
+      employees.forEach(e => {
+        const cid = String(e.contractId || '').trim();
+        if (cid) existingByContractId.set(cid, e);
+      });
+      const seenInBatch = new Map();
       const toInsert = [];
       const blocked = [];
+      const collided = [];
       clean.forEach(r => {
         const cid = String(r.contractId || '').trim();
-        if (cid && (existingContractIds.has(cid) || seenInBatch.has(cid))) {
+        const existing = cid ? existingByContractId.get(cid) : null;
+        const batchDupe = cid ? seenInBatch.get(cid) : null;
+        const sameAsExisting = existing && normName(existing.name) === normName(r.name);
+        const sameAsBatch = batchDupe && normName(batchDupe) === normName(r.name);
+        if (cid && (sameAsExisting || sameAsBatch)) {
           blocked.push({ name: r.name, contractId: cid });
           return;
         }
-        if (cid) seenInBatch.add(cid);
+        if (cid && (existing || batchDupe)) {
+          // Same Contract ID, different person — numbering coincidence, not
+          // a duplicate. Insert, but flag it so Nessma can renumber the
+          // older non-getonboarded record if she wants full uniqueness.
+          collided.push({ name: r.name, contractId: cid, existingName: existing ? existing.name : batchDupe });
+          r = { ...r, auditLog: [...(r.auditLog || []), { ts: new Date().toISOString(), action: `⚠️ Contract ID ${cid} already used by a different existing employee (${existing ? existing.name : batchDupe}) — inserted anyway since getonboarded.net numbering is authoritative; consider renumbering the older record.` }] };
+        }
+        if (cid) seenInBatch.set(cid, r.name);
         toInsert.push(r);
       });
 
       if (toInsert.length === 0) {
-        alert(`❌ اتوقف الرفع بالكامل — كل الـ Contract IDs في الملف ده مستخدمة بالفعل لموظفين تانيين:\n` +
+        alert(`❌ اتوقف الرفع بالكامل — كل الـ Contract IDs في الملف ده مستخدمة بالفعل لنفس الموظفين دول:\n` +
           blocked.map(b => `• ${b.name} — ${b.contractId}`).join('\n'));
         return;
       }
@@ -1875,8 +1897,12 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
       setEmployees(prev => [...allInserted, ...prev]);
       setPendingAddCSV(null);
       let msg = `✅ تم رفع ${allInserted.length} موظف بنجاح!`;
+      if (collided.length > 0) {
+        msg += `\n\n⚠️ ${collided.length} موظف اتسجلوا برقم عقد اتصادف نفسه مع موظف تاني قديم (شخص مختلف تمامًا) — راجعي ترقيم العقود القديمة لو حابة توحديها:\n` +
+          collided.map(b => `• ${b.name} (${b.contractId}) — نفس رقم ${b.existingName}`).join('\n');
+      }
       if (blocked.length > 0) {
-        msg += `\n\n⚠️ اتجاهل ${blocked.length} صف لأن الـ Contract ID بتاعهم مستخدم بالفعل لموظف تاني — غيّري الرقم وارفعيهم تاني:\n` +
+        msg += `\n\n🚫 اتجاهل ${blocked.length} صف لأنهم نفس الموظف اتكرر (نفس الاسم ونفس الـ Contract ID):\n` +
           blocked.map(b => `• ${b.name} — ${b.contractId}`).join('\n');
       }
       alert(msg);
