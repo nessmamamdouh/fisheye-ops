@@ -48,11 +48,34 @@ const TODAY = new Date();
 TODAY.setHours(0, 0, 0, 0);
 const CLIENTS_LIST = getEffectiveClientsList();
 const CLIENT_META = getEffectiveClientMeta();
+
+// Keeps CLIENTS_LIST / CLIENT_META in sync with whatever client names are
+// actually present on employee records, even when a client reaches
+// employees_master without ever being "registered" via Configuration (e.g.
+// a bulk edit typed straight into the client field). Mutates the two
+// module-level constants above IN PLACE -- every place in this file that
+// reads CLIENTS_LIST/CLIENT_META sees the update immediately on its next
+// render, with no prop changes needed anywhere. Called from a useEffect on
+// `employees` in the top-level component, so it runs after every load,
+// CSV import, bulk edit, Reconcile, etc.
+function syncClientRosterWithEmployees(emps) {
+  if (!Array.isArray(emps) || !emps.length) return;
+  const known = new Set(CLIENTS_LIST);
+  const distinct = [...new Set(emps.map(e => (e.client || "").trim()).filter(Boolean))];
+  distinct.forEach(name => {
+    if (known.has(name)) return;
+    CLIENTS_LIST.push(name);
+    known.add(name);
+    if (!CLIENT_META[name]) {
+      CLIENT_META[name] = CLIENT_COLOR_PALETTE[CLIENTS_LIST.length % CLIENT_COLOR_PALETTE.length];
+    }
+  });
+}
 const WORKFLOW_OPTS = [
   "Docs Requested","Docs Received","Docs Received +","Agreement Sent",
   "Agreement Signed","Pending","Complete","Rejected","Qiwa Submitted","Qiwa Approved", "Onboarding", "Iqama Transferred"
 ];
-const STATUS_OPTS = ["active","new","renewal","transfer","expired","resigned"];
+const STATUS_OPTS = ["active","new","renewal","transfer","expired","resigned","منتهي","مستقيل"];
 const QIWA_FIELDS = ["Name","Project","Job Title","Contract Type","Iqama","Sponsor","Start Date","Mobile","Sex","Nationality","D.O.B","IBAN","Email","Bank","Period","Probation","Vacation Days","Basic","HRA","TPT","Total Salary"];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -107,7 +130,7 @@ function parseCSV(raw) {
       phone: (row["Phone Number"] || "").replace(/\s+/g,""),
       idNumber: row["ID Number"] || "",
       position: row["Position"] || "",
-      project, client: mapClient(project),
+      project, client: classifyProjectStrict(project) || "",
       sourcingThrough: row["Sourcing Through"] || "",
       nationalityType: row["Nationality Type"] || "",
       startDate: row["Start Date"] || "",
@@ -371,6 +394,14 @@ function UploadScreen({ onUpload }) {
     reader.onload = ev => {
       try {
         const data = parseCSV(ev.target.result);
+        const unresolved = data.filter(d => !d.client);
+        if (unresolved.length) {
+          const projects = [...new Set(unresolved.map(d => d.project || "(no project)"))];
+          alert(
+            `⚠️ ${unresolved.length} موظف مشروعهم مش متعرّف عليه، فاتحفظوا من غير Client (محتاجين تحديد يدوي بعد كده من صفحة الموظفين أو الإعدادات):\n\n` +
+            projects.map(p => `• ${p}`).join('\n')
+          );
+        }
         onUpload(data);
       } catch (error) {
         alert("Parse error: " + error.message);
@@ -6645,6 +6676,11 @@ function PartnerFlowTab({ flows, saveFlows, employees }) {
 function FisheyeOpsPro({ employees, setEmployees }) {
   const [isLoading, setIsLoading] = useState(true);
 
+  // Keep the CLIENTS_LIST/CLIENT_META roster in sync with real employee data
+  // on every change (initial load, CSV import, bulk edit, Reconcile, ...) --
+  // see syncClientRosterWithEmployees() above for why this exists.
+  useEffect(() => { syncClientRosterWithEmployees(employees); }, [employees]);
+
   const [clients, setClients] = useState(() => {
     try { return JSON.parse(localStorage.getItem("fisheyeClients_v1")) || DEF_CLIENTS; }
     catch { return DEF_CLIENTS; }
@@ -7319,7 +7355,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
           {nav==="reports"     && <WeeklyMonthlyReports employees={employees}/>}
           {nav==="report"      && <MorningReportView employees={employees} morningReportChecks={morningReportChecks} setMorningReportChecks={setMorningReportChecks} reportSendTo={reportSendTo} setReportSendTo={setReportSendTo}/>}
           {nav==="tickets"     && <TicketingView/>}
-          {nav==="dashboard"   && <DashboardView employees={employees} isOnline={isOnline} syncStatus={syncStatus} syncMessage={syncMessage} lastSync={lastSync} uploadToCloud={uploadToCloud} downloadFromCloud={downloadFromCloud} backup={backup} bidirectionalSync={bidirectionalSync}/>}
+          {nav==="dashboard"   && <DashboardView employees={employees} isOnline={isOnline} syncStatus={syncStatus} syncMessage={syncMessage} syncProgress={syncProgress} lastSync={lastSync} uploadToCloud={uploadToCloud} downloadFromCloud={downloadFromCloud} backup={backup} bidirectionalSync={bidirectionalSync}/>}
           </div>
         </div>
       </div>
