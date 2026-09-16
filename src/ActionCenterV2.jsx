@@ -11,7 +11,8 @@
 //   {nav==="action" && <ActionCenter employees={employees} setEmployees={setEmployees} onNavigate={...} />}
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertCircle, Clock, DollarSign, CheckCircle, RefreshCw, ShieldAlert,
   Send, ArrowUpCircle, ExternalLink, CheckSquare, GitBranch,
@@ -385,58 +386,67 @@ function ClientBadge({ client }) {
   );
 }
 
-// ─── Workflow Picker (slide-in panel for Move Workflow action) ───────────────
-// A fixed, viewport-anchored panel (not positioned relative to the trigger
-// button) — this is what keeps it from ever rendering underneath another
-// card's buttons, since it no longer lives inside any card's own stacking
-// context.
-function WorkflowPicker({ onPick, onClose, employeeName }) {
-  return (
-    <div
-      className="wf-panel-backdrop"
-      style={{
-        position: "fixed", inset: 0, backgroundColor: "rgba(17,24,39,0.35)",
-        zIndex: 200, display: "flex", justifyContent: "flex-end",
-      }}
-      onClick={(ev) => ev.target === ev.currentTarget && onClose()}
-    >
-      <div className="wf-panel" style={{
-        width: 300, maxWidth: "88vw", height: "100%", backgroundColor: "white",
-        boxShadow: "-12px 0 32px rgba(0,0,0,0.16)",
-        display: "flex", flexDirection: "column",
+// ─── Workflow Picker (dropdown for Move Workflow action) ──────────────────────
+// A small anchored dropdown, like before — but rendered through a portal
+// into document.body at a fixed, computed position (from the trigger row's
+// own bounding rect) instead of position:absolute nested inside the card.
+// Two real bugs that plagued the nested version are both gone this way:
+// (1) it could paint *behind* a sibling card's button, because it only ever
+// had a local z-index inside that card's own stacking context; (2) while
+// the card is hovered, its `hover:-translate-y-0.5` transform makes the
+// card a CSS containing block for any `position:fixed` descendant, which is
+// exactly what broke the very first "slide-in panel" attempt at this — a
+// portal sidesteps that too, since document.body has no transform.
+function WorkflowPicker({ onPick, onClose, anchorEl }) {
+  const [pos, setPos] = useState(null);
+  const width = 200;
+
+  useLayoutEffect(() => {
+    if (!anchorEl) return;
+    const rect = anchorEl.getBoundingClientRect();
+    setPos({
+      top: rect.bottom + 6,
+      left: Math.min(rect.left, window.innerWidth - width - 8),
+    });
+  }, [anchorEl]);
+
+  if (!pos) return null;
+
+  return createPortal(
+    <>
+      <div style={{ position: "fixed", inset: 0, zIndex: 299 }} onClick={onClose} />
+      <div style={{
+        position: "fixed", top: pos.top, left: pos.left, zIndex: 300,
+        backgroundColor: "white", border: "1px solid #e5e7eb", borderRadius: 10,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.12)", width, overflow: "hidden",
       }}>
         <div style={{
-          padding: "16px 18px", borderBottom: "1px solid #f3f4f6",
-          display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0,
+          padding: "7px 12px", borderBottom: "1px solid #f3f4f6",
+          fontSize: 10, fontWeight: 700, color: "#6b7280", backgroundColor: "#fdf8f8",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
         }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>Set Workflow</h3>
-            {employeeName && (
-              <p style={{ margin: "2px 0 0", fontSize: 11, color: "#9ca3af" }}>{employeeName}</p>
-            )}
-          </div>
-          <button onClick={onClose} title="Close" style={{
-            background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: 2,
-          }}>
-            <X size={16} />
+          Set Workflow
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af" }}>
+            <X size={11} />
           </button>
         </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px" }}>
+        <div style={{ maxHeight: 220, overflowY: "auto" }}>
           {WORKFLOW_OPTS.map((opt) => (
             <button key={opt} onClick={() => onPick(opt)} style={{
-              width: "100%", textAlign: "left", padding: "11px 12px", fontSize: 13, fontWeight: 600,
-              borderRadius: 8, marginBottom: 2, border: "none", backgroundColor: "transparent",
-              cursor: "pointer", color: "#374151", transition: "background-color 0.12s",
+              width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 12,
+              border: "none", backgroundColor: "transparent", cursor: "pointer",
+              color: "#374151",
             }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f9fafb"}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+              onMouseEnter={(e) => e.target.style.backgroundColor = "#f9fafb"}
+              onMouseLeave={(e) => e.target.style.backgroundColor = "transparent"}
             >
               {opt}
             </button>
           ))}
         </div>
       </div>
-    </div>
+    </>,
+    document.body
   );
 }
 
@@ -504,6 +514,7 @@ function IssueCard({
   const [showWFPicker, setShowWFPicker] = useState(false);
   const [showPartnerPicker, setShowPartnerPicker] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  const actionRowRef = useRef(null);
   const { employee: e, severity, actions } = issue;
   const label = stdText(stdLabel(issue.label));
   const isResolved = resolvedIds.has(issue.id);
@@ -603,7 +614,7 @@ function IssueCard({
                anchored whether "Update Workflow" was clicked as a visible button or
                from inside the "more actions" menu — closing the overflow menu must
                never also unmount the picker it just opened. */}
-          <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", flexShrink: 0 }}>
+          <div ref={actionRowRef} style={{ position: "relative", display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", flexShrink: 0 }}>
             {visibleActions.map((action) => {
               const meta = ACTION_META[action];
               if (!meta) return null;
@@ -686,7 +697,7 @@ function IssueCard({
 
             {showWFPicker && (
               <WorkflowPicker
-                employeeName={e?.name}
+                anchorEl={actionRowRef.current}
                 onPick={(wf) => { onUpdateWorkflow(e._id, wf); setShowWFPicker(false); }}
                 onClose={() => setShowWFPicker(false)}
               />
