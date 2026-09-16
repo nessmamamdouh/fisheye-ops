@@ -209,7 +209,13 @@ function ReportShareBar({ issues, label, color }) {
       <button onClick={() => window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, "_blank")} style={bs(false, "rgba(255,255,255,0.6)")}>
         <Mail size={11}/> Email
       </button>
-      <button onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(buildReport(issues, label, "internal"))}`, "_blank")} style={bs(false, "rgba(255,255,255,0.6)")}>
+      <button onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(buildReport(issues, label, "internal"))}`, "_blank")} style={{
+        display: "inline-flex", alignItems: "center", gap: 4,
+        padding: "5px 11px", borderRadius: 7, fontSize: 11, fontWeight: 700,
+        border: "1.5px solid #86efac", backgroundColor: "#dcfce7", color: "#16a34a",
+        cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.15s",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+      }}>
         <MessageCircle size={11}/> WA
       </button>
       <button onClick={() => exportToExcel(issues, label)} style={bs(false, "#86efac")}>
@@ -1338,7 +1344,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
               </span>
             )}
           </div>
-          <p style={{ color: "#9ca3af", fontSize: 12, margin: 0 }}>
+          <p className="font-serif" style={{ color: "#9ca3af", fontSize: 12, margin: 0, fontStyle: "italic" }}>
             {adjustedCounts.total} open issues · {resolvedCount} resolved this session
           </p>
         </div>
