@@ -17,9 +17,10 @@ import {
   Send, ArrowUpCircle, ExternalLink, CheckSquare, GitBranch,
   ChevronDown, ChevronRight, X, Zap, Search, Filter, Users, User,
   Bell, TrendingUp, BarChart2, FileText, Building2,
-  Copy, Check, Mail, MessageCircle, Layers, CalendarDays,
+  Copy, Check, Mail, MessageCircle, Layers, CalendarDays, MoreHorizontal,
 } from "lucide-react";
 import { useOperationalIssues, daysUntil } from "./useOperationalIssues";
+import { Button, Badge } from "./components/ui";
 import { isExcluded } from "./utils/helpers";
 import { getEffectiveClientsList, getEffectiveClientMeta } from "./utils/appConfig";
 
@@ -477,6 +478,7 @@ function IssueCard({
 }) {
   const [showWFPicker, setShowWFPicker] = useState(false);
   const [showPartnerPicker, setShowPartnerPicker] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const { employee: e, severity, actions } = issue;
   const label = stdText(stdLabel(issue.label));
   const isResolved = resolvedIds.has(issue.id);
@@ -489,6 +491,7 @@ function IssueCard({
   const partnerContacts = partnerRecord?.contacts || [];
 
   const handleAction = (action) => {
+    setShowMore(false);
     switch (action) {
       case "send_reminder":   onSendReminder(issue); break;
       case "follow_up":       onSendReminder(issue); break;
@@ -514,6 +517,17 @@ function IssueCard({
   if (isResolved) return null;
 
   const severityColor = severity === "critical" ? "#dc2626" : severity === "high" ? "#ea580c" : tabCfg.color;
+  const severityBadgeColor = severity === "critical" ? "error" : (severity === "high" || severity === "medium") ? "warning" : "stone";
+
+  // ── Row actions: keep only the first two visible (per-issue-type order —
+  // e.g. urgent issues are ["send_reminder","escalate","open_employee",
+  // "move_workflow"]), the rest collapse into a "more actions" menu. Matches
+  // the approved Action Center design canvas + ERP row-actions guidance
+  // (2-3 visible actions + overflow), and drops nothing — every action is
+  // still one click away, just not all visible at once. ──
+  const actionList = actions || [];
+  const visibleActions = actionList.slice(0, 2);
+  const overflowActions = actionList.slice(2);
 
   return (
     <div style={{
@@ -524,7 +538,7 @@ function IssueCard({
     }}>
       {/* ── Main row ── */}
       <div style={{ padding: "11px 14px" }}>
-        {/* Row 1: Name + badges + WA */}
+        {/* Row 1: Name + badges */}
         <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
           {/* Bulk select checkbox */}
           {onToggleSelect && (
@@ -540,15 +554,15 @@ function IssueCard({
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <span style={{ fontWeight: 700, fontSize: 13, color: "#111827" }}>{e?.name || "—"}</span>
               {e?.client && <ClientBadge client={e.client} />}
-              <SeverityBadge severity={severity} />
+              {severity && (
+                <Badge color={severityBadgeColor} dot>
+                  {severity.charAt(0).toUpperCase() + severity.slice(1)}
+                </Badge>
+              )}
               {issue.daysLeft != null && (
-                <span style={{
-                  fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999,
-                  backgroundColor: issue.daysLeft <= 3 ? "#fee2e2" : "#fff7ed",
-                  color: issue.daysLeft <= 3 ? "#991b1b" : "#9a3412",
-                }}>
+                <Badge color={issue.daysLeft <= 3 ? "error" : "warning"}>
                   {issue.daysLeft === 0 ? "Today" : `${issue.daysLeft}d`}
-                </span>
+                </Badge>
               )}
             </div>
             {/* Row 2: Issue label */}
@@ -556,19 +570,10 @@ function IssueCard({
               {label}
             </p>
           </div>
-          {wa && (
-            <a href={wa} target="_blank" rel="noreferrer" style={{
-              display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700,
-              color: "white", padding: "5px 10px", borderRadius: 8,
-              backgroundColor: "#16a34a", textDecoration: "none", flexShrink: 0,
-            }}>
-              💬 WA
-            </a>
-          )}
         </div>
 
         {/* Row 3: Meta */}
-        <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#9ca3af", flexWrap: "wrap", marginBottom: 8 }}>
+        <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#9ca3af", flexWrap: "wrap", marginBottom: 10 }}>
           {e?.position && <span>{e.position}</span>}
           {e?.project  && <span>· {e.project}</span>}
           {e?.endDate  && <span>· Ends {fmt(e.endDate)}</span>}
@@ -577,26 +582,29 @@ function IssueCard({
           </span>
         </div>
 
-        {/* ── WorkflowPicker ── */}
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", position: "relative" }}>
-          {(actions || []).map((action) => {
+        {/* Row 4: unified action row — up to 2 visible actions + WA + overflow menu, right-aligned */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 7, flexWrap: "wrap" }}>
+          {visibleActions.map((action) => {
             const meta = ACTION_META[action];
             if (!meta) return null;
-            const Icon = meta.icon;
+            const isPrimary = action === "send_reminder" || action === "follow_up";
+            const btn = (
+              <Button
+                size="sm"
+                variant={isPrimary ? "primary" : "ghost"}
+                icon={meta.icon}
+                onClick={() => handleAction(action)}
+              >
+                {meta.label}
+              </Button>
+            );
+            if (action !== "move_workflow") {
+              return <React.Fragment key={action}>{btn}</React.Fragment>;
+            }
             return (
               <div key={action} style={{ position: "relative" }}>
-                <button
-                  onClick={() => handleAction(action)}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 4,
-                    padding: "4px 9px", borderRadius: 7, fontSize: 11, fontWeight: 600,
-                    border: `1px solid ${meta.color}40`,
-                    backgroundColor: meta.bg, color: meta.color, cursor: "pointer",
-                  }}
-                >
-                  <Icon size={11} /> {meta.label}
-                </button>
-                {action === "move_workflow" && showWFPicker && (
+                {btn}
+                {showWFPicker && (
                   <WorkflowPicker
                     onPick={(wf) => { onUpdateWorkflow(e._id, wf); setShowWFPicker(false); }}
                     onClose={() => setShowWFPicker(false)}
@@ -605,6 +613,68 @@ function IssueCard({
               </div>
             );
           })}
+
+          {wa && (
+            <a href={wa} target="_blank" rel="noreferrer" title="WhatsApp" style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 30, height: 30, borderRadius: 6, flexShrink: 0,
+              backgroundColor: "#dcfce7", color: "#16a34a",
+            }}>
+              <MessageCircle size={14}/>
+            </a>
+          )}
+
+          {overflowActions.length > 0 && (
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setShowMore((s) => !s)}
+                title="More actions"
+                style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  width: 30, height: 30, borderRadius: 6, cursor: "pointer",
+                  border: "1px solid #e5e7eb", backgroundColor: "white", color: "#9ca3af",
+                }}
+              >
+                <MoreHorizontal size={16}/>
+              </button>
+              {showMore && (
+                <>
+                  <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setShowMore(false)} />
+                  <div style={{
+                    position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 50,
+                    width: 190, backgroundColor: "white", border: "1px solid #e5e7eb",
+                    borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", overflow: "hidden",
+                  }}>
+                    {overflowActions.map((action) => {
+                      const meta = ACTION_META[action];
+                      if (!meta) return null;
+                      const Icon = meta.icon;
+                      return (
+                        <div key={action} style={{ position: "relative" }}>
+                          <button
+                            onClick={() => handleAction(action)}
+                            style={{
+                              width: "100%", display: "flex", alignItems: "center", gap: 8,
+                              padding: "9px 12px", fontSize: 12, fontWeight: 600, color: "#374151",
+                              background: "none", border: "none", cursor: "pointer", textAlign: "left",
+                            }}
+                          >
+                            <Icon size={13} style={{ color: meta.color }}/> {meta.label}
+                          </button>
+                          {action === "move_workflow" && showWFPicker && (
+                            <WorkflowPicker
+                              onPick={(wf) => { onUpdateWorkflow(e._id, wf); setShowWFPicker(false); setShowMore(false); }}
+                              onClose={() => setShowWFPicker(false)}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
