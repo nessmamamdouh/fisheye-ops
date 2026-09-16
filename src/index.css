@@ -152,7 +152,7 @@
   /* Surfaces -- derived from the gray scale above (not separate hardcoded
      hex) so there is exactly one place that ever needs to change. */
   --surface:       #ffffff;
-  --surface-sub:   var(--gray-50);
+  --surface-sub:   oklch(97.5% 0.008 75); /* warm paper tone, matches approved design canvas */
   --surface-dim:   var(--gray-100);
   --surface-raised:#ffffff;
 
