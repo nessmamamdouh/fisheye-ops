@@ -21,7 +21,7 @@ import {
   Edit3, Save, Hash, Zap, ClipboardList, Briefcase, Archive, Globe, Link, Inbox, UserPlus, Database,
   Target, CalendarDays, Receipt, AlertTriangle, RefreshCw, GitBranch, Award
 } from "lucide-react";
-import { ActionCenter, ClientCommandCenter } from './ActionCenterV2';
+import { ActionCenter } from './ActionCenterV2';
 import AuthGate, { useAuth } from './AuthGate';
 
 // ملاحظة: إضافة الموظفين تتم من خلال handleAddSingle داخل WorkforceView
@@ -6691,7 +6691,6 @@ function FisheyeOpsPro({ employees, setEmployees }) {
           {/* ── ENTITY VIEWS ── */}
           {nav==="workforce"  && <WorkforceView employees={employees} setEmployees={setEmployees} partners={partners} clients={clients} exportCSV={exportCSV} pendingOpenEmpId={pendingOpenEmpId} onPendingOpenHandled={() => setPendingOpenEmpId(null)}/>}
           {nav==="clients"    && <ClientHub employees={employees} clients={clients} saveClients={saveClients}/>}
-          {nav==="clientcmd"  && <ClientCommandCenter employees={employees}/>}
           {nav==="partners"   && <PartnerHub employees={employees} partners={partners} savePartners={savePartners}/>}
 
           {/* ── FINANCE (consolidated: Payroll · Billing · Settlements) ── */}
