@@ -582,14 +582,19 @@ function IssueCard({
           </span>
         </div>
 
-        {/* Row 4: unified action row — up to 2 visible actions + WA + overflow menu, right-aligned */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 7, flexWrap: "wrap" }}>
+        {/* Row 4: unified action row — up to 2 visible actions + WA + overflow menu, right-aligned.
+             The WorkflowPicker dropdown lives once at this row's level (not nested inside the
+             overflow menu's conditional render) so it stays open and anchored whether "Update
+             Workflow" was clicked as a visible button or from inside the "more actions" menu —
+             closing the overflow menu must never also unmount the picker it just opened. */}
+        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 7, flexWrap: "wrap" }}>
           {visibleActions.map((action) => {
             const meta = ACTION_META[action];
             if (!meta) return null;
             const isPrimary = action === "send_reminder" || action === "follow_up";
-            const btn = (
+            return (
               <Button
+                key={action}
                 size="sm"
                 variant={isPrimary ? "primary" : "ghost"}
                 icon={meta.icon}
@@ -597,20 +602,6 @@ function IssueCard({
               >
                 {meta.label}
               </Button>
-            );
-            if (action !== "move_workflow") {
-              return <React.Fragment key={action}>{btn}</React.Fragment>;
-            }
-            return (
-              <div key={action} style={{ position: "relative" }}>
-                {btn}
-                {showWFPicker && (
-                  <WorkflowPicker
-                    onPick={(wf) => { onUpdateWorkflow(e._id, wf); setShowWFPicker(false); }}
-                    onClose={() => setShowWFPicker(false)}
-                  />
-                )}
-              </div>
             );
           })}
 
@@ -650,30 +641,30 @@ function IssueCard({
                       if (!meta) return null;
                       const Icon = meta.icon;
                       return (
-                        <div key={action} style={{ position: "relative" }}>
-                          <button
-                            onClick={() => handleAction(action)}
-                            style={{
-                              width: "100%", display: "flex", alignItems: "center", gap: 8,
-                              padding: "9px 12px", fontSize: 12, fontWeight: 600, color: "#374151",
-                              background: "none", border: "none", cursor: "pointer", textAlign: "left",
-                            }}
-                          >
-                            <Icon size={13} style={{ color: meta.color }}/> {meta.label}
-                          </button>
-                          {action === "move_workflow" && showWFPicker && (
-                            <WorkflowPicker
-                              onPick={(wf) => { onUpdateWorkflow(e._id, wf); setShowWFPicker(false); setShowMore(false); }}
-                              onClose={() => setShowWFPicker(false)}
-                            />
-                          )}
-                        </div>
+                        <button
+                          key={action}
+                          onClick={() => handleAction(action)}
+                          style={{
+                            width: "100%", display: "flex", alignItems: "center", gap: 8,
+                            padding: "9px 12px", fontSize: 12, fontWeight: 600, color: "#374151",
+                            background: "none", border: "none", cursor: "pointer", textAlign: "left",
+                          }}
+                        >
+                          <Icon size={13} style={{ color: meta.color }}/> {meta.label}
+                        </button>
                       );
                     })}
                   </div>
                 </>
               )}
             </div>
+          )}
+
+          {showWFPicker && (
+            <WorkflowPicker
+              onPick={(wf) => { onUpdateWorkflow(e._id, wf); setShowWFPicker(false); }}
+              onClose={() => setShowWFPicker(false)}
+            />
           )}
         </div>
       </div>
