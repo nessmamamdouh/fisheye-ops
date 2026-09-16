@@ -530,7 +530,7 @@ function IssueCard({
   const overflowActions = actionList.slice(2);
 
   return (
-    <div style={{
+    <div className="shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200" style={{
       backgroundColor: "white",
       border: `1px solid #e5e7eb`,
       borderLeft: `3px solid ${severityColor}`,
@@ -696,7 +696,7 @@ function IssueCard({
 // ═══════════════════════════════════════════════════════════════════════════════
 function TabNavBar({ counts, activeTab, setActiveTab }) {
   return (
-    <div style={{ display: "flex", gap: 1, borderBottom: "1px solid #e5e7eb", marginBottom: 0 }}>
+    <div style={{ display: "flex", gap: 22, borderBottom: "1px solid #e5e7eb" }}>
       {TABS.map((tab) => {
         const count = counts[tab.key] || 0;
         const isActive = activeTab === tab.key;
@@ -705,29 +705,24 @@ function TabNavBar({ counts, activeTab, setActiveTab }) {
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             style={{
-              display: "inline-flex", alignItems: "center", gap: 5,
-              padding: "10px 16px",
-              fontSize: 12, fontWeight: isActive ? 800 : 500,
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "0 0 8px",
+              fontSize: 12, fontWeight: 600,
               color: isActive ? tab.color : "#6b7280",
-              background: isActive ? `${tab.color}0d` : "transparent",
+              background: "transparent",
               border: "none",
-              borderBottom: `3px solid ${isActive ? tab.color : "transparent"}`,
-              borderRadius: "6px 6px 0 0",
+              borderBottom: `2px solid ${isActive ? tab.color : "transparent"}`,
               cursor: "pointer",
-              marginBottom: -1,
-              transition: "all 0.15s",
               whiteSpace: "nowrap",
+              transition: "color 0.15s",
             }}
           >
             <tab.icon size={13} />
             {tab.label}
             {count > 0 && (
-              <span style={{
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                minWidth: 18, height: 18, borderRadius: 999, padding: "0 5px",
-                backgroundColor: isActive ? tab.color : (count > 0 && tab.key === "urgent" ? "#dc2626" : "#e5e7eb"),
-                color: isActive ? "white" : (tab.key === "urgent" && count > 0 ? "white" : "#6b7280"),
-                fontSize: 10, fontWeight: 800, lineHeight: 1,
+              <span className="font-mono" style={{
+                fontSize: 11, fontWeight: 600,
+                color: isActive ? tab.color : "#9ca3af",
               }}>{count}</span>
             )}
           </button>
@@ -1369,7 +1364,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
           { label: "Resolved",        value: resolvedCount,                color: "#059669", accent: "#059669", bg: "#f0fdf4", border: "#bbf7d0" },
           { label: "Payroll Blockers",value: adjustedCounts.payroll || 0,  color: "#7c3aed", accent: "#7c3aed", bg: "#faf5ff", border: "#ddd6fe" },
         ].map(k => (
-          <div key={k.label} style={{ padding: "13px 15px", borderRadius: 10, backgroundColor: k.bg, border: `1px solid ${k.border}`, borderLeft: `4px solid ${k.accent}` }}>
+          <div key={k.label} style={{ padding: "13px 15px", borderRadius: 10, backgroundColor: k.bg, borderLeft: `4px solid ${k.accent}` }}>
             <p style={{ margin: "0 0 5px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.06em" }}>{k.label}</p>
             <p className="font-mono" style={{ color: k.color, margin: 0, fontSize: 22, fontWeight: 800, lineHeight: 1 }}>{k.value}</p>
           </div>

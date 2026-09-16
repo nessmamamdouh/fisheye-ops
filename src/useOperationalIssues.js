@@ -75,8 +75,8 @@ export function computeOperationalIssues(employees = []) {
           employee: e,
           daysLeft: d,
           label: d === 0
-            ? "Expires TODAY — take action immediately 🔴"
-            : `Expires in ${d}d — renew or extend now ⚠️`,
+            ? "Expires TODAY — take action immediately"
+            : `Expires in ${d}d — renew or extend now`,
           severity: d <= 3 ? "critical" : "high",
           actions: ["send_reminder", "escalate", "open_employee", "mark_resolved", "move_workflow"],
         });
@@ -173,7 +173,7 @@ export function computeOperationalIssues(employees = []) {
           employee: e,
           daysLeft: null,
           label: isExp
-            ? `Missing PO (${e.client}) — expired contract, invoice pending 🔴`
+            ? `Missing PO (${e.client}) — expired contract, invoice pending`
             : `Missing PO Number (${e.client}) — invoice risk`,
           severity: isExp ? "critical" : "high",
           actions: ["send_reminder", "open_employee", "mark_resolved"],
