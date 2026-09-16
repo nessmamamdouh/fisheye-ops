@@ -1326,7 +1326,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
   // RENDER
   // ══════════════════════════════════════════════════════════════════════════
   return (
-    <div className="font-sans" style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+    <div className="font-sans" style={{ display: "flex", flexDirection: "column", gap: 0, zoom: 0.85 }}>
 
       {/* ── Page Header ─────────────────────────────────────────────────────── */}
       <div style={{ marginBottom: 16, display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
