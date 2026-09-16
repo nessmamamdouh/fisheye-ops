@@ -711,7 +711,7 @@ function TabNavBar({ counts, activeTab, setActiveTab }) {
               whiteSpace: "nowrap",
             }}
           >
-            <span style={{ fontSize: 13 }}>{tab.emoji}</span>
+            <tab.icon size={13} />
             {tab.label}
             {count > 0 && (
               <span style={{
@@ -780,8 +780,8 @@ function PartnerContactPicker({ partnerName, contacts, partnerEmail, employee: e
           display: "flex", justifyContent: "space-between", alignItems: "center",
         }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "white" }}>
-              🤝 Contact Partner
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "white", display: "flex", alignItems: "center", gap: 7 }}>
+              <Users size={16}/> Contact Partner
             </h3>
             <p style={{ margin: "2px 0 0", fontSize: 11, color: "rgba(200,230,255,0.85)" }}>
               {partnerName} · re: {empName}
@@ -946,7 +946,7 @@ function EscalationModal({ issue, onClose, onConfirm, clients = [] }) {
           position: "sticky", top: 0, zIndex: 1,
         }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "white" }}>🚨 Escalate Issue</h3>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "white", display: "flex", alignItems: "center", gap: 7 }}><ArrowUpCircle size={16}/> Escalate Issue</h3>
             <p style={{ margin: "2px 0 0", fontSize: 11, color: "rgba(255,200,200,0.85)" }}>
               {e?.name} · {e?.client}
             </p>
@@ -1244,7 +1244,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
           : e
       )
     );
-    showToast(`🔄 Workflow updated → ${newWF}`);
+    showToast(`Workflow updated → ${newWF}`);
   }, [setEmployees, showToast]);
 
   const handleOpenEmployee = useCallback((issue) => {
@@ -1255,7 +1255,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
     } else if (onNavigate) {
       onNavigate("workforce");
     }
-    showToast(`📂 Opening ${emp?.name}`);
+    showToast(`Opening ${emp?.name}`);
   }, [onNavigate, onOpenEmployee, showToast]);
 
   const handleSendReminder = useCallback((issue) => {
@@ -1268,7 +1268,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
         ? `Hello ${e?.name},\n\nYour Qiwa request has been *approved*. The next step is to complete your *Iqama Transfer*.\n\nPlease coordinate with your partner or contact the Fisheye Ops team.\n\nFisheye Ops Pro`
         : `Hello ${e?.name},\n\nThis is a follow-up regarding: ${stdLabel(issue.label)}\n\nPlease contact the Fisheye Ops team at your earliest convenience.\n\nFisheye Ops Pro`;
       window.open(`https://wa.me/${(e?.phone || "").replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`, "_blank");
-      showToast(`💬 Reminder sent to ${e?.name}`);
+      showToast(`Reminder sent to ${e?.name}`);
     } else {
       showToast("⚠️ No phone number on file for this employee", "#d97706");
     }
@@ -1295,7 +1295,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
       // keep last 50 escalations
       localStorage.setItem("fisheye_escalations", JSON.stringify(log.slice(0, 50)));
     } catch {}
-    showToast(`🚨 Escalated to ${to} — logged`);
+    showToast(`Escalated to ${to} — logged`);
     setEscalationIssue(null);
   }, [escalationIssue, showToast]);
 
@@ -1317,7 +1317,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
   // RENDER
   // ══════════════════════════════════════════════════════════════════════════
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+    <div className="font-sans" style={{ display: "flex", flexDirection: "column", gap: 0 }}>
 
       {/* ── Page Header ─────────────────────────────────────────────────────── */}
       <div style={{ marginBottom: 16, display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
@@ -1326,7 +1326,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
             <div style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: M, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Zap size={15} style={{ color: "white" }} />
             </div>
-            <h1 style={{ fontSize: 18, fontWeight: 800, color: "#111827", margin: 0, letterSpacing: "-0.02em" }}>
+            <h1 className="font-serif" style={{ fontSize: 19, fontWeight: 700, color: "#111827", margin: 0, letterSpacing: "-0.01em" }}>
               Action Center
             </h1>
             {adjustedCounts.critical > 0 && (
@@ -1363,7 +1363,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
         ].map(k => (
           <div key={k.label} style={{ padding: "13px 15px", borderRadius: 10, backgroundColor: k.bg, border: `1px solid ${k.border}`, borderLeft: `4px solid ${k.accent}` }}>
             <p style={{ margin: "0 0 5px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.06em" }}>{k.label}</p>
-            <p style={{ color: k.color, margin: 0, fontSize: 22, fontWeight: 900, lineHeight: 1 }}>{k.value}</p>
+            <p className="font-mono" style={{ color: k.color, margin: 0, fontSize: 22, fontWeight: 800, lineHeight: 1 }}>{k.value}</p>
           </div>
         ))}
       </div>
@@ -1378,8 +1378,8 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
               const pct = issues.counts.total ? Math.round(count / issues.counts.total * 100) : 0;
               return (
                 <div key={tab.key} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
-                  <span style={{ fontSize: 11, width: 90, color: tab.color, fontWeight: 700, whiteSpace: "nowrap" }}>
-                    {tab.emoji} {tab.label}
+                  <span style={{ fontSize: 11, width: 90, color: tab.color, fontWeight: 700, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <tab.icon size={11} /> {tab.label}
                   </span>
                   <div style={{ flex: 1, height: 5, backgroundColor: "#f3f4f6", borderRadius: 999, overflow: "hidden" }}>
                     <div style={{ width: `${pct}%`, height: "100%", backgroundColor: tab.color, borderRadius: 999, transition: "width 0.3s" }} />
@@ -1471,7 +1471,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
           display: "flex", alignItems: "center", gap: 10,
           borderLeft: `4px solid ${tabCfg.color}`,
         }}>
-          <span style={{ fontSize: 16 }}>{tabCfg.emoji}</span>
+          <tabCfg.icon size={16} style={{ color: tabCfg.color, flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <span style={{ fontWeight: 800, fontSize: 13, color: tabCfg.color }}>{tabCfg.label}</span>
             <span style={{ marginLeft: 8, fontWeight: 900, fontSize: 14, color: tabCfg.color, backgroundColor: "white", padding: "1px 8px", borderRadius: 999, border: `1px solid ${tabCfg.border}` }}>
@@ -1482,12 +1482,15 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <ReportShareBar
               issues={visibleIssues}
-              label={`${tabCfg.emoji} ${tabCfg.label} Report${clientFilter !== "all" ? ` — ${clientFilter}` : ""}`}
+              label={`${tabCfg.label} Report${clientFilter !== "all" ? ` — ${clientFilter}` : ""}`}
               color={tabCfg.color}
             />
             {/* Resolve Selected — only shown when items are checked */}
             {selectedIssueIds.size > 0 && (
-              <button
+              <Button
+                size="sm"
+                variant="success"
+                icon={CheckSquare}
                 onClick={() => {
                   const ids = [...selectedIssueIds];
                   setResolvedIds((prev) => {
@@ -1503,15 +1506,17 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
                     return next;
                   });
                   setSelectedIssueIds(new Set());
-                  showToast(`✅ Resolved ${ids.length} selected`);
+                  showToast(`Resolved ${ids.length} selected`);
                 }}
-                style={{ padding: "5px 11px", borderRadius: 7, border: `1.5px solid #16a34a`, backgroundColor: "#f0fdf4", color: "#16a34a", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
               >
-                ✅ Resolve Selected ({selectedIssueIds.size})
-              </button>
+                Resolve Selected ({selectedIssueIds.size})
+              </Button>
             )}
             {visibleIssues.length > 0 && (
-              <button
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={CheckSquare}
                 onClick={() => {
                   const ids = visibleIssues.map((i) => i.id);
                   setResolvedIds((prev) => {
@@ -1527,12 +1532,11 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
                     return next;
                   });
                   setSelectedIssueIds(new Set());
-                  showToast(`✅ Resolved all ${ids.length} items`);
+                  showToast(`Resolved all ${ids.length} items`);
                 }}
-                style={{ padding: "5px 11px", borderRadius: 7, border: `1px solid ${tabCfg.color}`, backgroundColor: "white", color: tabCfg.color, fontSize: 11, fontWeight: 700, cursor: "pointer" }}
               >
-                ✅ Resolve All
-              </button>
+                Resolve All
+              </Button>
             )}
           </div>
         </div>
@@ -1543,7 +1547,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
             <div style={{ padding: "40px 0", textAlign: "center", color: "#9ca3af" }}>
               <CheckCircle size={32} style={{ color: "#4ade80", margin: "0 auto 10px", display: "block" }} />
               <p style={{ fontWeight: 600, margin: 0, fontSize: 13 }}>
-                {tabIssues.length === 0 ? `✅ No ${tabCfg.label} issues` : "All filtered out — clear filters to see more"}
+                {tabIssues.length === 0 ? `No ${tabCfg.label} issues` : "All filtered out — clear filters to see more"}
               </p>
             </div>
           ) : (
