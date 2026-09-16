@@ -1217,9 +1217,16 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
   const visibleIssues = tabIssues.filter((i) => !resolvedIds.has(i.id));
 
   // ── Counts after subtracting resolved ─────────────────────────────────────
+  // Matches the active client-filter dropdown — "all" means every client.
+  const clientMatches = useCallback((i) => clientFilter === "all" || i.employee?.client === clientFilter, [clientFilter]);
+
   const adjustedCounts = useMemo(() => {
     const result = { ...issues.counts };
-    // For each tab, count how many of its issues are resolved
+    // For each tab, recompute straight from that tab's actual list — filtered
+    // by the selected client (if any) and by resolved status — instead of
+    // subtracting a resolved-count from the hook's unfiltered global summary.
+    // That old approach left every KPI card / tab badge showing all-clients
+    // totals even while the visible issue list was correctly client-filtered.
     TABS.forEach(t => {
       if (t.key === "all") return; // calculated separately below
       let tabList;
@@ -1232,20 +1239,24 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
       } else {
         tabList = issues[t.key] || [];
       }
-      const resolvedInTab = tabList.filter(i => resolvedIds.has(i.id)).length;
-      result[t.key] = Math.max(0, (result[t.key] || 0) - resolvedInTab);
+      result[t.key] = tabList.filter(clientMatches).filter(i => !resolvedIds.has(i.id)).length;
     });
     // recalc partner count
     const partnerList = partnerIssues.filter(i => i._tab === "partner" || !i._tab);
-    result.partner = Math.max(0, partnerList.filter(i => !resolvedIds.has(i.id)).length);
-    // recalc critical badge
-    result.critical = Math.max(0, (issues.counts.critical || 0) -
-      (issues.all || []).filter(i => resolvedIds.has(i.id) && i.severity === "critical").length);
-    result.total = Math.max(0, (issues.counts.total || 0) - resolvedIds.size);
-    // "all" tab count = every unresolved issue across all tabs
+    result.partner = partnerList.filter(clientMatches).filter(i => !resolvedIds.has(i.id)).length;
+    // "all" tab / Total Issues KPI — same union + de-dup that the "All" tab's
+    // own issue list uses (issues.all plus any partner issues not already in it)
+    const seenAll = new Set((issues.all || []).map(i => i.id));
+    const extraPartnerAll = partnerIssues.filter(i => !seenAll.has(i.id));
+    const allFiltered = [...(issues.all || []), ...extraPartnerAll]
+      .filter(clientMatches)
+      .filter(i => !resolvedIds.has(i.id));
+    result.total = allFiltered.length;
     result.all = result.total;
+    // Critical KPI — from that same filtered list, not the global summary
+    result.critical = allFiltered.filter(i => i.severity === "critical").length;
     return result;
-  }, [issues, partnerIssues, resolvedIds]);
+  }, [issues, partnerIssues, resolvedIds, clientMatches]);
 
   // ─── Actions ───────────────────────────────────────────────────────────────
   const showToast = useCallback((msg, color = "#16a34a") => {
@@ -1353,7 +1364,15 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
       .slice(0, 5);
   }, [issues.byClient]);
 
-  const resolvedCount = resolvedIds.size;
+  const resolvedCount = useMemo(() => {
+    if (clientFilter === "all") return resolvedIds.size;
+    const seenAll = new Set((issues.all || []).map(i => i.id));
+    const extraPartnerAll = partnerIssues.filter(i => !seenAll.has(i.id));
+    return [...(issues.all || []), ...extraPartnerAll]
+      .filter(clientMatches)
+      .filter(i => resolvedIds.has(i.id))
+      .length;
+  }, [resolvedIds, clientFilter, issues.all, partnerIssues, clientMatches]);
 
   // ══════════════════════════════════════════════════════════════════════════
   // RENDER
