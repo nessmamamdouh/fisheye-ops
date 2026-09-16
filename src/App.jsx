@@ -19,7 +19,7 @@ import {
   Download, MessageCircle, Calendar, AlertCircle, Trash2,
   Menu, ChevronDown, Copy, Check, Mail, Filter, FileUp,
   Edit3, Save, Hash, Zap, ClipboardList, Briefcase, Archive, Globe, Link, Inbox, UserPlus, Database,
-  Target, CalendarDays, Receipt, AlertTriangle, RefreshCw, GitBranch, Award
+  Target, CalendarDays, Receipt, AlertTriangle, RefreshCw, GitBranch, Award, LogOut
 } from "lucide-react";
 import { ActionCenter } from './ActionCenterV2';
 import AuthGate, { useAuth } from './AuthGate';
@@ -225,6 +225,7 @@ const s = {
   sidebarNav: { flex:1, overflowY:"auto", padding:"8px 8px" },
   navBtn: (active) => ({ width:"100%", display:"flex", alignItems:"center", gap:9, padding:"8px 10px", borderRadius:8, border:"none", cursor:"pointer", fontSize:12, fontWeight: active ? 700 : 500, marginBottom:1, backgroundColor: active ? "rgba(160,40,67,0.18)" : "transparent", color: active ? "#f9a8b8" : "rgba(180,210,220,0.55)", whiteSpace:"nowrap", letterSpacing:"-0.01em", fontFamily:"var(--font-sans)", borderLeft: active ? "3px solid #A02843" : "3px solid transparent", transition:"all 0.15s" }),
   navBadge: { fontSize:9, fontWeight:800, padding:"2px 6px", borderRadius:999, backgroundColor:"#fde047", color:"#713f12", marginLeft:"auto", letterSpacing:"0", fontFamily:"var(--font-mono)" },
+  sidebarFooter: { padding:"10px 10px 12px", borderTop:"1px solid rgba(255,255,255,0.07)", flexShrink:0 },
   sidebarToggle: { padding:"6px 8px", borderTop:"1px solid rgba(255,255,255,0.07)", flexShrink:0 },
   toggleBtn: { width:"100%", padding:7, display:"flex", alignItems:"center", justifyContent:"center", backgroundColor:"transparent", border:"none", cursor:"pointer", color:"rgba(255,200,200,0.35)", borderRadius:7, fontFamily:"inherit", transition:"color 0.15s" },
   main: { flex:1, display:"flex", flexDirection:"column", minWidth:0, overflow:"hidden" },
@@ -6600,6 +6601,71 @@ function FisheyeOpsPro({ employees, setEmployees }) {
             );
           })}
         </nav>
+        <div style={s.sidebarFooter}>
+          {open ? (
+            <>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                <span style={{fontSize:10,fontWeight:700,color:"rgba(160,210,230,0.6)",fontFamily:"var(--font-sans)"}} title={session?.user?.email}>
+                  {isViewer ? "👁️ Viewer" : "🛡️ Admin"}
+                </span>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{position:"relative"}}>
+                    <Bell size={14}
+                      style={{color: notifications.length > 0 ? "#f9a8b8" : "rgba(160,210,230,0.45)", cursor:"pointer"}}
+                      onClick={() => setShowNotifications(p => !p)}/>
+                    {notifications.length > 0 && (
+                      <span style={{position:"absolute",top:-6,right:-6,width:14,height:14,borderRadius:"50%",backgroundColor:M,color:"white",fontSize:8,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        {notifications.length > 99 ? "99+" : notifications.length}
+                      </span>
+                    )}
+                    {showNotifications && (
+                      <div style={{position:"absolute",bottom:"calc(100% + 10px)",left:0,width:320,backgroundColor:"white",borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,0.25)",border:"1px solid #e5e7eb",zIndex:100,overflow:"hidden"}}>
+                        <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                          <p style={{margin:0,fontWeight:700,fontSize:13}}>التنبيهات</p>
+                          <span style={{fontSize:11,color:"#9ca3af"}}>{notifications.length} تنبيه</span>
+                        </div>
+                        <div style={{maxHeight:360,overflowY:"auto"}}>
+                          {notifications.length === 0
+                            ? <p style={{padding:"24px",textAlign:"center",color:"#9ca3af",fontSize:12}}>لا توجد تنبيهات</p>
+                            : notifications.map(n => (
+                                <div key={n.id} style={{padding:"12px 16px",borderBottom:"1px solid #f9fafb",display:"flex",gap:10,alignItems:"flex-start"}}>
+                                  <div style={{width:8,height:8,borderRadius:"50%",backgroundColor: n.type==='warning'?"#f59e0b":"#3b82f6",flexShrink:0,marginTop:4}}/>
+                                  <div>
+                                    <p style={{margin:0,fontWeight:600,fontSize:12,color:"#1f2937"}}>{n.title}</p>
+                                    <p style={{margin:"2px 0 0",fontSize:11,color:"#6b7280"}}>{n.message}</p>
+                                    <p style={{margin:"2px 0 0",fontSize:10,color:"#9ca3af"}}>{n.client}</p>
+                                  </div>
+                                </div>
+                              ))
+                          }
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => supabase.auth.signOut()}
+                    title="تسجيل خروج"
+                    style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#f9a8b8",fontFamily:"var(--font-sans)"}}
+                  ><LogOut size={13}/> خروج</button>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:9}}>
+                <div style={{width:28,height:28,borderRadius:8,backgroundColor:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:10,fontWeight:900,flexShrink:0}}>FO</div>
+                <div style={{minWidth:0}}>
+                  <p style={{margin:0,fontSize:11,fontWeight:700,color:"white",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Fisheye Admin</p>
+                  <p style={{margin:0,fontSize:10,color:"rgba(160,210,230,0.5)"}}>Super Admin</p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div style={{position:"relative", display:"flex", justifyContent:"center"}} title={`Fisheye Admin · Super Admin${notifications.length ? ` · ${notifications.length} notifications` : ""}`}>
+              <div style={{width:28,height:28,borderRadius:8,backgroundColor:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:10,fontWeight:900}}>FO</div>
+              {notifications.length > 0 && (
+                <span style={{position:"absolute",top:-4,right:-4,width:12,height:12,borderRadius:"50%",backgroundColor:M,border:"2px solid #00293A"}}/>
+              )}
+            </div>
+          )}
+        </div>
         <div style={s.sidebarToggle}>
           <button onClick={() => setOpen(p => !p)} className="fe-toggle-btn" style={s.toggleBtn}><Menu size={15}/></button>
         </div>
@@ -6607,68 +6673,15 @@ function FisheyeOpsPro({ employees, setEmployees }) {
 
       {/* ── Main ── */}
       <div style={s.main}>
-        {/* Topbar */}
-        <div style={s.topbar} className="fe-topbar">
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            {!["action","finance","billing","weeklyreport"].includes(nav) && (
-              <h1 style={{margin:0,fontSize:15,fontWeight:700,color:"#111827",letterSpacing:"-0.02em",fontFamily:"var(--font-sans)"}}>{labels[nav] || nav}</h1>
-            )}
+        {/* Page title — the Admin/notifications/logout/user cluster that used
+             to live in a topbar here has moved to the sidebar footer (see
+             sidebarFooter below); it's global chrome, not something that
+             needs to repeat above the content on every single screen. */}
+        {!["action","finance","billing","weeklyreport"].includes(nav) && (
+          <div style={s.topbar} className="fe-topbar">
+            <h1 style={{margin:0,fontSize:15,fontWeight:700,color:"#111827",letterSpacing:"-0.02em",fontFamily:"var(--font-sans)"}}>{labels[nav] || nav}</h1>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:16}}>
-            {/* Notifications Bell */}
-            <div style={{position:"relative"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginRight:4,paddingRight:12,borderRight:"1px solid #e5e7eb"}}>
-              <span style={{fontSize:11,fontWeight:700,color:"#6b7280",fontFamily:"var(--font-sans)"}} title={session?.user?.email}>
-                {isViewer ? "👁️ Viewer" : "🛡️ Admin"}
-              </span>
-              <button
-                onClick={() => supabase.auth.signOut()}
-                title="تسجيل خروج"
-                style={{border:"none",background:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#A02843",fontFamily:"var(--font-sans)"}}
-              >خروج</button>
-            </div>
-            <Bell size={17}
-                style={{color: notifications.length > 0 ? M : "#9ca3af", cursor:"pointer"}}
-                onClick={() => setShowNotifications(p => !p)}/>
-              {notifications.length > 0 && (
-                <span style={{position:"absolute",top:-6,right:-6,width:16,height:16,borderRadius:"50%",backgroundColor:M,color:"white",fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  {notifications.length > 99 ? "99+" : notifications.length}
-                </span>
-              )}
-              {showNotifications && (
-                <div style={{position:"absolute",top:"calc(100% + 12px)",right:0,width:320,backgroundColor:"white",borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,0.15)",border:"1px solid #e5e7eb",zIndex:100,overflow:"hidden"}}>
-                  <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                    <p style={{margin:0,fontWeight:700,fontSize:13}}>التنبيهات</p>
-                    <span style={{fontSize:11,color:"#9ca3af"}}>{notifications.length} تنبيه</span>
-                  </div>
-                  <div style={{maxHeight:360,overflowY:"auto"}}>
-                    {notifications.length === 0
-                      ? <p style={{padding:"24px",textAlign:"center",color:"#9ca3af",fontSize:12}}>لا توجد تنبيهات</p>
-                      : notifications.map(n => (
-                          <div key={n.id} style={{padding:"12px 16px",borderBottom:"1px solid #f9fafb",display:"flex",gap:10,alignItems:"flex-start"}}>
-                            <div style={{width:8,height:8,borderRadius:"50%",backgroundColor: n.type==='warning'?"#f59e0b":"#3b82f6",flexShrink:0,marginTop:4}}/>
-                            <div>
-                              <p style={{margin:0,fontWeight:600,fontSize:12,color:"#1f2937"}}>{n.title}</p>
-                              <p style={{margin:"2px 0 0",fontSize:11,color:"#6b7280"}}>{n.message}</p>
-                              <p style={{margin:"2px 0 0",fontSize:10,color:"#9ca3af"}}>{n.client}</p>
-                            </div>
-                          </div>
-                        ))
-                    }
-                  </div>
-                </div>
-              )}
-            </div>
-            {/* User */}
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:32,height:32,borderRadius:10,backgroundColor:M,display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:11,fontWeight:900}}>FO</div>
-              <div>
-                <p style={{margin:0,fontSize:11,fontWeight:700,color:"#1f2937"}}>Fisheye Admin</p>
-                <p style={{margin:0,fontSize:11,color:"#9ca3af"}}>Super Admin</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* ── Content ── */}
         <div id="app-main-content" style={s.content} className="fe-scroll">
