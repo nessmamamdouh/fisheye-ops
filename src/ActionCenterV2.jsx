@@ -605,7 +605,7 @@ function IssueCard({
             );
           })}
 
-          {wa && (
+          {wa ? (
             <a href={wa} target="_blank" rel="noreferrer" title="WhatsApp" style={{
               display: "inline-flex", alignItems: "center", justifyContent: "center",
               width: 30, height: 30, borderRadius: 6, flexShrink: 0,
@@ -613,6 +613,14 @@ function IssueCard({
             }}>
               <MessageCircle size={14}/>
             </a>
+          ) : (
+            <span title="No phone number on file" style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 30, height: 30, borderRadius: 6, flexShrink: 0,
+              backgroundColor: "#f3f4f6", color: "#d1d5db", cursor: "not-allowed",
+            }}>
+              <MessageCircle size={14}/>
+            </span>
           )}
 
           {overflowActions.length > 0 && (
