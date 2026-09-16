@@ -18,7 +18,7 @@ import {
   Send, ArrowUpCircle, ExternalLink, CheckSquare, GitBranch,
   ChevronDown, ChevronRight, X, Zap, Search, Filter, Users, User,
   Bell, TrendingUp, BarChart2, FileText, Building2,
-  Copy, Check, Mail, MessageCircle, Layers, CalendarDays, MoreHorizontal,
+  Copy, Check, Mail, MessageCircle, Layers, CalendarDays, MoreHorizontal, Wallet,
 } from "lucide-react";
 import { useOperationalIssues, daysUntil } from "./useOperationalIssues";
 import { Button, Badge } from "./components/ui";
@@ -274,7 +274,7 @@ const TABS = [
     color: "#7c3aed",
     bg: "#f3e8ff",
     border: "#c4b5fd",
-    icon: DollarSign,
+    icon: Wallet,
     desc: "Financial blockers",
   },
   {
