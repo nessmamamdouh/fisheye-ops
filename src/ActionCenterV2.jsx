@@ -1472,7 +1472,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
       </div>
 
       {/* ── Active Tab Content ──────────────────────────────────────────────── */}
-      <div style={{ borderRadius: 12, border: "1px solid #e5e7eb", overflow: "hidden", backgroundColor: "white", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+      <div style={{ borderRadius: 12, border: "1px solid #e5e7eb", overflow: "hidden", backgroundColor: "transparent", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
         {/* Tab content header */}
         <div style={{
           padding: "9px 14px", backgroundColor: tabCfg.bg,
