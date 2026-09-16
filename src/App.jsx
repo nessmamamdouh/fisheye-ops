@@ -19,7 +19,7 @@ import {
   Download, MessageCircle, Calendar, AlertCircle, Trash2,
   Menu, ChevronDown, Copy, Check, Mail, Filter, FileUp,
   Edit3, Save, Hash, Zap, ClipboardList, Briefcase, Archive, Globe, Link, Inbox, UserPlus, Database,
-  Target, CalendarDays, Receipt, AlertTriangle, RefreshCw, GitBranch, Award, LogOut
+  Target, CalendarDays, Receipt, AlertTriangle, RefreshCw, GitBranch, Award, LogOut, Wallet
 } from "lucide-react";
 import { ActionCenter } from './ActionCenterV2';
 import AuthGate, { useAuth } from './AuthGate';
@@ -217,14 +217,16 @@ const s = {
   // Layout
   appShell: { display:"flex", height:"100vh", overflow:"hidden", fontFamily:"var(--font-sans,'Plus Jakarta Sans',-apple-system,sans-serif)", backgroundColor:"var(--surface-sub,#f8f8f9)" },
   sidebar: (open) => ({ width: open ? 220 : 60, flexShrink:0, display:"flex", flexDirection:"column", background:"#00293A", borderRight:"1px solid rgba(255,255,255,0.06)", transition:"width 280ms cubic-bezier(0.4,0,0.2,1)", overflow:"hidden" }),
-  sidebarHeader: { padding:"16px 14px 14px", display:"flex", alignItems:"center", gap:11, borderBottom:"1px solid rgba(255,255,255,0.07)", flexShrink:0 },
+  sidebarHeader: { padding:"16px 14px 14px", display:"flex", alignItems:"center", gap:11, flexShrink:0 },
   sidebarLogo: { width:34, height:34, background:"#A02843", borderRadius:7, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, boxShadow:`0 0 0 1px rgba(255,255,255,0.15), 0 4px 12px rgba(0,0,0,0.35)` },
   sidebarBadge: { padding:"7px 10px", borderBottom:"1px solid rgba(255,255,255,0.07)", flexShrink:0 },
   sidebarBadgeInner: { display:"flex", alignItems:"center", gap:8, backgroundColor:"rgba(255,255,255,0.06)", borderRadius:7, padding:"6px 10px", border:"1px solid rgba(255,255,255,0.08)" },
-  sidebarDot: { width:6, height:6, borderRadius:"50%", backgroundColor:"#4ade80", flexShrink:0, boxShadow:"0 0 5px #4ade80" },
+  sidebarDot: { width:6, height:6, borderRadius:"50%", backgroundColor:"oklch(70% 0.12 152)", flexShrink:0, boxShadow:"0 0 6px oklch(70% 0.12 152 / 0.7)" },
   sidebarNav: { flex:1, overflowY:"auto", padding:"8px 8px" },
-  navBtn: (active) => ({ width:"100%", display:"flex", alignItems:"center", gap:9, padding:"8px 10px", borderRadius:8, border:"none", cursor:"pointer", fontSize:12, fontWeight: active ? 700 : 500, marginBottom:1, backgroundColor: active ? "rgba(160,40,67,0.18)" : "transparent", color: active ? "#f9a8b8" : "rgba(180,210,220,0.55)", whiteSpace:"nowrap", letterSpacing:"-0.01em", fontFamily:"var(--font-sans)", borderLeft: active ? "3px solid #A02843" : "3px solid transparent", transition:"all 0.15s" }),
-  navBadge: { fontSize:9, fontWeight:800, padding:"2px 6px", borderRadius:999, backgroundColor:"#fde047", color:"#713f12", marginLeft:"auto", letterSpacing:"0", fontFamily:"var(--font-mono)" },
+  navBtn: (active) => ({ width:"100%", display:"flex", alignItems:"center", gap:9, padding:"8px 10px", borderRadius:9, border:"none", cursor:"pointer", fontSize:12, fontWeight: active ? 700 : 500, marginBottom:1, backgroundColor: active ? "#A02843" : "transparent", color: active ? "white" : "rgba(180,210,220,0.65)", whiteSpace:"nowrap", letterSpacing:"-0.01em", fontFamily:"var(--font-sans)", transition:"all 0.15s" }),
+  navBadgeTotal: { fontSize:9, fontWeight:800, padding:"2px 7px", borderRadius:999, backgroundColor:"#A02843", color:"white", marginLeft:"auto", letterSpacing:"0", fontFamily:"var(--font-mono)" },
+  navBadgeWarn:  { fontSize:9, fontWeight:800, padding:"2px 7px", borderRadius:999, backgroundColor:"oklch(54% 0.13 78)", color:"white", marginLeft:"auto", letterSpacing:"0", fontFamily:"var(--font-mono)" },
+  navBadgeCount: { fontSize:10, fontWeight:700, padding:0, borderRadius:0, backgroundColor:"transparent", color:"rgba(180,210,220,0.6)", marginLeft:"auto", letterSpacing:"0", fontFamily:"var(--font-mono)" },
   sidebarFooter: { padding:"10px 10px 12px", borderTop:"1px solid rgba(255,255,255,0.07)", flexShrink:0 },
   sidebarToggle: { padding:"6px 8px", borderTop:"1px solid rgba(255,255,255,0.07)", flexShrink:0 },
   toggleBtn: { width:"100%", padding:7, display:"flex", alignItems:"center", justifyContent:"center", backgroundColor:"transparent", border:"none", cursor:"pointer", color:"rgba(255,200,200,0.35)", borderRadius:7, fontFamily:"inherit", transition:"color 0.15s" },
@@ -6438,9 +6440,9 @@ function FisheyeOpsPro({ employees, setEmployees }) {
     { k:"clients",      l:"Clients",        i:Building2,   section:null      },
     { k:"partners",     l:"Partners",       i:Briefcase,   section:null      },
     { k:"onboarding",   l:"Onboarding",     i:UserPlus,    section:"OPS"     },
-    { k:"finance",      l:"Finance",        i:DollarSign,  section:null      },
+    { k:"finance",      l:"Finance",        i:Wallet,      section:null      },
     { k:"bonus",        l:"My Bonus",       i:Award,       section:null      },
-    { k:"weeklyreport", l:"Reports",        i:FileText,    section:null      },
+    { k:"weeklyreport", l:"Reports",        i:FileText,    section:"INSIGHTS"},
     { k:"settings",     l:"Settings",       i:Settings,    section:"SYSTEM"  },
   ];
 
@@ -6496,13 +6498,15 @@ function FisheyeOpsPro({ employees, setEmployees }) {
             <p style={{color:"rgba(160,210,230,0.5)",fontSize:9,margin:"2px 0 0",fontWeight:500,letterSpacing:"0.1em",textTransform:"uppercase"}}>Executive Search · ERP</p>
           </div>}
         </div>
+        <div style={{height:2,background:"linear-gradient(90deg, #A02843 0%, rgba(160,40,67,0) 65%)",flexShrink:0}}/>
         {open && (
           <div style={s.sidebarBadge}>
             <div style={s.sidebarBadgeInner}>
-              <div style={s.sidebarDot} className="fe-pulse"/>
+              <FileText size={12} style={{color:"oklch(70% 0.12 152)",flexShrink:0}}/>
               <span style={{color:"white",fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                 {employees.length} contracts
               </span>
+              <div style={{...s.sidebarDot,marginLeft:"auto"}} className="fe-pulse"/>
             </div>
           </div>
         )}
@@ -6578,10 +6582,20 @@ function FisheyeOpsPro({ employees, setEmployees }) {
                         : k==="onboarding" ? onboardingBadge
                         : k==="report"     ? report.pendingCount
                         : 0;
+            // Badge color follows what the number MEANS, not one loud color
+            // for every number: "action" is the whole backlog (brand
+            // crimson); "workforce"/"finance" are things that need attention
+            // (contracts expiring soon / payroll blockers) so they get the
+            // warning tone; everything else is a quiet status count.
+            const badgeKind  = k==="action" ? "total" : (k==="workforce" || k==="finance") ? "warn" : "count";
+            const badgeStyle = badgeKind==="total" ? s.navBadgeTotal : badgeKind==="warn" ? s.navBadgeWarn : s.navBadgeCount;
             return (
               <React.Fragment key={k}>
                 {section && open && (
-                  <p style={{fontSize:9,fontWeight:700,color:"rgba(160,210,230,0.35)",letterSpacing:"0.1em",textTransform:"uppercase",margin:"14px 0 4px",paddingLeft:12,fontFamily:"var(--font-sans)"}}>{section}</p>
+                  <div style={{display:"flex",alignItems:"center",gap:6,margin:"14px 0 4px",paddingLeft:12}}>
+                    <span style={{width:10,height:2,borderRadius:2,backgroundColor:"#A02843",opacity:0.55,flexShrink:0}}/>
+                    <p style={{fontSize:9,fontWeight:700,color:"rgba(160,210,230,0.35)",letterSpacing:"0.1em",textTransform:"uppercase",margin:0,fontFamily:"var(--font-sans)"}}>{section}</p>
+                  </div>
                 )}
                 {section && !open && (
                   <div style={{height:1,margin:"8px 4px",backgroundColor:"rgba(255,255,255,0.07)"}}/>
@@ -6592,10 +6606,10 @@ function FisheyeOpsPro({ employees, setEmployees }) {
                   style={s.navBtn(isA)}
                   title={!open ? l : undefined}
                 >
-                  <Icon size={15} style={{flexShrink:0, color: isA ? "#f9a8b8" : "rgba(160,210,230,0.45)"}}/>
+                  <Icon size={15} style={{flexShrink:0, color: isA ? "white" : "rgba(160,210,230,0.6)"}}/>
                   {open && <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis"}}>{l}</span>}
-                  {open && badge > 0 && <span key={badge} className="fe-notif-badge fe-badge-pop" style={s.navBadge}>{badge}</span>}
-                  {!open && badge > 0 && <span key={badge} className="fe-badge-pop" style={{...s.navBadge,position:"absolute",top:4,right:4,fontSize:8,padding:"1px 4px"}}>{badge}</span>}
+                  {open && badge > 0 && <span key={badge} className="fe-notif-badge fe-badge-pop" style={badgeStyle}>{badge}</span>}
+                  {!open && badge > 0 && <span key={badge} className="fe-badge-pop" style={{...badgeStyle,position:"absolute",top:4,right:4,fontSize:8,padding:"1px 4px"}}>{badge}</span>}
                 </button>
               </React.Fragment>
             );
@@ -6603,60 +6617,51 @@ function FisheyeOpsPro({ employees, setEmployees }) {
         </nav>
         <div style={s.sidebarFooter}>
           {open ? (
-            <>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                <span style={{fontSize:10,fontWeight:700,color:"rgba(160,210,230,0.6)",fontFamily:"var(--font-sans)"}} title={session?.user?.email}>
-                  {isViewer ? "👁️ Viewer" : "🛡️ Admin"}
-                </span>
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <div style={{position:"relative"}}>
-                    <Bell size={14}
-                      style={{color: notifications.length > 0 ? "#f9a8b8" : "rgba(160,210,230,0.45)", cursor:"pointer"}}
-                      onClick={() => setShowNotifications(p => !p)}/>
-                    {notifications.length > 0 && (
-                      <span style={{position:"absolute",top:-6,right:-6,width:14,height:14,borderRadius:"50%",backgroundColor:M,color:"white",fontSize:8,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                        {notifications.length > 99 ? "99+" : notifications.length}
-                      </span>
-                    )}
-                    {showNotifications && (
-                      <div style={{position:"absolute",bottom:"calc(100% + 10px)",left:0,width:320,backgroundColor:"white",borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,0.25)",border:"1px solid #e5e7eb",zIndex:100,overflow:"hidden"}}>
-                        <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                          <p style={{margin:0,fontWeight:700,fontSize:13}}>التنبيهات</p>
-                          <span style={{fontSize:11,color:"#9ca3af"}}>{notifications.length} تنبيه</span>
-                        </div>
-                        <div style={{maxHeight:360,overflowY:"auto"}}>
-                          {notifications.length === 0
-                            ? <p style={{padding:"24px",textAlign:"center",color:"#9ca3af",fontSize:12}}>لا توجد تنبيهات</p>
-                            : notifications.map(n => (
-                                <div key={n.id} style={{padding:"12px 16px",borderBottom:"1px solid #f9fafb",display:"flex",gap:10,alignItems:"flex-start"}}>
-                                  <div style={{width:8,height:8,borderRadius:"50%",backgroundColor: n.type==='warning'?"#f59e0b":"#3b82f6",flexShrink:0,marginTop:4}}/>
-                                  <div>
-                                    <p style={{margin:0,fontWeight:600,fontSize:12,color:"#1f2937"}}>{n.title}</p>
-                                    <p style={{margin:"2px 0 0",fontSize:11,color:"#6b7280"}}>{n.message}</p>
-                                    <p style={{margin:"2px 0 0",fontSize:10,color:"#9ca3af"}}>{n.client}</p>
-                                  </div>
-                                </div>
-                              ))
-                          }
-                        </div>
-                      </div>
-                    )}
+            <div style={{display:"flex",alignItems:"center",gap:8}} title={`${isViewer ? "Viewer" : "Admin"} \u00b7 Fisheye Admin \u00b7 Super Admin`}>
+              <div style={{position:"relative",width:28,height:28,borderRadius:8,backgroundColor:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:10,fontWeight:900,flexShrink:0}}>
+                FO
+                <span style={{position:"absolute",bottom:-1,right:-1,width:8,height:8,borderRadius:"50%",backgroundColor:"oklch(70% 0.12 152)",border:"1.5px solid #00293A"}}/>
+              </div>
+              <p style={{flex:1,minWidth:0,margin:0,fontSize:11,fontWeight:700,color:"white",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Fisheye Admin</p>
+              <div style={{position:"relative"}}>
+                <Bell size={14}
+                  style={{color: notifications.length > 0 ? "#ff8fa3" : "rgba(160,210,230,0.5)", cursor:"pointer"}}
+                  onClick={() => setShowNotifications(p => !p)}/>
+                {notifications.length > 0 && (
+                  <span style={{position:"absolute",top:-6,right:-6,width:14,height:14,borderRadius:"50%",backgroundColor:M,color:"white",fontSize:8,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    {notifications.length > 99 ? "99+" : notifications.length}
+                  </span>
+                )}
+                {showNotifications && (
+                  <div style={{position:"absolute",bottom:"calc(100% + 10px)",left:0,width:320,backgroundColor:"white",borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,0.25)",border:"1px solid #e5e7eb",zIndex:100,overflow:"hidden"}}>
+                    <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <p style={{margin:0,fontWeight:700,fontSize:13}}>\u0627\u0644\u062a\u0646\u0628\u064a\u0647\u0627\u062a</p>
+                      <span style={{fontSize:11,color:"#9ca3af"}}>{notifications.length} \u062a\u0646\u0628\u064a\u0647</span>
+                    </div>
+                    <div style={{maxHeight:360,overflowY:"auto"}}>
+                      {notifications.length === 0
+                        ? <p style={{padding:"24px",textAlign:"center",color:"#9ca3af",fontSize:12}}>\u0644\u0627 \u062a\u0648\u062c\u062f \u062a\u0646\u0628\u064a\u0647\u0627\u062a</p>
+                        : notifications.map(n => (
+                            <div key={n.id} style={{padding:"12px 16px",borderBottom:"1px solid #f9fafb",display:"flex",gap:10,alignItems:"flex-start"}}>
+                              <div style={{width:8,height:8,borderRadius:"50%",backgroundColor: n.type==='warning'?"#f59e0b":"#3b82f6",flexShrink:0,marginTop:4}}/>
+                              <div>
+                                <p style={{margin:0,fontWeight:600,fontSize:12,color:"#1f2937"}}>{n.title}</p>
+                                <p style={{margin:"2px 0 0",fontSize:11,color:"#6b7280"}}>{n.message}</p>
+                                <p style={{margin:"2px 0 0",fontSize:10,color:"#9ca3af"}}>{n.client}</p>
+                              </div>
+                            </div>
+                          ))
+                      }
+                    </div>
                   </div>
-                  <button
-                    onClick={() => supabase.auth.signOut()}
-                    title="تسجيل خروج"
-                    style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",cursor:"pointer",fontSize:11,fontWeight:700,color:"#f9a8b8",fontFamily:"var(--font-sans)"}}
-                  ><LogOut size={13}/> خروج</button>
-                </div>
+                )}
               </div>
-              <div style={{display:"flex",alignItems:"center",gap:9}}>
-                <div style={{width:28,height:28,borderRadius:8,backgroundColor:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:10,fontWeight:900,flexShrink:0}}>FO</div>
-                <div style={{minWidth:0}}>
-                  <p style={{margin:0,fontSize:11,fontWeight:700,color:"white",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Fisheye Admin</p>
-                  <p style={{margin:0,fontSize:10,color:"rgba(160,210,230,0.5)"}}>Super Admin</p>
-                </div>
-              </div>
-            </>
+              <button
+                onClick={() => supabase.auth.signOut()}
+                title="\u062a\u0633\u062c\u064a\u0644 \u062e\u0631\u0648\u062c"
+                style={{display:"flex",alignItems:"center",border:"none",background:"none",cursor:"pointer",color:"#ff8fa3",padding:0,flexShrink:0}}
+              ><LogOut size={14}/></button>
+            </div>
           ) : (
             <div style={{position:"relative", display:"flex", justifyContent:"center"}} title={`Fisheye Admin · Super Admin${notifications.length ? ` · ${notifications.length} notifications` : ""}`}>
               <div style={{width:28,height:28,borderRadius:8,backgroundColor:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:10,fontWeight:900}}>FO</div>
