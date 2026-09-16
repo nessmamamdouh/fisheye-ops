@@ -735,7 +735,7 @@ function IssueCard({
 // ═══════════════════════════════════════════════════════════════════════════════
 function TabNavBar({ counts, activeTab, setActiveTab }) {
   return (
-    <div style={{ display: "flex", gap: 22, borderBottom: "1px solid #e5e7eb" }}>
+    <div style={{ display: "flex", gap: 22, justifyContent: "space-between", borderBottom: "1px solid #e5e7eb" }}>
       {TABS.map((tab) => {
         const count = counts[tab.key] || 0;
         const isActive = activeTab === tab.key;
@@ -1444,6 +1444,9 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
           </div>
         </div>
       )}
+
+      {/* ── Divider — clearer separation from the KPI/stats section above ──── */}
+      <div style={{ height: 1, backgroundColor: "#e5e7eb", margin: "4px 0 16px" }} />
 
       {/* ── Tab Navigation ──────────────────────────────────────────────────── */}
       <TabNavBar counts={adjustedCounts} activeTab={activeTab} setActiveTab={handleSetActiveTab} />
