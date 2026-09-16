@@ -544,7 +544,8 @@ function IssueCard({
     }}>
       {/* ── Main row ── */}
       <div style={{ padding: "11px 14px" }}>
-        {/* Row 1: Name + badges */}
+        {/* Row 1: Name + badges, with the action buttons aligned on the same line
+             (moved up from their own row below to keep the card compact). */}
         <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
           {/* Bulk select checkbox */}
           {onToggleSelect && (
@@ -576,110 +577,111 @@ function IssueCard({
               {label}
             </p>
           </div>
+
+          {/* Unified action row — up to 2 visible actions + WA + overflow menu.
+               The WorkflowPicker dropdown lives once at this row's level (not nested
+               inside the overflow menu's conditional render) so it stays open and
+               anchored whether "Update Workflow" was clicked as a visible button or
+               from inside the "more actions" menu — closing the overflow menu must
+               never also unmount the picker it just opened. */}
+          <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", flexShrink: 0 }}>
+            {visibleActions.map((action) => {
+              const meta = ACTION_META[action];
+              if (!meta) return null;
+              const isPrimary = action === "send_reminder" || action === "follow_up";
+              return (
+                <Button
+                  key={action}
+                  size="sm"
+                  variant={isPrimary ? "primary" : "ghost"}
+                  icon={meta.icon}
+                  onClick={() => handleAction(action)}
+                >
+                  {meta.label}
+                </Button>
+              );
+            })}
+
+            {wa ? (
+              <a href={wa} target="_blank" rel="noreferrer" title="WhatsApp" style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                width: 30, height: 30, borderRadius: 6, flexShrink: 0,
+                backgroundColor: "#dcfce7", color: "#16a34a",
+              }}>
+                <MessageCircle size={14}/>
+              </a>
+            ) : (
+              <span title="No phone number on file" style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                width: 30, height: 30, borderRadius: 6, flexShrink: 0,
+                backgroundColor: "#f3f4f6", color: "#d1d5db", cursor: "not-allowed",
+              }}>
+                <MessageCircle size={14}/>
+              </span>
+            )}
+
+            {overflowActions.length > 0 && (
+              <div style={{ position: "relative" }}>
+                <button
+                  onClick={() => setShowMore((s) => !s)}
+                  title="More actions"
+                  style={{
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    width: 30, height: 30, borderRadius: 6, cursor: "pointer",
+                    border: "1px solid #e5e7eb", backgroundColor: "white", color: "#9ca3af",
+                  }}
+                >
+                  <MoreHorizontal size={16}/>
+                </button>
+                {showMore && (
+                  <>
+                    <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setShowMore(false)} />
+                    <div style={{
+                      position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 50,
+                      width: 190, backgroundColor: "white", border: "1px solid #e5e7eb",
+                      borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", overflow: "hidden",
+                    }}>
+                      {overflowActions.map((action) => {
+                        const meta = ACTION_META[action];
+                        if (!meta) return null;
+                        const Icon = meta.icon;
+                        return (
+                          <button
+                            key={action}
+                            onClick={() => handleAction(action)}
+                            style={{
+                              width: "100%", display: "flex", alignItems: "center", gap: 8,
+                              padding: "9px 12px", fontSize: 12, fontWeight: 600, color: "#374151",
+                              background: "none", border: "none", cursor: "pointer", textAlign: "left",
+                            }}
+                          >
+                            <Icon size={13} style={{ color: meta.color }}/> {meta.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {showWFPicker && (
+              <WorkflowPicker
+                onPick={(wf) => { onUpdateWorkflow(e._id, wf); setShowWFPicker(false); }}
+                onClose={() => setShowWFPicker(false)}
+              />
+            )}
+          </div>
         </div>
 
         {/* Row 3: Meta */}
-        <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#9ca3af", flexWrap: "wrap", marginBottom: 10 }}>
+        <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#9ca3af", flexWrap: "wrap" }}>
           {e?.position && <span>{e.position}</span>}
           {e?.project  && <span>· {e.project}</span>}
           {e?.endDate  && <span>· Ends {fmt(e.endDate)}</span>}
           <span style={{ color: "#6b7280", display: "flex", alignItems: "center", gap: 3 }}>
             <User size={10}/> {owner}
           </span>
-        </div>
-
-        {/* Row 4: unified action row — up to 2 visible actions + WA + overflow menu, right-aligned.
-             The WorkflowPicker dropdown lives once at this row's level (not nested inside the
-             overflow menu's conditional render) so it stays open and anchored whether "Update
-             Workflow" was clicked as a visible button or from inside the "more actions" menu —
-             closing the overflow menu must never also unmount the picker it just opened. */}
-        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 7, flexWrap: "wrap" }}>
-          {visibleActions.map((action) => {
-            const meta = ACTION_META[action];
-            if (!meta) return null;
-            const isPrimary = action === "send_reminder" || action === "follow_up";
-            return (
-              <Button
-                key={action}
-                size="sm"
-                variant={isPrimary ? "primary" : "ghost"}
-                icon={meta.icon}
-                onClick={() => handleAction(action)}
-              >
-                {meta.label}
-              </Button>
-            );
-          })}
-
-          {wa ? (
-            <a href={wa} target="_blank" rel="noreferrer" title="WhatsApp" style={{
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              width: 30, height: 30, borderRadius: 6, flexShrink: 0,
-              backgroundColor: "#dcfce7", color: "#16a34a",
-            }}>
-              <MessageCircle size={14}/>
-            </a>
-          ) : (
-            <span title="No phone number on file" style={{
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              width: 30, height: 30, borderRadius: 6, flexShrink: 0,
-              backgroundColor: "#f3f4f6", color: "#d1d5db", cursor: "not-allowed",
-            }}>
-              <MessageCircle size={14}/>
-            </span>
-          )}
-
-          {overflowActions.length > 0 && (
-            <div style={{ position: "relative" }}>
-              <button
-                onClick={() => setShowMore((s) => !s)}
-                title="More actions"
-                style={{
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  width: 30, height: 30, borderRadius: 6, cursor: "pointer",
-                  border: "1px solid #e5e7eb", backgroundColor: "white", color: "#9ca3af",
-                }}
-              >
-                <MoreHorizontal size={16}/>
-              </button>
-              {showMore && (
-                <>
-                  <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setShowMore(false)} />
-                  <div style={{
-                    position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 50,
-                    width: 190, backgroundColor: "white", border: "1px solid #e5e7eb",
-                    borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", overflow: "hidden",
-                  }}>
-                    {overflowActions.map((action) => {
-                      const meta = ACTION_META[action];
-                      if (!meta) return null;
-                      const Icon = meta.icon;
-                      return (
-                        <button
-                          key={action}
-                          onClick={() => handleAction(action)}
-                          style={{
-                            width: "100%", display: "flex", alignItems: "center", gap: 8,
-                            padding: "9px 12px", fontSize: 12, fontWeight: 600, color: "#374151",
-                            background: "none", border: "none", cursor: "pointer", textAlign: "left",
-                          }}
-                        >
-                          <Icon size={13} style={{ color: meta.color }}/> {meta.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {showWFPicker && (
-            <WorkflowPicker
-              onPick={(wf) => { onUpdateWorkflow(e._id, wf); setShowWFPicker(false); }}
-              onClose={() => setShowWFPicker(false)}
-            />
-          )}
         </div>
       </div>
 
