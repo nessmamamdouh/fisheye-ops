@@ -1329,7 +1329,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
     <div className="font-sans" style={{ display: "flex", flexDirection: "column", gap: 0, zoom: 0.85 }}>
 
       {/* ── Page Header ─────────────────────────────────────────────────────── */}
-      <div style={{ marginBottom: 16, display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+      <div style={{ marginBottom: 12, display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
             <div style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: M, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1363,14 +1363,14 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
       </div>
 
       {/* ── KPI Strip ───────────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 12 }}>
         {[
           { label: "Total Issues",    value: adjustedCounts.total || 0,    color: M,         accent: M,         bg: "#fff5f5", border: `${M}22`  },
           { label: "Critical",        value: adjustedCounts.critical || 0, color: "#dc2626", accent: "#dc2626", bg: "#fef2f2", border: "#fca5a5" },
           { label: "Resolved",        value: resolvedCount,                color: "#059669", accent: "#059669", bg: "#f0fdf4", border: "#bbf7d0" },
           { label: "Payroll Blockers",value: adjustedCounts.payroll || 0,  color: "#7c3aed", accent: "#7c3aed", bg: "#faf5ff", border: "#ddd6fe" },
         ].map(k => (
-          <div key={k.label} style={{ padding: "13px 15px", borderRadius: 10, backgroundColor: k.bg, borderLeft: `4px solid ${k.accent}` }}>
+          <div key={k.label} style={{ padding: "11px 13px", borderRadius: 10, backgroundColor: k.bg, borderLeft: `4px solid ${k.accent}` }}>
             <p style={{ margin: "0 0 5px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.06em" }}>{k.label}</p>
             <p className="font-mono" style={{ color: k.color, margin: 0, fontSize: 22, fontWeight: 800, lineHeight: 1 }}>{k.value}</p>
           </div>
@@ -1379,7 +1379,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
 
       {/* ── Stats Panel ─────────────────────────────────────────────────────── */}
       {showStats && (
-        <div style={{ padding: 16, borderRadius: 12, border: "1px solid #e5e7eb", backgroundColor: "white", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+        <div style={{ padding: 14, borderRadius: 12, border: "1px solid #e5e7eb", backgroundColor: "white", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 12 }}>
           <div>
             <p style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", margin: "0 0 10px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Issues by Category</p>
             {TABS.map((tab) => {
@@ -1418,9 +1418,9 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
       {/* ── Filters row ─────────────────────────────────────────────────────── */}
       <div style={{
         display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center",
-        padding: "10px 14px", backgroundColor: "#f9fafb",
+        padding: "8px 12px", backgroundColor: "#f9fafb",
         border: "1px solid #f3f4f6", borderTop: "none", borderRadius: "0 0 0 0",
-        marginBottom: 12,
+        marginBottom: 9,
       }}>
         {/* Search */}
         <div style={{ position: "relative", flex: 1, minWidth: 180 }}>
@@ -1475,7 +1475,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
       <div style={{ borderRadius: 12, border: "1px solid #e5e7eb", overflow: "hidden", backgroundColor: "white", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
         {/* Tab content header */}
         <div style={{
-          padding: "10px 16px", backgroundColor: tabCfg.bg,
+          padding: "9px 14px", backgroundColor: tabCfg.bg,
           borderBottom: `1px solid ${tabCfg.border}`,
           display: "flex", alignItems: "center", gap: 10,
           borderLeft: `4px solid ${tabCfg.color}`,
@@ -1551,7 +1551,7 @@ export function ActionCenter({ employees = [], setEmployees, onNavigate, onOpenE
         </div>
 
         {/* Issue list */}
-        <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8, maxHeight: 560, overflowY: "auto" }}>
+        <div style={{ padding: 10, display: "flex", flexDirection: "column", gap: 7, maxHeight: 560, overflowY: "auto" }}>
           {visibleIssues.length === 0 ? (
             <div style={{ padding: "40px 0", textAlign: "center", color: "#9ca3af" }}>
               <CheckCircle size={32} style={{ color: "#4ade80", margin: "0 auto 10px", display: "block" }} />
