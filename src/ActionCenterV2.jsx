@@ -385,37 +385,56 @@ function ClientBadge({ client }) {
   );
 }
 
-// ─── Workflow Picker (inline dropdown for Move Workflow action) ───────────────
-function WorkflowPicker({ onPick, onClose }) {
+// ─── Workflow Picker (slide-in panel for Move Workflow action) ───────────────
+// A fixed, viewport-anchored panel (not positioned relative to the trigger
+// button) — this is what keeps it from ever rendering underneath another
+// card's buttons, since it no longer lives inside any card's own stacking
+// context.
+function WorkflowPicker({ onPick, onClose, employeeName }) {
   return (
-    <div style={{
-      position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 50,
-      backgroundColor: "white", border: "1px solid #e5e7eb", borderRadius: 10,
-      boxShadow: "0 8px 24px rgba(0,0,0,0.12)", width: 200, overflow: "hidden",
-    }}>
-      <div style={{
-        padding: "7px 12px", borderBottom: "1px solid #f3f4f6",
-        fontSize: 10, fontWeight: 700, color: "#6b7280", backgroundColor: "#fdf8f8",
-        display: "flex", justifyContent: "space-between", alignItems: "center",
+    <div
+      className="wf-panel-backdrop"
+      style={{
+        position: "fixed", inset: 0, backgroundColor: "rgba(17,24,39,0.35)",
+        zIndex: 200, display: "flex", justifyContent: "flex-end",
+      }}
+      onClick={(ev) => ev.target === ev.currentTarget && onClose()}
+    >
+      <div className="wf-panel" style={{
+        width: 300, maxWidth: "88vw", height: "100%", backgroundColor: "white",
+        boxShadow: "-12px 0 32px rgba(0,0,0,0.16)",
+        display: "flex", flexDirection: "column",
       }}>
-        Set Workflow
-        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af" }}>
-          <X size={11} />
-        </button>
-      </div>
-      <div style={{ maxHeight: 220, overflowY: "auto" }}>
-        {WORKFLOW_OPTS.map((opt) => (
-          <button key={opt} onClick={() => onPick(opt)} style={{
-            width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 12,
-            border: "none", backgroundColor: "transparent", cursor: "pointer",
-            color: "#374151",
-          }}
-            onMouseEnter={(e) => e.target.style.backgroundColor = "#f9fafb"}
-            onMouseLeave={(e) => e.target.style.backgroundColor = "transparent"}
-          >
-            {opt}
+        <div style={{
+          padding: "16px 18px", borderBottom: "1px solid #f3f4f6",
+          display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0,
+        }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>Set Workflow</h3>
+            {employeeName && (
+              <p style={{ margin: "2px 0 0", fontSize: 11, color: "#9ca3af" }}>{employeeName}</p>
+            )}
+          </div>
+          <button onClick={onClose} title="Close" style={{
+            background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: 2,
+          }}>
+            <X size={16} />
           </button>
-        ))}
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px" }}>
+          {WORKFLOW_OPTS.map((opt) => (
+            <button key={opt} onClick={() => onPick(opt)} style={{
+              width: "100%", textAlign: "left", padding: "11px 12px", fontSize: 13, fontWeight: 600,
+              borderRadius: 8, marginBottom: 2, border: "none", backgroundColor: "transparent",
+              cursor: "pointer", color: "#374151", transition: "background-color 0.12s",
+            }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f9fafb"}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -667,6 +686,7 @@ function IssueCard({
 
             {showWFPicker && (
               <WorkflowPicker
+                employeeName={e?.name}
                 onPick={(wf) => { onUpdateWorkflow(e._id, wf); setShowWFPicker(false); }}
                 onClose={() => setShowWFPicker(false)}
               />

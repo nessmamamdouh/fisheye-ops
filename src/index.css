@@ -84,6 +84,18 @@
 .ds-modal-box { animation: ds-modal-in 200ms cubic-bezier(0.23, 1, 0.32, 1) both; }
 .ds-overlay   { animation: ds-overlay-in 160ms ease-out both; }
 
+/* Slide-in panel (Workflow picker, and any future edge drawer). Same gate
+   and curve as the modal above (occasional/spatial-consistency, strong
+   ease-out) — reusing ds-modal-in's curve rather than a new one, per the
+   one-motion-system rule. transform/opacity only; the backdrop reuses
+   ds-overlay-in verbatim. */
+@keyframes ds-drawer-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.wf-panel-backdrop { animation: ds-overlay-in 160ms ease-out both; }
+.wf-panel          { animation: ds-drawer-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+
 /* Signature marks — the one recurring visual idiom reused across the new
    component library (Tabs indicator, Modal top bar, StyleGuide hero rule)
    so the crimson+navy brand pairing reads as a deliberate motif rather
