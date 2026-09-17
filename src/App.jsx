@@ -5388,8 +5388,22 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                 )}
                 {projectsOpen && (
                   <div style={{ padding: "14px 16px", borderTop: "1px solid #f3f4f6", backgroundColor: "#FCFBF9", display: "flex", flexDirection: "column", gap: 8 }}>
-                    <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", lineHeight: 1.6 }}>
-                      أي مشروع جديد اسمه (أو جزء منه) يطابق واحدة من الكلمات دي، هيتحط تلقائي تحت "{row.name || matchName}".
+                    <div>
+                      <p style={{ margin: "0 0 6px", fontSize: 10.5, fontWeight: 700, color: MD, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                        Real projects on record ({clientProjectNames.length})
+                      </p>
+                      {clientProjectNames.length === 0 ? (
+                        <p style={{ margin: 0, fontSize: 12, color: "#c4c4c4" }}>مفيش موظفين ليهم اسم مشروع مسجل تحت "{row.name || matchName}" لسه.</p>
+                      ) : (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {clientProjectNames.map(p => (
+                            <span key={p} style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 600, color: MD, backgroundColor: `${MD}0a`, padding: "4px 9px", borderRadius: 999 }}>{p}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af", lineHeight: 1.6 }}>
+                      دي أسماء المشاريع الحقيقية المسجلة فعليًا على موظفين تحت العميل ده — مش مربوطة تلقائي بحاجة. اللي بيربطها فعليًا بالعميل ده الكلمات المفتاحية تحت: أي مشروع جديد اسمه (أو جزء منه) يطابق واحدة منها، هيتحط تلقائي تحت "{row.name || matchName}".
                     </p>
                     {clientRules.length === 0 && (
                       <p style={{ margin: 0, fontSize: 12, color: "#c4c4c4" }}>مفيش مشاريع مربوطة لسه — أي موظف من غير مشروع مطابق هيروح للعميل الافتراضي.</p>
