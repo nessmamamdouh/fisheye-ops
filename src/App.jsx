@@ -5381,7 +5381,7 @@ function SettingsView({
   const isAdmin = __profile?.role === 'admin';
   const [tab,setTab]=useState("general");
   const [confirmClear,setConfirmClear]=useState(false);
-  const stabs=[{k:"general",l:"General"},{k:"notifications",l:"🔔 Notifications"},{k:"config",l:"🗂️ Configuration"},{k:"integration",l:"Integration Guide"},{k:"mapping",l:"Client Mapping"},{k:"logic",l:"Report Logic"}];
+  const stabs=[{k:"general",l:"General"},{k:"notifications",l:"🔔 Notifications"},{k:"config",l:"🗂️ Configuration"},{k:"integration",l:"Integration Guide"},{k:"logic",l:"Report Logic"}];
   if (isAdmin) stabs.push({k:"team",l:"👥 Team"});
   return (
     <div style={{maxWidth:720,display:"flex",flexDirection:"column",gap:20}}>
@@ -5470,20 +5470,6 @@ function SettingsView({
             </Card>
           ))}
         </div>
-      )}
-      {tab==="mapping"&&(
-        <Card style={{padding:20}}>
-          <h3 style={{fontWeight:700,fontSize:14,margin:"0 0 16px"}}>Client Mapping Rules</h3>
-          {getEffectiveMappingRules().map((r,i)=>(
-            <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #f3f4f6"}}>
-              <ClientBadge client={r.client}/>
-              <span style={{fontSize:11,color:"#9ca3af",fontFamily:"monospace"}}>
-                {r.matchType==="default" ? "All other projects (default)" : r.matchType==="exact" ? `Project = "${r.value}" (exact)` : `Contains "${r.value}"`}
-              </span>
-            </div>
-          ))}
-          <p style={{fontSize:11,color:"#9ca3af",margin:"14px 0 0"}}>عايزة تعدّلي القواعد دي؟ من تاب <b>🗂️ Configuration</b> جنبها.</p>
-        </Card>
       )}
       {tab==="logic"&&(
         <Card style={{padding:20}}>
