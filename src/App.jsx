@@ -12,7 +12,7 @@ import WeeklyReportGenerator from './Weeklyreportgenerator';
 import { useSupabaseSync } from './hooks/useSupabaseSync';
 import { supabase, testConnection } from './utils/supabase';
 import { isExcluded, isWFDone, hasMissingPO, hasValidPO, getClientsList } from './utils/helpers';
-import { getEffectiveClientsList, getEffectiveClientMeta, getEffectiveMappingRules, CLIENT_COLOR_PALETTE, CONFIG_KEY, classifyProject, classifyProjectStrict, sanitizeClientName, clientRequiresPO, DEFAULT_CLIENTS_LIST, DEFAULT_CLIENT_META, loadAppConfig, getEffectiveMargin, dealHasAnyValue, computeDealMargin } from './utils/appConfig';
+import { getEffectiveClientsList, getEffectiveClientMeta, getEffectiveMappingRules, CLIENT_COLOR_PALETTE, CONFIG_KEY, classifyProject, classifyProjectStrict, sanitizeClientName, clientRequiresPO, DEFAULT_CLIENTS_LIST, DEFAULT_CLIENT_META, DEFAULT_MAPPING_RULES, loadAppConfig, getEffectiveMargin, dealHasAnyValue, computeDealMargin } from './utils/appConfig';
 import {
   LayoutDashboard, Users, DollarSign, Ticket, Settings, Building2,
   Bell, Clock, FileText, Upload, Plus, X, Send, Eye,
@@ -5345,7 +5345,22 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
         ...priorRemoved.filter(n => !keptNames.has(n)),
         ...[...allDefaultNames].filter(n => !keptNames.has(n)),
       ])];
-      const finalCfg = { clientsList: dedupedFinalNames, clientMeta, mappingRules, removedClients };
+      // Same problem, for classification rules instead of clients: a coded
+      // default rule (DEFAULT_MAPPING_RULES) that the user just deleted from
+      // the Projects panel would otherwise reappear right after Save --
+      // getEffectiveMappingRules merges in any coded default rule not
+      // already covered by the saved ones, so a delete alone can never
+      // actually remove one, only adding a rule back in was ever possible.
+      // Record it here as "removed" (by matchType+value) so the merge skips
+      // it for good, same pattern as removedClients just above.
+      const ruleKey = r => `${r.matchType}:${(r.value || "").trim().toUpperCase()}`;
+      const keptRuleKeys = new Set(nonDefaultRules.map(ruleKey));
+      const priorRemovedRuleKeys = Array.isArray(priorCfg?.removedMappingRuleKeys) ? priorCfg.removedMappingRuleKeys : [];
+      const removedMappingRuleKeys = [...new Set([
+        ...priorRemovedRuleKeys.filter(k => !keptRuleKeys.has(k)),
+        ...DEFAULT_MAPPING_RULES.filter(r => r.matchType !== "default").map(ruleKey).filter(k => !keptRuleKeys.has(k)),
+      ])];
+      const finalCfg = { clientsList: dedupedFinalNames, clientMeta, mappingRules, removedClients, removedMappingRuleKeys };
       localStorage.setItem(CONFIG_KEY, JSON.stringify(finalCfg));
       const { error } = await supabase.from('fisheye_app_data').upsert({ key: CONFIG_KEY, data: finalCfg }, { onConflict: 'key' });
       setSaving(false);

@@ -164,6 +164,13 @@ export function getEffectiveMappingRules() {
   const cfg = loadAppConfig();
   const saved = (cfg && Array.isArray(cfg.mappingRules) && cfg.mappingRules.length) ? cfg.mappingRules : null;
   const removed = new Set((cfg && Array.isArray(cfg.removedClients)) ? cfg.removedClients : []);
+  // A coded default rule the user has explicitly deleted from Settings ->
+  // Clients & Deals -> Projects (recorded at save time -- see doSave in
+  // App.jsx). Without this, the merge below could only ever ADD a coded
+  // default rule back in, never actually drop one: deleting a rule that
+  // happens to match a DEFAULT_MAPPING_RULES entry (by matchType+value)
+  // would silently reappear on the very next load/save.
+  const removedRuleKeys = new Set((cfg && Array.isArray(cfg.removedMappingRuleKeys)) ? cfg.removedMappingRuleKeys : []);
   if (!saved) return DEFAULT_MAPPING_RULES.filter(r => !removed.has(r.client));
 
   // Merge instead of replace: keep every saved rule first (these are the
@@ -184,6 +191,7 @@ export function getEffectiveMappingRules() {
   const missingDefaults = DEFAULT_MAPPING_RULES.filter(r =>
     r.matchType !== "default" &&
     !removed.has(r.client) &&
+    !removedRuleKeys.has(`${r.matchType}:${(r.value || "").trim().toUpperCase()}`) &&
     !savedKeys.has(`${r.matchType}:${(r.value || "").trim().toUpperCase()}`)
   );
   const savedDefaultRule = saved.find(r => r.matchType === "default");
