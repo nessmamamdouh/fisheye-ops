@@ -5345,22 +5345,18 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-      <Card style={{ padding: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-          <h3 style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>Client Names <span style={{fontWeight:600,color:"#9ca3af",fontSize:12}}>({rows.length})</span></h3>
-          <Btn onClick={addRow}><Plus size={13}/> Add Client</Btn>
-        </div>
-        <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 10px" }}>
-          دول أسماء العملاء اللي بتظهر في كل الفلاتر والداشبورد والتقارير. غيّري الاسم وهيتحدث تلقائي في كل حتة، شامل سجلات الموظفين الحاليين.
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+        <p style={{ fontSize: 12.5, color: "#6b7280", margin: 0, lineHeight: 1.6, maxWidth: 560 }}>
+          دول أسماء العملاء اللي بتظهر في كل الفلاتر والداشبورد والتقارير ({rows.length} حاليًا). غيّري الاسم وهيتحدث تلقائي في كل حتة، شامل سجلات الموظفين الحاليين.
         </p>
-        {rows.length > 6 && (
-          <div style={{ position: "relative", marginBottom: 10 }}>
-            <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#d1d5db" }} />
-            <input value={clientFilter} onChange={e => setClientFilter(e.target.value)} placeholder="دوّري على عميل..."
-              style={{ width: "100%", boxSizing: "border-box", padding: "6px 10px 6px 30px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12 }}/>
-          </div>
-        )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <Btn onClick={addRow} style={{ ...s.btnPrimary, backgroundColor: M, flexShrink: 0, whiteSpace: "nowrap" }}><Plus size={13}/> Add Client</Btn>
+      </div>
+      <div style={{ position: "relative" }}>
+        <Search size={14} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#9ca3af" }} />
+        <input value={clientFilter} onChange={e => setClientFilter(e.target.value)} placeholder="Search clients…"
+          style={{ width: "100%", boxSizing: "border-box", padding: "10px 14px 10px 38px", border: "1px solid #E5E1DC", borderRadius: 10, fontSize: 13, backgroundColor: "white" }}/>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {rows.filter(r => !clientFilter.trim() || r.name.toLowerCase().includes(clientFilter.trim().toLowerCase())).map(row => {
             const count = row.origName ? empCountFor(row.origName) : 0;
             const renamed = row.origName && row.name.trim() && row.origName !== row.name.trim();
@@ -5371,8 +5367,8 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
             const clientRules = nonDefaultRules.filter(r => r.client === matchName);
             const projectsOpen = expandedProjectsId === row.id;
             return (
-              <div key={row.id} style={{ border: "1px solid #f3f4f6", borderRadius: 10, overflow: "hidden" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", flexWrap: "wrap" }}>
+              <div key={row.id} style={{ border: "1px solid #E5E1DC", borderRadius: 14, overflow: "hidden", backgroundColor: "white" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", flexWrap: "wrap" }}>
                   <div style={{ display: "flex", gap: 4 }}>
                     {CLIENT_COLOR_PALETTE.map((pal, i) => (
                       <button key={i} onClick={() => updateRowColor(row.id, pal)} title="لون"
@@ -5380,7 +5376,8 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                     ))}
                   </div>
                   <input value={row.name} onChange={e => updateRowName(row.id, e.target.value)} placeholder="اسم العميل"
-                    style={{ flex: "1 1 160px", padding: "6px 10px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600 }}/>
+                    style={{ flex: "1 1 160px", padding: "7px 10px", border: "1px solid transparent", borderRadius: 8, fontSize: 14.5, fontWeight: 600, backgroundColor: "transparent" }}
+                    onFocus={e => e.target.style.border = "1px solid #E5E1DC"} onBlur={e => e.target.style.border = "1px solid transparent"}/>
                   {renamed && (
                     <span style={{ fontSize: 10, fontWeight: 700, color: WF_TOKENS.warningSolid, backgroundColor: WF_TOKENS.warningBg, padding: "3px 8px", borderRadius: 999 }}>
                       ⚠️ هيتحدث {count} موظف
@@ -5388,11 +5385,11 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                   )}
                   {!renamed && count > 0 && <span style={{ fontSize: 10, color: "#9ca3af" }}>{count} موظف حاليًا</span>}
                   <button onClick={() => setExpandedProjectsId(projectsOpen ? null : row.id)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 999, border: clientRules.length ? `1px solid ${MD}40` : "1px solid #e5e7eb", backgroundColor: clientRules.length ? `${MD}0e` : "white", color: clientRules.length ? MD : "#6b7280", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 999, border: projectsOpen ? "none" : "1px solid #e5e1dc", backgroundColor: projectsOpen ? MD : "#F1EEE8", color: projectsOpen ? "#fff" : "#374151", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
                     Projects{clientRules.length ? ` (${clientRules.length})` : ""} <ChevronDown size={11} style={{ transform: projectsOpen ? "rotate(180deg)" : "none" }}/>
                   </button>
                   <button onClick={() => setExpandedDealId(dealOpen ? null : row.id)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 999, border: dealOpen ? "none" : (hasDeal ? `1px solid ${M}40` : "1px solid #e5e7eb"), backgroundColor: dealOpen ? MD : (hasDeal ? `${M}0e` : "white"), color: dealOpen ? "#fff" : (hasDeal ? M : "#6b7280"), fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 999, border: dealOpen ? "none" : (hasDeal ? "1px solid transparent" : "1px solid #e5e7eb"), backgroundColor: dealOpen ? MD : (hasDeal ? WF_TOKENS.infoBg : "white"), color: dealOpen ? "#fff" : (hasDeal ? WF_TOKENS.info : "#6b7280"), fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
                     {hasDeal ? `Deal Terms${deals.length > 1 ? ` (${deals.length})` : ""}` : "+ Deal Terms"} <ChevronDown size={11} style={{ transform: dealOpen ? "rotate(180deg)" : "none" }}/>
                   </button>
                   <button onClick={() => removeRow(row.id)} title="مسح" style={{ width: 26, height: 26, borderRadius: 7, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
@@ -5475,13 +5472,12 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
               </div>
             );
           })}
-        </div>
-      </Card>
+      </div>
 
       <Card style={{ padding: 20 }}>
         <h3 style={{ fontWeight: 700, fontSize: 14, margin: "0 0 4px" }}>Project Matching</h3>
         <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 14px" }}>
-          لما موظف جديد ييجي بمشروع معين، النظام بيحدد العميل تلقائي بمطابقة اسم المشروع مع المشاريع المربوطة بكل عميل (اضبطيها من كارت <b>Client Names</b> فوق، تحت "🔗 Projects" لكل عميل). لو مفيش تطابق، بيتحط تحت العميل الافتراضي هنا.
+          لما موظف جديد ييجي بمشروع معين، النظام بيحدد العميل تلقائي بمطابقة اسم المشروع مع المشاريع المربوطة بكل عميل (اضبطيها من كارت العميل فوق، تحت "Projects"). لو مفيش تطابق، بيتحط تحت العميل الافتراضي هنا.
         </p>
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 8px", border: "1px dashed #d1d5db", borderRadius: 8, backgroundColor: "#f9fafb" }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280" }}>Default (no match) →</span>
