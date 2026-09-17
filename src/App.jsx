@@ -5027,14 +5027,14 @@ function DealFields({ deal, onChange, previewEmployees, positionOptions }) {
         <select value={billingModel} onChange={e => onChange({ billingModel: e.target.value })}
           style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 220, fontWeight: 700, color: MD }}>
           <option value="per_employee">Per-Employee Margin (% / fixed of salary)</option>
-          <option value="cost_plus">Cost Plus (hourly, by position)</option>
-          <option value="lump_sum">Lump Sum (fixed project total)</option>
+          <option value="lump_sum">Lump Sum (flat rate/hour by position, or one flat total)</option>
+          <option value="cost_plus">Cost Plus (actual cost + % / fixed markup)</option>
         </select>
       </div>
 
       {billingModel === "per_employee" && <PerEmployeeDealFields deal={deal} onChange={onChange} previewEmployees={previewEmployees} />}
-      {billingModel === "cost_plus" && <CostPlusDealFields deal={deal} onChange={onChange} positionOptions={positionOptions} />}
-      {billingModel === "lump_sum" && <LumpSumDealFields deal={deal} onChange={onChange} />}
+      {billingModel === "lump_sum" && <LumpSumDealFields deal={deal} onChange={onChange} positionOptions={positionOptions} />}
+      {billingModel === "cost_plus" && <CostPlusDealFields deal={deal} onChange={onChange} previewEmployees={previewEmployees} />}
 
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
         {[["billGosi","Bill GOSI"],["billMedical","Bill Medical"],["billAjeer","Bill Ajeer"]].map(([key,label]) => (
@@ -5167,20 +5167,27 @@ function PerEmployeeDealFields({ deal, onChange, previewEmployees }) {
   );
 }
 
-// Cost Plus: a client (e.g. Sela) is billed per HOUR, per POSITION (a job
-// title, not an individual employee) -- a monthly timesheet from the client
-// gives the actual hours worked per position, and Fisheye's margin per hour
-// is whatever's left after the client's own bill rate covers what the
-// worker is paid and what any partner takes:
-//   margin/hour = client rate/hour − worker rate/hour − partner rate/hour
-// This is a POOLED, project-level margin (one number covering however many
-// employees hold that position), not a per-employee split -- so unlike the
-// Per-Employee model above, it deliberately does NOT feed
-// getEffectiveMargin/computeDealMargin in utils/appConfig.js, which only
-// know how to compute a margin off one employee's own salary. It's tracked
-// and totalled here so it's visible and auditable, but folding it into the
-// company-wide profit rollups in the Finance module is a separate step.
-function CostPlusDealFields({ deal, onChange, positionOptions }) {
+// Lump Sum: the client rate is agreed directly and flatly, as its own
+// project-level pool -- unlike Cost Plus (below), which reuses the
+// Per-Employee Margin fields/logic exactly. Two shapes cover what's
+// actually seen in practice:
+//   - Per-position hourly rates (e.g. Sela): a monthly timesheet from the
+//     client gives actual hours worked per position (a job title, not an
+//     individual employee), and Fisheye's margin per hour is whatever's
+//     left after the client's flat bill rate covers what the worker is
+//     paid and what any partner takes:
+//       margin/hour = client rate/hour − worker rate/hour − partner rate/hour
+//   - One flat total (e.g. Riva's rental project): a single agreed number
+//     for the whole contract, unrelated to hours or headcount at all.
+// Either way this is a POOLED, project-level margin (covering however many
+// employees hold a position, or the whole contract), not a per-employee
+// split -- so unlike the Per-Employee model above, it deliberately does NOT
+// feed getEffectiveMargin/computeDealMargin in utils/appConfig.js, which
+// only know how to compute a margin off one employee's own salary. It's
+// tracked and totalled here so it's visible and auditable, but folding it
+// into the company-wide profit rollups in the Finance module is a separate step.
+function LumpSumDealFields({ deal, onChange, positionOptions }) {
+  const structure = deal?.lumpSumStructure || "positions";
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const rates = deal?.positionRates || [];
   const hoursForMonth = (deal?.monthlyHours || {})[month] || {};
@@ -5196,124 +5203,155 @@ function CostPlusDealFields({ deal, onChange, positionOptions }) {
 
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <p style={{ margin: 0, fontSize: 10.5, fontWeight: 700, color: MD, textTransform: "uppercase", letterSpacing: "0.05em" }}>Position Rates (SAR / hour)</p>
-        {rates.map(r => (
-          <div key={r.id} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "flex-end", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 8, backgroundColor: "white" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              <label style={{ fontSize: 9.5, fontWeight: 700, color: "#6b7280" }}>Position</label>
-              <input value={r.position} onChange={e => updateRate(r.id, { position: e.target.value })} placeholder="e.g. Electrician"
-                list={positionOptions ? "cp-positions" : undefined}
-                style={{ padding: "5px 7px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, width: 150 }}/>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              <label style={{ fontSize: 9.5, fontWeight: 700, color: "#6b7280" }}>Client Rate/hr</label>
-              <input type="number" value={r.clientRate ?? ""} onChange={e => updateRate(r.id, { clientRate: e.target.value })} placeholder="e.g. 29"
-                style={{ padding: "5px 7px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, width: 90 }}/>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              <label style={{ fontSize: 9.5, fontWeight: 700, color: "#6b7280" }}>Worker Rate/hr</label>
-              <input type="number" value={r.workerRate ?? ""} onChange={e => updateRate(r.id, { workerRate: e.target.value })} placeholder="e.g. 14"
-                style={{ padding: "5px 7px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, width: 90 }}/>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              <label style={{ fontSize: 9.5, fontWeight: 700, color: "#6b7280" }}>Partner (optional)</label>
-              <input value={r.partnerName || ""} onChange={e => updateRate(r.id, { partnerName: e.target.value })} placeholder="e.g. Baraa Al-Memar"
-                style={{ padding: "5px 7px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, width: 130 }}/>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              <label style={{ fontSize: 9.5, fontWeight: 700, color: "#6b7280" }}>Partner Rate/hr</label>
-              <input type="number" value={r.partnerRate ?? ""} onChange={e => updateRate(r.id, { partnerRate: e.target.value })} placeholder="e.g. 5"
-                style={{ padding: "5px 7px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, width: 90 }}/>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 90 }}>
-              <label style={{ fontSize: 9.5, fontWeight: 700, color: "#6b7280" }}>Fisheye/hr</label>
-              <span style={{ padding: "5px 0", fontSize: 12.5, fontWeight: 700, color: MD }}>SAR {perHourMargin(r).toLocaleString()}</span>
-            </div>
-            <button onClick={() => removeRate(r.id)} title="Remove this position" style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-              <Trash2 size={12}/>
-            </button>
-          </div>
-        ))}
-        {positionOptions && (
-          <datalist id="cp-positions">
-            {positionOptions.map(p => <option key={p} value={p} />)}
-          </datalist>
-        )}
-        <Btn onClick={addRate} variant="ghost" style={{ ...s.btnSm, alignSelf: "flex-start" }}><Plus size={12}/> Add Position Rate</Btn>
+      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Structure</label>
+        <select value={structure} onChange={e => onChange({ lumpSumStructure: e.target.value })}
+          style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 220 }}>
+          <option value="positions">Flat rate/hour, per position (e.g. Sela)</option>
+          <option value="flat">One flat total for the whole project (e.g. Riva rental)</option>
+        </select>
       </div>
 
-      {rates.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", border: `1px solid ${MD}20`, borderRadius: 8, backgroundColor: `${MD}08` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <p style={{ margin: 0, fontSize: 10.5, fontWeight: 700, color: MD, textTransform: "uppercase", letterSpacing: "0.05em" }}>Monthly Timesheet Hours</p>
-            <input type="month" value={month} onChange={e => setMonth(e.target.value)}
-              style={{ padding: "4px 7px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11.5 }}/>
+      {structure === "flat" ? (
+        <>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Lump Sum Amount (SAR)</label>
+              <input type="number" value={deal?.lumpSumAmount ?? ""} onChange={e => onChange({ lumpSumAmount: e.target.value })} placeholder="e.g. 45000"
+                style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, width: 130 }}/>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Period</label>
+              <select value={deal?.lumpSumPeriod || "monthly"} onChange={e => onChange({ lumpSumPeriod: e.target.value })}
+                style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 150 }}>
+                <option value="monthly">Per month</option>
+                <option value="one_time">One-time (whole contract)</option>
+              </select>
+            </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {!!(Number(deal?.lumpSumAmount) || 0) && (
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: MD }}>
+              Lump sum margin: SAR {Math.round(Number(deal.lumpSumAmount) || 0).toLocaleString()} {deal?.lumpSumPeriod === "one_time" ? "(one-time)" : "/ month"}
+            </p>
+          )}
+        </>
+      ) : (
+        <>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <p style={{ margin: 0, fontSize: 10.5, fontWeight: 700, color: MD, textTransform: "uppercase", letterSpacing: "0.05em" }}>Position Rates (SAR / hour)</p>
             {rates.map(r => (
-              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12, color: "#374151", flex: "1 1 140px" }}>{r.position || "(no position name yet)"}</span>
-                <input type="number" value={hoursForMonth[r.id] ?? ""} onChange={e => setHours(r.id, e.target.value)} placeholder="hours"
-                  style={{ padding: "5px 7px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, width: 90 }}/>
-                <span style={{ fontSize: 11.5, color: "#9ca3af", width: 130, textAlign: "right" }}>
-                  = SAR {Math.round(perHourMargin(r) * (Number(hoursForMonth[r.id]) || 0)).toLocaleString()}
-                </span>
+              <div key={r.id} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "flex-end", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 8, backgroundColor: "white" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <label style={{ fontSize: 9.5, fontWeight: 700, color: "#6b7280" }}>Position</label>
+                  <input value={r.position} onChange={e => updateRate(r.id, { position: e.target.value })} placeholder="e.g. Electrician"
+                    list={positionOptions ? "ls-positions" : undefined}
+                    style={{ padding: "5px 7px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, width: 150 }}/>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <label style={{ fontSize: 9.5, fontWeight: 700, color: "#6b7280" }}>Client Rate/hr</label>
+                  <input type="number" value={r.clientRate ?? ""} onChange={e => updateRate(r.id, { clientRate: e.target.value })} placeholder="e.g. 29"
+                    style={{ padding: "5px 7px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, width: 90 }}/>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <label style={{ fontSize: 9.5, fontWeight: 700, color: "#6b7280" }}>Worker Rate/hr</label>
+                  <input type="number" value={r.workerRate ?? ""} onChange={e => updateRate(r.id, { workerRate: e.target.value })} placeholder="e.g. 14"
+                    style={{ padding: "5px 7px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, width: 90 }}/>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <label style={{ fontSize: 9.5, fontWeight: 700, color: "#6b7280" }}>Partner (optional)</label>
+                  <input value={r.partnerName || ""} onChange={e => updateRate(r.id, { partnerName: e.target.value })} placeholder="e.g. Baraa Al-Memar"
+                    style={{ padding: "5px 7px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, width: 130 }}/>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <label style={{ fontSize: 9.5, fontWeight: 700, color: "#6b7280" }}>Partner Rate/hr</label>
+                  <input type="number" value={r.partnerRate ?? ""} onChange={e => updateRate(r.id, { partnerRate: e.target.value })} placeholder="e.g. 5"
+                    style={{ padding: "5px 7px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, width: 90 }}/>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 90 }}>
+                  <label style={{ fontSize: 9.5, fontWeight: 700, color: "#6b7280" }}>Fisheye/hr</label>
+                  <span style={{ padding: "5px 0", fontSize: 12.5, fontWeight: 700, color: MD }}>SAR {perHourMargin(r).toLocaleString()}</span>
+                </div>
+                <button onClick={() => removeRate(r.id)} title="Remove this position" style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                  <Trash2 size={12}/>
+                </button>
               </div>
             ))}
+            {positionOptions && (
+              <datalist id="ls-positions">
+                {positionOptions.map(p => <option key={p} value={p} />)}
+              </datalist>
+            )}
+            <Btn onClick={addRate} variant="ghost" style={{ ...s.btnSm, alignSelf: "flex-start" }}><Plus size={12}/> Add Position Rate</Btn>
           </div>
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: MD }}>
-            {month} margin: SAR {Math.round(monthTotal).toLocaleString()}
-          </p>
-          {monthsLogged.length > 1 && (
-            <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 6, display: "flex", flexDirection: "column", gap: 2 }}>
-              <p style={{ margin: "0 0 2px", fontSize: 9.5, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" }}>Logged months</p>
-              {monthsLogged.map(mk => {
-                const mHours = (deal?.monthlyHours || {})[mk] || {};
-                const mTotal = rates.reduce((sum, r) => sum + perHourMargin(r) * (Number(mHours[r.id]) || 0), 0);
-                return <span key={mk} style={{ fontSize: 11, color: "#6b7280" }}>{mk}: SAR {Math.round(mTotal).toLocaleString()}</span>;
-              })}
+
+          {rates.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", border: `1px solid ${MD}20`, borderRadius: 8, backgroundColor: `${MD}08` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <p style={{ margin: 0, fontSize: 10.5, fontWeight: 700, color: MD, textTransform: "uppercase", letterSpacing: "0.05em" }}>Monthly Timesheet Hours</p>
+                <input type="month" value={month} onChange={e => setMonth(e.target.value)}
+                  style={{ padding: "4px 7px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11.5 }}/>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {rates.map(r => (
+                  <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 12, color: "#374151", flex: "1 1 140px" }}>{r.position || "(no position name yet)"}</span>
+                    <input type="number" value={hoursForMonth[r.id] ?? ""} onChange={e => setHours(r.id, e.target.value)} placeholder="hours"
+                      style={{ padding: "5px 7px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, width: 90 }}/>
+                    <span style={{ fontSize: 11.5, color: "#9ca3af", width: 130, textAlign: "right" }}>
+                      = SAR {Math.round(perHourMargin(r) * (Number(hoursForMonth[r.id]) || 0)).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: MD }}>
+                {month} margin: SAR {Math.round(monthTotal).toLocaleString()}
+              </p>
+              {monthsLogged.length > 1 && (
+                <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 6, display: "flex", flexDirection: "column", gap: 2 }}>
+                  <p style={{ margin: "0 0 2px", fontSize: 9.5, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" }}>Logged months</p>
+                  {monthsLogged.map(mk => {
+                    const mHours = (deal?.monthlyHours || {})[mk] || {};
+                    const mTotal = rates.reduce((sum, r) => sum + perHourMargin(r) * (Number(mHours[r.id]) || 0), 0);
+                    return <span key={mk} style={{ fontSize: 11, color: "#6b7280" }}>{mk}: SAR {Math.round(mTotal).toLocaleString()}</span>;
+                  })}
+                </div>
+              )}
             </div>
           )}
-        </div>
+        </>
       )}
       <p style={{ margin: 0, fontSize: 10.5, color: "#9ca3af", lineHeight: 1.5 }}>
-        This margin is pooled per position, not split across individual employees — it isn't wired into per-employee profit figures elsewhere in the app yet.
+        This is a project-level margin, not split across individual employees — it isn't wired into per-employee profit figures elsewhere in the app yet.
       </p>
     </>
   );
 }
 
-// Lump Sum: one fixed price for the whole project/contract, unrelated to
-// headcount, salary, or hours. Also a project-level number for the same
-// reason Cost Plus is -- it can't be attributed to any one employee's
-// profit line without arbitrarily splitting it.
-function LumpSumDealFields({ deal, onChange }) {
+// Cost Plus: unlike Lump Sum, the client's bill rate is DERIVED, not typed
+// directly -- it's built up from the actual cost of the position (worker
+// wage/hour, GOSI/hour, insurance/hour) plus a markup on top (a percentage
+// of that cost, or a flat SAR/hour), same shape Sela's real invoices use.
+// Fisheye's margin/hour is exactly the markup piece; the cost portion is
+// pass-through. Hours still come from the client's monthly timesheet, same
+// mechanism as Lump Sum's per-position table. Also a pooled, project-level
+// margin -- see the note on LumpSumDealFields above for why this doesn't
+// feed getEffectiveMargin/computeDealMargin.
+// Cost Plus: same calculation as Per-Employee Margin (percentage and/or a
+// fixed amount, applied against the employee's own salary, plus an optional
+// Saudization fee, plus GOSI/Medical/Ajeer as pass-through billing) -- this
+// is deliberately the exact same fields/logic as PerEmployeeDealFields, not
+// a separate computation. It exists as its own Billing Model option purely
+// so a client like Sela can be labeled "Cost Plus" (matching how the real
+// invoice is described) instead of the generic "Per-Employee Margin" label,
+// while automatically feeding the same getEffectiveMargin/computeDealMargin
+// engine every other per-employee deal already uses.
+function CostPlusDealFields({ deal, onChange, previewEmployees }) {
   return (
     <>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Lump Sum Amount (SAR)</label>
-          <input type="number" value={deal?.lumpSumAmount ?? ""} onChange={e => onChange({ lumpSumAmount: e.target.value })} placeholder="e.g. 45000"
-            style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, width: 130 }}/>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Period</label>
-          <select value={deal?.lumpSumPeriod || "monthly"} onChange={e => onChange({ lumpSumPeriod: e.target.value })}
-            style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 150 }}>
-            <option value="monthly">Per month</option>
-            <option value="one_time">One-time (whole contract)</option>
-          </select>
-        </div>
-      </div>
-      {!!(Number(deal?.lumpSumAmount) || 0) && (
-        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: MD }}>
-          Lump sum margin: SAR {Math.round(Number(deal.lumpSumAmount) || 0).toLocaleString()} {deal?.lumpSumPeriod === "one_time" ? "(one-time)" : "/ month"}
-        </p>
-      )}
       <p style={{ margin: 0, fontSize: 10.5, color: "#9ca3af", lineHeight: 1.5 }}>
-        A single project-level margin, unrelated to any one employee's salary — it isn't wired into per-employee profit figures elsewhere in the app yet.
+        Cost Plus = the actual cost (salary, plus GOSI/Medical/Ajeer below if billed) + a percentage or fixed amount on top. Same calculation as Per-Employee Margin — just labeled for a cost-plus contract like Sela's.
       </p>
+      <PerEmployeeDealFields deal={deal} onChange={onChange} previewEmployees={previewEmployees} />
     </>
   );
 }
@@ -5606,8 +5644,11 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
             // be counted alongside real project-specific deals just because it
             // exists as a placeholder row in the array.
             const dealIsFilled = d => {
-              if (d.billingModel === "cost_plus") return (d.positionRates || []).some(r => r.clientRate !== undefined && r.clientRate !== "" || r.workerRate !== undefined && r.workerRate !== "" || r.partnerRate !== undefined && r.partnerRate !== "");
-              if (d.billingModel === "lump_sum") return !!(Number(d.lumpSumAmount) || 0);
+              if (d.billingModel === "lump_sum") {
+                if (d.lumpSumStructure === "flat") return !!(Number(d.lumpSumAmount) || 0);
+                return (d.positionRates || []).some(r => (r.clientRate !== undefined && r.clientRate !== "") || (r.workerRate !== undefined && r.workerRate !== "") || (r.partnerRate !== undefined && r.partnerRate !== ""));
+              }
+              // cost_plus reuses the exact same fields/logic as per_employee (see CostPlusDealFields), so it's checked the same way.
               return !!(d.serviceType || (d.marginValue !== undefined && d.marginValue !== "") || (d.marginPercent !== undefined && d.marginPercent !== "") || (d.marginFixed !== undefined && d.marginFixed !== "") || (d.saudizationFee !== undefined && d.saudizationFee !== "") || d.recruitmentFee || d.note || (d.projectMatches||[]).length);
             };
             const hasDeal = deals.some(dealIsFilled);
