@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import StyleGuide from './StyleGuide.jsx';
 import { FinanceModule } from './FinanceModule';
@@ -5999,7 +6000,58 @@ function PartnerFlowTab({ flows, saveFlows, employees }) {
 }
 
 // ─── MAIN APP ────────────────────────────────────────────────────────────
+// ─── Notifications panel (sidebar footer bell) ─────────────────────────────
+// Portaled to <body> so it always paints above page content, never behind
+// it -- the sidebar sits inside its own stacking context, so a merely-high
+// z-index isn't enough once another panel on the page has one of its own.
+function NotificationsPanel({ anchorEl, notifications, onClose }) {
+  const [pos, setPos] = useState(null);
+  const width = 320;
+  useLayoutEffect(() => {
+    if (!anchorEl) return;
+    const rect = anchorEl.getBoundingClientRect();
+    setPos({
+      bottom: window.innerHeight - rect.top + 10,
+      left: Math.min(rect.left, window.innerWidth - width - 8),
+    });
+  }, [anchorEl]);
+  if (!pos) return null;
+  return createPortal(
+    <>
+      <div style={{ position: "fixed", inset: 0, zIndex: 299 }} onClick={onClose} />
+      <div style={{
+        position: "fixed", bottom: pos.bottom, left: pos.left, width,
+        backgroundColor: "white", borderRadius: 16,
+        boxShadow: "0 8px 32px rgba(0,0,0,0.25)", border: "1px solid #e5e7eb",
+        zIndex: 300, overflow: "hidden",
+      }}>
+        <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <p style={{margin:0,fontWeight:700,fontSize:13}}>التنبيهات</p>
+          <span style={{fontSize:11,color:"#9ca3af"}}>{notifications.length} تنبيه</span>
+        </div>
+        <div style={{maxHeight:360,overflowY:"auto"}}>
+          {notifications.length === 0
+            ? <p style={{padding:"24px",textAlign:"center",color:"#9ca3af",fontSize:12}}>لا توجد تنبيهات</p>
+            : notifications.map(n => (
+                <div key={n.id} style={{padding:"12px 16px",borderBottom:"1px solid #f9fafb",display:"flex",gap:10,alignItems:"flex-start"}}>
+                  <div style={{width:8,height:8,borderRadius:"50%",backgroundColor: n.type==='warning'?"#f59e0b":"#3b82f6",flexShrink:0,marginTop:4}}/>
+                  <div>
+                    <p style={{margin:0,fontWeight:600,fontSize:12,color:"#1f2937"}}>{n.title}</p>
+                    <p style={{margin:"2px 0 0",fontSize:11,color:"#6b7280"}}>{n.message}</p>
+                    <p style={{margin:"2px 0 0",fontSize:10,color:"#9ca3af"}}>{n.client}</p>
+                  </div>
+                </div>
+              ))
+          }
+        </div>
+      </div>
+    </>,
+    document.body
+  );
+}
+
 function FisheyeOpsPro({ employees, setEmployees }) {
+  const bellRef = useRef(null); // anchors the portaled NotificationsPanel
   const { session, profile } = useAuth();
   const isViewer = profile?.role === 'viewer';
   const [isLoading, setIsLoading] = useState(true);
@@ -6623,7 +6675,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
                 <span style={{position:"absolute",bottom:-1,right:-1,width:8,height:8,borderRadius:"50%",backgroundColor:"oklch(70% 0.12 152)",border:"1.5px solid #00293A"}}/>
               </div>
               <p style={{flex:1,minWidth:0,margin:0,fontSize:11,fontWeight:700,color:"white",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Fisheye Admin</p>
-              <div style={{position:"relative"}}>
+              <div style={{position:"relative"}} ref={bellRef}>
                 <Bell size={14}
                   style={{color: notifications.length > 0 ? "#ff8fa3" : "rgba(160,210,230,0.5)", cursor:"pointer"}}
                   onClick={() => setShowNotifications(p => !p)}/>
@@ -6633,27 +6685,11 @@ function FisheyeOpsPro({ employees, setEmployees }) {
                   </span>
                 )}
                 {showNotifications && (
-                  <div style={{position:"absolute",bottom:"calc(100% + 10px)",left:0,width:320,backgroundColor:"white",borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,0.25)",border:"1px solid #e5e7eb",zIndex:100,overflow:"hidden"}}>
-                    <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <p style={{margin:0,fontWeight:700,fontSize:13}}>التنبيهات</p>
-                      <span style={{fontSize:11,color:"#9ca3af"}}>{notifications.length} تنبيه</span>
-                    </div>
-                    <div style={{maxHeight:360,overflowY:"auto"}}>
-                      {notifications.length === 0
-                        ? <p style={{padding:"24px",textAlign:"center",color:"#9ca3af",fontSize:12}}>لا توجد تنبيهات</p>
-                        : notifications.map(n => (
-                            <div key={n.id} style={{padding:"12px 16px",borderBottom:"1px solid #f9fafb",display:"flex",gap:10,alignItems:"flex-start"}}>
-                              <div style={{width:8,height:8,borderRadius:"50%",backgroundColor: n.type==='warning'?"#f59e0b":"#3b82f6",flexShrink:0,marginTop:4}}/>
-                              <div>
-                                <p style={{margin:0,fontWeight:600,fontSize:12,color:"#1f2937"}}>{n.title}</p>
-                                <p style={{margin:"2px 0 0",fontSize:11,color:"#6b7280"}}>{n.message}</p>
-                                <p style={{margin:"2px 0 0",fontSize:10,color:"#9ca3af"}}>{n.client}</p>
-                              </div>
-                            </div>
-                          ))
-                      }
-                    </div>
-                  </div>
+                  <NotificationsPanel
+                    anchorEl={bellRef.current}
+                    notifications={notifications}
+                    onClose={() => setShowNotifications(false)}
+                  />
                 )}
               </div>
               <button
