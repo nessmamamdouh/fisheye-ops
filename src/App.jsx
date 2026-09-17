@@ -6617,7 +6617,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
         </nav>
         <div style={s.sidebarFooter}>
           {open ? (
-            <div style={{display:"flex",alignItems:"center",gap:8}} title={`${isViewer ? "Viewer" : "Admin"} \u00b7 Fisheye Admin \u00b7 Super Admin`}>
+            <div style={{display:"flex",alignItems:"center",gap:8}} title={`${isViewer ? "Viewer" : "Admin"} · Fisheye Admin · Super Admin`}>
               <div style={{position:"relative",width:28,height:28,borderRadius:8,backgroundColor:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:10,fontWeight:900,flexShrink:0}}>
                 FO
                 <span style={{position:"absolute",bottom:-1,right:-1,width:8,height:8,borderRadius:"50%",backgroundColor:"oklch(70% 0.12 152)",border:"1.5px solid #00293A"}}/>
@@ -6635,12 +6635,12 @@ function FisheyeOpsPro({ employees, setEmployees }) {
                 {showNotifications && (
                   <div style={{position:"absolute",bottom:"calc(100% + 10px)",left:0,width:320,backgroundColor:"white",borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,0.25)",border:"1px solid #e5e7eb",zIndex:100,overflow:"hidden"}}>
                     <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <p style={{margin:0,fontWeight:700,fontSize:13}}>\u0627\u0644\u062a\u0646\u0628\u064a\u0647\u0627\u062a</p>
-                      <span style={{fontSize:11,color:"#9ca3af"}}>{notifications.length} \u062a\u0646\u0628\u064a\u0647</span>
+                      <p style={{margin:0,fontWeight:700,fontSize:13}}>التنبيهات</p>
+                      <span style={{fontSize:11,color:"#9ca3af"}}>{notifications.length} تنبيه</span>
                     </div>
                     <div style={{maxHeight:360,overflowY:"auto"}}>
                       {notifications.length === 0
-                        ? <p style={{padding:"24px",textAlign:"center",color:"#9ca3af",fontSize:12}}>\u0644\u0627 \u062a\u0648\u062c\u062f \u062a\u0646\u0628\u064a\u0647\u0627\u062a</p>
+                        ? <p style={{padding:"24px",textAlign:"center",color:"#9ca3af",fontSize:12}}>لا توجد تنبيهات</p>
                         : notifications.map(n => (
                             <div key={n.id} style={{padding:"12px 16px",borderBottom:"1px solid #f9fafb",display:"flex",gap:10,alignItems:"flex-start"}}>
                               <div style={{width:8,height:8,borderRadius:"50%",backgroundColor: n.type==='warning'?"#f59e0b":"#3b82f6",flexShrink:0,marginTop:4}}/>
@@ -6658,7 +6658,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
               </div>
               <button
                 onClick={() => supabase.auth.signOut()}
-                title="\u062a\u0633\u062c\u064a\u0644 \u062e\u0631\u0648\u062c"
+                title="تسجيل خروج"
                 style={{display:"flex",alignItems:"center",border:"none",background:"none",cursor:"pointer",color:"#ff8fa3",padding:0,flexShrink:0}}
               ><LogOut size={14}/></button>
             </div>
