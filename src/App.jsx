@@ -47,6 +47,13 @@ const sendWhatsAppMessage = async (phone, message, clientName) => {
 const M  = "#A02843";  // Fisheye Crimson — Pantone 194C
 const MD = "#00293A";  // Fisheye Navy    — Pantone 303C
 const ML = "#c04060";  // Crimson light tint
+// Design System v3 "Refined Editorial Enterprise" type stack. Scope-applied via
+// inline style (CSS custom-property override of --font-sans, which every legacy
+// .fe-* class already reads through var()) rather than editing global CSS, so
+// modules can opt in one at a time without touching screens not yet redone.
+const FE_SANS  = "'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FE_SERIF = "'Piazzolla', Georgia, serif";
+const FE_MONO  = "'IBM Plex Mono', 'SF Mono', 'Fira Code', monospace";
 const TODAY = new Date();
 TODAY.setHours(0, 0, 0, 0);
 const CLIENTS_LIST = getEffectiveClientsList();
@@ -5581,9 +5588,9 @@ function SettingsView({
   const current = CATEGORIES.find(c=>c.k===tab);
 
   if (!tab) return (
-    <div style={{maxWidth:960,display:"flex",flexDirection:"column",gap:20}}>
+    <div style={{maxWidth:960,display:"flex",flexDirection:"column",gap:20,"--font-sans":FE_SANS,fontFamily:FE_SANS}}>
       <div>
-        <h2 style={{margin:0,fontSize:20,fontWeight:700}}>Settings</h2>
+        <h2 style={{margin:0,fontSize:21,fontWeight:700,fontFamily:FE_SERIF,color:MD}}>Settings</h2>
         <p style={{margin:"4px 0 0",fontSize:13,color:"#6b7280"}}>Everything that shapes how Fisheye Ops runs.</p>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16}}>
@@ -5597,7 +5604,7 @@ function SettingsView({
               <div style={{fontSize:15,fontWeight:700,color:"#111827"}}>{c.l}</div>
               <div style={{fontSize:12.5,color:"#6b7280",lineHeight:1.5,flexGrow:1}}>{c.d}</div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:2}}>
-                <span style={{fontSize:11,fontFamily:"monospace",color:"#9ca3af"}}>{c.meta}</span>
+                <span style={{fontSize:11,fontFamily:FE_MONO,color:"#9ca3af"}}>{c.meta}</span>
                 <ChevronRight size={15} color={M}/>
               </div>
             </button>
@@ -5608,7 +5615,7 @@ function SettingsView({
   );
 
   return (
-    <div style={{maxWidth:720,display:"flex",flexDirection:"column",gap:20}}>
+    <div style={{maxWidth:720,display:"flex",flexDirection:"column",gap:20,"--font-sans":FE_SANS,fontFamily:FE_SANS}}>
       <button onClick={()=>setTab(null)} style={{display:"flex",alignItems:"center",gap:6,fontSize:12.5,fontWeight:600,color:"#6b7280",background:"none",border:"none",cursor:"pointer",padding:0,alignSelf:"flex-start"}}>
         <ChevronLeft size={15}/> Settings
       </button>
@@ -5619,7 +5626,7 @@ function SettingsView({
           </div>
         )}
         <div>
-          <h2 style={{margin:0,fontSize:19,fontWeight:700}}>{current?.l}</h2>
+          <h2 style={{margin:0,fontSize:20,fontWeight:700,fontFamily:FE_SERIF,color:MD}}>{current?.l}</h2>
           {current?.d && <p style={{margin:"2px 0 0",fontSize:12.5,color:"#6b7280"}}>{current.d}</p>}
         </div>
       </div>
