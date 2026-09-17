@@ -4965,39 +4965,39 @@ function DealFields({ deal, onChange }) {
     <>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>نوع الخدمة</label>
+          <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Service Type</label>
           <select value={deal?.serviceType || ""} onChange={e => onChange({ serviceType: e.target.value })}
             style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 140 }}>
-            <option value="">— اختاري —</option>
+            <option value="">— Choose —</option>
             <option value="Outsourcing">Outsourcing</option>
             <option value="Recruitment">Recruitment</option>
             <option value="RPO">RPO (via Partner)</option>
           </select>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>نوع المارجن</label>
+          <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Margin Type</label>
           <select value={deal?.marginType || "percent"} onChange={e => onChange({ marginType: e.target.value })}
             style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 120 }}>
-            <option value="percent">نسبة %</option>
-            <option value="fixed">مبلغ ثابت SAR</option>
-            <option value="percent_fixed">نسبة + مبلغ ثابت</option>
+            <option value="percent">Percentage</option>
+            <option value="fixed">Fixed amount (SAR)</option>
+            <option value="percent_fixed">Percentage + fixed amount</option>
           </select>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>قيمة المارجن</label>
-          <input type="number" value={deal?.marginValue ?? ""} onChange={e => onChange({ marginValue: e.target.value })} placeholder="مثال: 15"
+          <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Margin Value</label>
+          <input type="number" value={deal?.marginValue ?? ""} onChange={e => onChange({ marginValue: e.target.value })} placeholder="e.g. 15"
             style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, width: 90 }}/>
         </div>
         {deal?.serviceType === "Recruitment" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>رسوم التوظيف (SAR)</label>
-            <input type="number" value={deal?.recruitmentFee ?? ""} onChange={e => onChange({ recruitmentFee: e.target.value })} placeholder="مثال: 5000"
+            <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Recruitment Fee (SAR)</label>
+            <input type="number" value={deal?.recruitmentFee ?? ""} onChange={e => onChange({ recruitmentFee: e.target.value })} placeholder="e.g. 5000"
               style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, width: 110 }}/>
           </div>
         )}
       </div>
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-        {[["billGosi","GOSI على العميل"],["billMedical","تأمين طبي على العميل"],["billAjeer","Ajeer على العميل"]].map(([key,label]) => (
+        {[["billGosi","Bill GOSI"],["billMedical","Bill Medical"],["billAjeer","Bill Ajeer"]].map(([key,label]) => (
           <label key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#374151", cursor: "pointer" }}>
             <input type="checkbox" checked={!!deal?.[key]} onChange={e => onChange({ [key]: e.target.checked })}/>
             {label}
@@ -5005,8 +5005,8 @@ function DealFields({ deal, onChange }) {
         ))}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-        <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>ملاحظات إضافية (زي شروط سعودة/فيزا خاصة)</label>
-        <input value={deal?.note || ""} onChange={e => onChange({ note: e.target.value })} placeholder="مثال: اتفاق سعودة فيزا خاص بديل التوسيع التاني"
+        <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Notes (e.g. Saudization / special visa terms)</label>
+        <input value={deal?.note || ""} onChange={e => onChange({ note: e.target.value })} placeholder="e.g. Saudization deal in place of a special visa slot"
           style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12 }}/>
       </div>
     </>
@@ -5382,15 +5382,15 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                   )}
                   {!renamed && count > 0 && <span style={{ fontSize: 10, color: "#9ca3af" }}>{count} موظف حاليًا</span>}
                   <button onClick={() => setExpandedDealId(dealOpen ? null : row.id)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 999, border: dealOpen ? "none" : (hasDeal ? "1px solid transparent" : "1px solid #e5e7eb"), backgroundColor: dealOpen ? MD : (hasDeal ? WF_TOKENS.infoBg : "white"), color: dealOpen ? "#fff" : (hasDeal ? WF_TOKENS.info : "#6b7280"), fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-                    {hasDeal ? `Deal Terms${deals.length > 1 ? ` (${deals.length})` : ""}` : "+ Deal Terms"} <ChevronDown size={11} style={{ transform: dealOpen ? "rotate(180deg)" : "none" }}/>
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5, height: 30, padding: "0 14px", borderRadius: 999, border: "none", backgroundColor: dealOpen ? MD : WF_TOKENS.infoBg, color: dealOpen ? "#fff" : WF_TOKENS.info, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxSizing: "border-box" }}>
+                    {`Deal Terms${deals.length > 1 ? ` (${deals.length})` : ""}`} <ChevronDown size={11} style={{ transform: dealOpen ? "rotate(180deg)" : "none" }}/>
                   </button>
                   <button onClick={() => setExpandedProjectsId(projectsOpen ? null : row.id)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 999, border: projectsOpen ? "none" : "1px solid #e5e1dc", backgroundColor: projectsOpen ? MD : "#F1EEE8", color: projectsOpen ? "#fff" : "#374151", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5, height: 30, padding: "0 14px", borderRadius: 999, border: "none", backgroundColor: projectsOpen ? MD : "#F1EEE8", color: projectsOpen ? "#fff" : "#374151", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxSizing: "border-box" }}>
                     Projects{clientRules.length ? ` (${clientRules.length})` : ""} <ChevronDown size={11} style={{ transform: projectsOpen ? "rotate(180deg)" : "none" }}/>
                   </button>
-                  <button onClick={() => removeRow(row.id)} title="مسح" style={{ width: 26, height: 26, borderRadius: 7, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
-                    <Trash2 size={12}/>
+                  <button onClick={() => removeRow(row.id)} title="مسح" style={{ width: 30, height: 30, borderRadius: 8, border: "none", backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, boxSizing: "border-box" }}>
+                    <Trash2 size={13}/>
                   </button>
                 </div>
                 {colorPickerId === row.id && (
@@ -5404,19 +5404,19 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                 {dealOpen && (
                   <div style={{ padding: "14px 16px", borderTop: "1px solid #f3f4f6", backgroundColor: "#FCFBF9", display: "flex", flexDirection: "column", gap: 14 }}>
                     <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", lineHeight: 1.6 }}>
-                      نسخة فيشآي المرجعية من شروط الديل المتفق عليها مع العميل — مش مربوطة بالـ CRM لحد دلوقتي. المارجن الافتراضي بيتطبق تلقائي على حساب ربح كل موظف تحت العميل ده، إلا لو الموظف نفسه عنده مارجن مكتوب يدوي على كارته — في الحالة دي رقمه هو اللي بيفوز دايمًا. تفاصيل تكلفة البارتنر والبونص بتفضل سرية في سجل كل موظف زي دلوقتي.
+                      Fisheye's own reference copy of the deal terms agreed with the client — not yet linked to the CRM. The default margin applies automatically to every employee's profit under this client, unless the employee has their own margin typed on their card — in that case their number always wins. Partner cost and bonus details stay confidential in each employee's own record, same as today.
                     </p>
 
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      <p style={{ margin: 0, fontSize: 10.5, fontWeight: 700, color: MD, textTransform: "uppercase", letterSpacing: "0.05em" }}>المارجن الافتراضي لكل مشاريع العميل</p>
+                      <p style={{ margin: 0, fontSize: 10.5, fontWeight: 700, color: MD, textTransform: "uppercase", letterSpacing: "0.05em" }}>Default margin for all of this client's projects</p>
                       <DealFields deal={deals[0]} onChange={patch => updateDeal(row.id, deals[0].id, patch)} />
                     </div>
 
                     {deals.slice(1).map(d => (
                       <div key={d.id} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 14, backgroundColor: "white", display: "flex", flexDirection: "column", gap: 10 }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <p style={{ margin: 0, fontSize: 10.5, fontWeight: 700, color: M, textTransform: "uppercase", letterSpacing: "0.05em" }}>مارجن خاص بمشروع معين</p>
-                          <button onClick={() => removeDeal(row.id, d.id)} title="مسح الديل ده" style={{ width: 22, height: 22, borderRadius: 6, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                          <p style={{ margin: 0, fontSize: 10.5, fontWeight: 700, color: M, textTransform: "uppercase", letterSpacing: "0.05em" }}>Margin for a specific project</p>
+                          <button onClick={() => removeDeal(row.id, d.id)} title="Remove this deal" style={{ width: 22, height: 22, borderRadius: 6, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                             <Trash2 size={11}/>
                           </button>
                         </div>
@@ -5431,7 +5431,7 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                               </select>
                               <input value={pm.value} onChange={e => updateDealProject(row.id, d.id, pm.id, { value: e.target.value })} placeholder="keyword"
                                 style={{ padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11, fontFamily: "monospace", fontWeight: 600, width: 110, backgroundColor: `${MD}0a`, color: MD }}/>
-                              <button onClick={() => removeDealProject(row.id, d.id, pm.id)} title="مسح" style={{ width: 20, height: 20, borderRadius: 5, border: "none", backgroundColor: "transparent", color: "#c4c4c4", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>×</button>
+                              <button onClick={() => removeDealProject(row.id, d.id, pm.id)} title="Remove" style={{ width: 20, height: 20, borderRadius: 5, border: "none", backgroundColor: "transparent", color: "#c4c4c4", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>×</button>
                             </div>
                           ))}
                           <Btn onClick={() => addDealProject(row.id, d.id)} variant="ghost" style={{ ...s.btnSm, padding: "4px 9px", fontSize: 11 }}>
@@ -5439,7 +5439,7 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                           </Btn>
                         </div>
                         {!(d.projectMatches || []).length && (
-                          <p style={{ margin: 0, fontSize: 10, color: "#c4c4c4" }}>محتاجة على الأقل مشروع واحد هنا عشان المارجن ده يتطبق بدل الافتراضي.</p>
+                          <p style={{ margin: 0, fontSize: 10, color: "#c4c4c4" }}>Needs at least one project here for this margin to apply instead of the default.</p>
                         )}
                       </div>
                     ))}
@@ -5482,7 +5482,7 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
       <Card style={{ padding: 20 }}>
         <h3 style={{ fontWeight: 700, fontSize: 14, margin: "0 0 4px" }}>Project Matching</h3>
         <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 14px" }}>
-          لما موظف جديد ييجي بمشروع معين، النظام بيحدد العميل تلقائي بمطابقة اسم المشروع مع المشاريع المربوطة بكل عميل (اضبطيها من كارت العميل فوق، تحت "Projects"). لو مفيش تطابق، بيتحط تحت العميل الافتراضي هنا.
+          لما موظف جديد ييجي بمشروع معين، النظام بيحاول يحدد العميل تلقائي بمطابقة اسم المشروع مع الكلمات المربوطة بكل عميل (اضبطيها من كارت العميل فوق، تحت "Projects"). لو مفيش تطابق، النظام <b>مش بيحطه تلقائي تحت أي عميل</b> — هيسألك تحددي العميل بنفسك وقت الرفع (CSV)، أو هيتسجل من غير عميل محدد لحد ما تحدديه يدويًا بعد كده.
         </p>
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 8px", border: "1px dashed #d1d5db", borderRadius: 8, backgroundColor: "#f9fafb" }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280" }}>Default (no match) →</span>
@@ -5490,6 +5490,9 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
             {clientOptions.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
+        <p style={{ fontSize: 10.5, color: "#c4c4c4", margin: "6px 0 0" }}>
+          القيمة دي بتتستخدم بس في أداة "جرّبي اسم مشروع" تحت كمعاينة — مش بتتطبق تلقائي على موظفين حقيقيين وقت الرفع الفعلي.
+        </p>
 
         <div style={{ marginTop: 16, padding: "10px 12px", backgroundColor: "#f9fafb", borderRadius: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280" }}>🔍 جرّبي اسم مشروع:</span>
