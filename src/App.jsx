@@ -5042,15 +5042,8 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
     }));
   });
   const [rules, setRules] = useState(() => getEffectiveMappingRules().map((r, i) => ({ id: `rule-${i}`, ...r })));
-  const [testProject, setTestProject] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
-  const [reconciling, setReconciling] = useState(false);
-  const [reconcileFlash, setReconcileFlash] = useState("");
-  const [renameFromProject, setRenameFromProject] = useState("");
-  const [renameToProject, setRenameToProject] = useState("");
-  const [renamingProject, setRenamingProject] = useState(false);
-  const [projectRenameFlash, setProjectRenameFlash] = useState("");
   const [clientFilter, setClientFilter] = useState("");
   const [expandedDealId, setExpandedDealId] = useState(null); // which row's Deal Terms panel is open
   const [expandedProjectsId, setExpandedProjectsId] = useState(null); // which row's Projects panel is open
@@ -5121,113 +5114,18 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
   const updateRule = (id, patch) => setRules(rs => rs.map(r => r.id === id ? { ...r, ...patch } : r));
   const removeRule = (id) => setRules(rs => rs.filter(r => r.id !== id));
 
-  const activeRulesForReconcile = useMemo(
-    () => [...nonDefaultRules, defaultRule],
-    [nonDefaultRules, defaultRule]
-  );
-  const mismatches = useMemo(() => {
-    const out = [];
-    employees.forEach(e => {
-      const suggested = classifyProjectStrict(e.project, activeRulesForReconcile);
-      if (suggested && suggested !== e.client) out.push({ emp: e, suggested });
-    });
-    return out;
-  }, [employees, activeRulesForReconcile]);
-  const mismatchGroups = useMemo(() => {
-    const g = {};
-    mismatches.forEach(({ emp, suggested }) => {
-      const key = `${emp.project} | ${emp.client} → ${suggested}`;
-      (g[key] = g[key] || { project: emp.project, from: emp.client, to: suggested, items: [] }).items.push(emp);
-    });
-    return Object.values(g);
-  }, [mismatches]);
-
-  const distinctProjects = useMemo(
-    () => [...new Set(employees.map(e => (e.project || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
-    [employees]
-  );
-  const projectRenameAffectedCount = renameFromProject
-    ? employees.filter(e => (e.project || "").trim() === renameFromProject).length
-    : 0;
-  const applyProjectRename = async () => {
-    const from = renameFromProject;
-    const to = renameToProject.trim();
-    if (!from || !to) return;
-    if (from === to) return alert("الاسم الجديد لازم يكون مختلف عن الاسم الحالي.");
-    const affected = employees.filter(e => (e.project || "").trim() === from);
-    if (!affected.length) return alert(`مفيش موظفين بمشروع "${from}" حاليًا.`);
-    const ok = window.confirm(
-      `هيتم تعديل حقل الـ Project بس (من "${from}" لـ "${to}") لـ ${affected.length} موظف — من غير أي تعديل على Client أو بارتنر أو مارجن أو أي بيانات تانية:\n\nمتابعة؟`
-    );
-    if (!ok) return;
-    setRenamingProject(true);
-    try {
-      const ids = affected.map(e => e._id);
-      const { error } = await supabase.from('employees_master').update({ project: to }).in('_id', ids);
-      if (error) throw error;
-      const idSet = new Set(ids);
-      // Functional update: apply against whatever the CURRENT employees
-      // state is when this resolves, not the snapshot from when the
-      // button was clicked -- avoids clobbering a concurrent realtime
-      // update from another tab/user during the (possibly multi-second)
-      // save.
-      let updatedForCache = null;
-      setEmployees(prev => {
-        updatedForCache = prev.map(e => idSet.has(e._id) ? { ...e, project: to } : e);
-        return updatedForCache;
-      });
-      try { if (updatedForCache) localStorage.setItem("fisheyeData_v3", JSON.stringify(updatedForCache)); } catch {}
-      setProjectRenameFlash(`✅ اتغيّر الـ Project لـ ${affected.length} موظف (${from} → ${to})`);
-      setRenameFromProject("");
-      setRenameToProject("");
-      setTimeout(() => setProjectRenameFlash(""), 5000);
-    } catch (err) {
-      alert("حصل خطأ أثناء تعديل الـ Project: " + err.message);
-    } finally {
-      setRenamingProject(false);
-    }
-  };
-
-  const applyReconcile = async () => {
-    if (!mismatchGroups.length) return;
-    const summary = mismatchGroups.map(g => `• ${g.project}: ${g.items.length} موظف — ${g.from} → ${g.to}`).join("\n");
-    const ok = window.confirm(
-      `هيتم تعديل حقل الـ Client بس لـ ${mismatches.length} موظف (من غير أي تعديل على بارتنر أو مارجن أو أي بيانات تانية):\n\n${summary}\n\nمتابعة؟`
-    );
-    if (!ok) return;
-    setReconciling(true);
-    try {
-      // Apply each group's change against the CURRENT employees state via
-      // the functional setEmployees form, not a snapshot taken before this
-      // (possibly multi-second, multi-group) save started -- see note above
-      // applyProjectRename for why.
-      let updatedForCache = null;
-      for (const g of mismatchGroups) {
-        const ids = g.items.map(e => e._id);
-        const { error } = await supabase.from('employees_master').update({ client: g.to }).in('_id', ids);
-        if (error) throw error;
-        const idSet = new Set(ids);
-        setEmployees(prev => {
-          updatedForCache = prev.map(e => idSet.has(e._id) ? { ...e, client: g.to } : e);
-          return updatedForCache;
-        });
-      }
-      try { if (updatedForCache) localStorage.setItem("fisheyeData_v3", JSON.stringify(updatedForCache)); } catch {}
-      setReconcileFlash(`✅ اتصلح Client لـ ${mismatches.length} موظف`);
-      setTimeout(() => setReconcileFlash(""), 4000);
-    } catch (err) {
-      alert("حصل خطأ أثناء التصحيح: " + err.message);
-    } finally {
-      setReconciling(false);
-    }
-  };
-
   // Inserts a new keyword rule pinned to one client — used by the "+ Project" button
   // under each client row, so adding a project keyword never requires picking the
   // client from a dropdown (it's already the row you're in). Order among rules for
-  // DIFFERENT clients no longer needs manual reordering here (see Project Matching
-  // card below) since keywords are looked up per-client rather than as one flat,
-  // priority-ordered list.
+  // DIFFERENT clients no longer needs manual reordering here since keywords are
+  // looked up per-client rather than as one flat, priority-ordered list. (A
+  // standalone "Project Matching" card with a manual default-client picker, a
+  // "test a project name" preview, a client/project mismatch fixer, and a
+  // rename-project-everywhere tool used to live here -- removed at the user's
+  // request since the default-client picker never actually drove real employee
+  // creation (CSV import always asks explicitly instead) and read as confusing
+  // dead weight. The underlying `rules`/`defaultRule` data this fed is untouched
+  // and keeps working exactly as before; only that admin card is gone.)
   const addRuleForClient = (clientName) => setRules(rs => {
     const idx = rs.findIndex(r => r.matchType === "default");
     const newRule = { id: `rule-new-${Date.now()}`, client: clientName, matchType: "contains", value: "" };
@@ -5235,11 +5133,6 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
     if (idx === -1) arr.push(newRule); else arr.splice(idx, 0, newRule);
     return arr;
   });
-
-  const testResult = useMemo(() => {
-    if (!testProject.trim()) return null;
-    return classifyProject(testProject, [...nonDefaultRules, defaultRule]);
-  }, [testProject, rules]);
 
   const pendingRenames = rows.filter(r => r.origName && r.name.trim() && r.origName !== r.name.trim());
   const totalAffected  = pendingRenames.reduce((sum, r) => sum + empCountFor(r.origName), 0);
@@ -5382,11 +5275,11 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                   )}
                   {!renamed && count > 0 && <span style={{ fontSize: 10, color: "#9ca3af" }}>{count} موظف حاليًا</span>}
                   <button onClick={() => setExpandedDealId(dealOpen ? null : row.id)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 5, height: 30, padding: "0 14px", borderRadius: 999, border: "none", backgroundColor: dealOpen ? MD : WF_TOKENS.infoBg, color: dealOpen ? "#fff" : WF_TOKENS.info, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxSizing: "border-box" }}>
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, height: 30, minWidth: 116, padding: "0 14px", borderRadius: 999, border: "none", backgroundColor: dealOpen ? MD : WF_TOKENS.infoBg, color: dealOpen ? "#fff" : WF_TOKENS.info, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxSizing: "border-box", flexShrink: 0 }}>
                     {`Deal Terms${deals.length > 1 ? ` (${deals.length})` : ""}`} <ChevronDown size={11} style={{ transform: dealOpen ? "rotate(180deg)" : "none" }}/>
                   </button>
                   <button onClick={() => setExpandedProjectsId(projectsOpen ? null : row.id)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 5, height: 30, padding: "0 14px", borderRadius: 999, border: "none", backgroundColor: projectsOpen ? MD : "#F1EEE8", color: projectsOpen ? "#fff" : "#374151", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxSizing: "border-box" }}>
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, height: 30, minWidth: 116, padding: "0 14px", borderRadius: 999, border: "none", backgroundColor: projectsOpen ? MD : "#F1EEE8", color: projectsOpen ? "#fff" : "#374151", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxSizing: "border-box", flexShrink: 0 }}>
                     Projects{clientRules.length ? ` (${clientRules.length})` : ""} <ChevronDown size={11} style={{ transform: projectsOpen ? "rotate(180deg)" : "none" }}/>
                   </button>
                   <button onClick={() => removeRow(row.id)} title="مسح" style={{ width: 30, height: 30, borderRadius: 8, border: "none", backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, boxSizing: "border-box" }}>
@@ -5478,65 +5371,6 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
             );
           })}
       </div>
-
-      <Card style={{ padding: 20 }}>
-        <h3 style={{ fontWeight: 700, fontSize: 14, margin: "0 0 4px" }}>Project Matching</h3>
-        <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 14px" }}>
-          لما موظف جديد ييجي بمشروع معين، النظام بيحاول يحدد العميل تلقائي بمطابقة اسم المشروع مع الكلمات المربوطة بكل عميل (اضبطيها من كارت العميل فوق، تحت "Projects"). لو مفيش تطابق، النظام <b>مش بيحطه تلقائي تحت أي عميل</b> — هيسألك تحددي العميل بنفسك وقت الرفع (CSV)، أو هيتسجل من غير عميل محدد لحد ما تحدديه يدويًا بعد كده.
-        </p>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 8px", border: "1px dashed #d1d5db", borderRadius: 8, backgroundColor: "#f9fafb" }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280" }}>Default (no match) →</span>
-          <select value={defaultRule.client} onChange={e => updateRule(defaultRule.id, { client: e.target.value })} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11, fontWeight: 600 }}>
-            {clientOptions.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        <p style={{ fontSize: 10.5, color: "#c4c4c4", margin: "6px 0 0" }}>
-          القيمة دي بتتستخدم بس في أداة "جرّبي اسم مشروع" تحت كمعاينة — مش بتتطبق تلقائي على موظفين حقيقيين وقت الرفع الفعلي.
-        </p>
-
-        <div style={{ marginTop: 16, padding: "10px 12px", backgroundColor: "#f9fafb", borderRadius: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280" }}>🔍 جرّبي اسم مشروع:</span>
-          <input value={testProject} onChange={e => setTestProject(e.target.value)} placeholder="مثال: SILQFI Batch 2" style={{ flex: "1 1 160px", padding: "6px 10px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12 }}/>
-          {testResult && <ClientBadge client={testResult}/>}
-        </div>
-
-        {mismatchGroups.length > 0 && (
-          <div style={{ marginTop: 12, padding: "10px 12px", backgroundColor: WF_TOKENS.warningBg, border: `1px solid ${WF_TOKENS.warningSolid}30`, borderRadius: 10 }}>
-            <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: WF_TOKENS.warning }}>
-              ⚠️ {mismatches.length} موظف الـ Client بتاعهم مش متطابق مع قواعد التصنيف فوق:
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
-              {mismatchGroups.map(g => (
-                <div key={`${g.project}|${g.from}|${g.to}`} style={{ fontSize: 11, color: WF_TOKENS.warning }}>
-                  {g.project}: {g.items.length} موظف — {g.from} → {g.to}
-                </div>
-              ))}
-            </div>
-            <Btn onClick={applyReconcile} disabled={reconciling} style={{ ...s.btnPrimary, backgroundColor: WF_TOKENS.warningSolid, opacity: reconciling ? 0.6 : 1 }}>
-              {reconciling ? "جاري التصحيح..." : `✅ صحّح Client لـ ${mismatches.length} موظف`}
-            </Btn>
-            {reconcileFlash && <span style={{ marginInlineStart: 10, fontSize: 12, fontWeight: 700, color: WF_TOKENS.success }}>{reconcileFlash}</span>}
-          </div>
-        )}
-
-        <div style={{ marginTop: 12, padding: "10px 12px", backgroundColor: "#f9fafb", borderRadius: 10 }}>
-          <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: "#6b7280" }}>
-            ✏️ تغيير اسم Project لكل الموظفين اللي عليه (مفيدة بعد ما توحّدي/تغيّري اسم عميل قديم)
-          </p>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <select value={renameFromProject} onChange={e => setRenameFromProject(e.target.value)} style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 160 }}>
-              <option value="">— اختاري Project الحالي —</option>
-              {distinctProjects.map(p => <option key={p} value={p}>{p} ({employees.filter(e => (e.project||"").trim() === p).length})</option>)}
-            </select>
-            <span style={{ fontSize: 12, color: "#9ca3af" }}>→</span>
-            <input value={renameToProject} onChange={e => setRenameToProject(e.target.value)} placeholder="الاسم الجديد" style={{ flex: "1 1 140px", padding: "6px 10px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12 }}/>
-            <Btn onClick={applyProjectRename} disabled={renamingProject || !renameFromProject || !renameToProject.trim()} style={{ ...s.btnPrimary, opacity: (renamingProject || !renameFromProject || !renameToProject.trim()) ? 0.6 : 1 }}>
-              {renamingProject ? "جاري التعديل..." : `غيّري (${projectRenameAffectedCount} موظف)`}
-            </Btn>
-          </div>
-          {projectRenameFlash && <span style={{ display: "inline-block", marginTop: 6, fontSize: 12, fontWeight: 700, color: WF_TOKENS.success }}>{projectRenameFlash}</span>}
-        </div>
-      </Card>
 
       <Card style={{ padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
         <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>عايزة تعدّلي أسماء الـ Partners؟ ده متاح من صفحة <b>Partner Hub</b> نفسها (إضافة/تعديل/حذف partner).</p>
