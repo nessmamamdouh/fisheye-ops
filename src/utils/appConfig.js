@@ -221,3 +221,47 @@ export function classifyProject(project = "", rules = null) {
   const list = getEffectiveClientsList();
   return list[0] || "Sela";
 }
+
+// Resolves the margin (type + value) that actually applies to a Direct-mode
+// employee's profit calculation. Precedence:
+//   1. The employee's OWN Fisheye Margin, if one has been typed on their
+//      record — this always wins, so nothing already saved on an employee
+//      ever changes silently when a client's Deal is added or edited later.
+//   2. Otherwise, the client's Deals (configured in Settings → Clients &
+//      Deals): a project-specific deal if the employee's project matches one
+//      of that deal's keywords, else the client's default/base deal.
+//   3. Otherwise, 0 (unchanged from the old behaviour of an employee with no
+//      margin and no deal configured).
+// Used by calcProfit (App.jsx) and calcLine (FinanceModule.jsx) so every
+// profit/billing number in the app stays consistent with the same rule.
+export function getEffectiveMargin(emp) {
+  const manual = Number(emp?.fisheyeMargin) || 0;
+  if (manual) {
+    return { marginType: emp.fisheyeMarginType || "percent", marginValue: manual, source: "manual" };
+  }
+  const meta = getEffectiveClientMeta();
+  const deals = meta?.[emp?.client]?.deals;
+  if (Array.isArray(deals) && deals.length) {
+    const project = (emp?.project || "").trim().toUpperCase();
+    // Later entries are the more specific, project-scoped deals -- check
+    // those first so a project-specific override wins over the base deal.
+    for (let i = deals.length - 1; i >= 1; i--) {
+      const d = deals[i];
+      const matched = (d.projectMatches || []).some(pm => {
+        const v = (pm.value || "").trim().toUpperCase();
+        if (!v) return false;
+        return pm.matchType === "exact" ? project === v : project.includes(v);
+      });
+      if (matched && d.marginValue !== "" && d.marginValue != null) {
+        const v = Number(d.marginValue);
+        if (!Number.isNaN(v)) return { marginType: d.marginType || "percent", marginValue: v, source: "deal" };
+      }
+    }
+    const base = deals[0];
+    if (base && base.marginValue !== "" && base.marginValue != null) {
+      const v = Number(base.marginValue);
+      if (!Number.isNaN(v)) return { marginType: base.marginType || "percent", marginValue: v, source: "deal" };
+    }
+  }
+  return { marginType: emp?.fisheyeMarginType || "percent", marginValue: manual, source: "none" };
+}

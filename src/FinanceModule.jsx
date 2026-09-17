@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { isExcluded } from "./utils/helpers";
 import { supabase } from "./utils/supabase";
-import { clientRequiresPO } from "./utils/appConfig";
+import { clientRequiresPO, getEffectiveMargin } from "./utils/appConfig";
 
 // ─── CONSTANTS & HELPERS ─────────────────────────────────────────────────────
 const M   = "#A02843";
@@ -40,9 +40,10 @@ export const calcLine = emp => {
     const pType  = emp.clientPriceType || "percent";
     marginAmount = pType === "percent" ? (pValue / 100) * totalPkg : pValue;
   } else {
-    // Direct mode: margin = fisheyeMargin on top of totalPackage
-    const mValue = Number(emp.fisheyeMargin || 0);
-    const mType  = emp.fisheyeMarginType || "percent";
+    // Direct mode: margin comes from getEffectiveMargin -- the employee's own
+    // typed-in value if there is one, else the matching client Deal (see
+    // utils/appConfig.js) -- on top of totalPackage.
+    const { marginType: mType, marginValue: mValue } = getEffectiveMargin(emp);
     marginAmount = mType === "percent" ? (mValue / 100) * totalPkg : mValue;
   }
 

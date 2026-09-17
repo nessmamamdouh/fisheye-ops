@@ -12,7 +12,7 @@ import WeeklyReportGenerator from './Weeklyreportgenerator';
 import { useSupabaseSync } from './hooks/useSupabaseSync';
 import { supabase, testConnection } from './utils/supabase';
 import { isExcluded, isWFDone, hasMissingPO, hasValidPO, getClientsList } from './utils/helpers';
-import { getEffectiveClientsList, getEffectiveClientMeta, getEffectiveMappingRules, CLIENT_COLOR_PALETTE, CONFIG_KEY, classifyProject, classifyProjectStrict, sanitizeClientName, clientRequiresPO, DEFAULT_CLIENTS_LIST, DEFAULT_CLIENT_META, loadAppConfig } from './utils/appConfig';
+import { getEffectiveClientsList, getEffectiveClientMeta, getEffectiveMappingRules, CLIENT_COLOR_PALETTE, CONFIG_KEY, classifyProject, classifyProjectStrict, sanitizeClientName, clientRequiresPO, DEFAULT_CLIENTS_LIST, DEFAULT_CLIENT_META, loadAppConfig, getEffectiveMargin } from './utils/appConfig';
 import {
   LayoutDashboard, Users, DollarSign, Ticket, Settings, Building2,
   Bell, Clock, FileText, Upload, Plus, X, Send, Eye,
@@ -168,12 +168,14 @@ const waHref = phone => { const c=(phone||"").replace(/[^0-9+]/g,"").replace(/^\
 const isContractExpired = e => e.endDate && daysUntil(e.endDate) < 0;
 const calcProfit = e => {
   if (e.profitMode === "direct") {
-    // Direct mode: Fisheye Margin * Total Package
-    const marginType = e.fisheyeMarginType || "percent";
+    // Direct mode: Fisheye Margin * Total Package. The margin itself comes
+    // from getEffectiveMargin: the employee's own typed-in value if there is
+    // one, else the matching client Deal (see utils/appConfig.js).
+    const { marginType, marginValue } = getEffectiveMargin(e);
     if (marginType === "percent") {
-      return Math.round((e.fisheyeMargin / 100) * e.totalPackage);
+      return Math.round((marginValue / 100) * e.totalPackage);
     } else {
-      return e.fisheyeMargin; // Fixed amount
+      return marginValue; // Fixed amount
     }
   } else {
     // Partner mode: Client Price - Partner Cost
@@ -500,6 +502,7 @@ function EmployeeModal({ emp, onClose, onSave, partners, allEmployees = [], useO
   });
   const wa = waHref(form.phone);
   const profit = useMemo(() => calcProfit(form), [form]);
+  const effMargin = useMemo(() => getEffectiveMargin(form), [form.fisheyeMargin, form.fisheyeMarginType, form.client, form.project]);
 
   // Operational issues for this employee (from Sprint 1 hook if available)
   const empIssues = useMemo(() => {
@@ -750,7 +753,15 @@ function EmployeeModal({ emp, onClose, onSave, partners, allEmployees = [], useO
             <Inp label="Total Package" value={String(form.totalPackage)} onChange={v=>upd("totalPackage",parseFloat(v)||0)} type="number"/>
             {form.profitMode==="partner"
               ?<Inp label="Partner Cost (SAR)" value={String(form.partnerCost||"")} onChange={v=>upd("partnerCost",parseFloat(v)||0)} type="number"/>
-              :<Inp label="Fisheye Margin (%)" value={String(form.fisheyeMargin||15)} onChange={v=>upd("fisheyeMargin",parseFloat(v)||0)} type="number"/>
+              :<div>
+                  <Inp label="Fisheye Margin (%)" value={form.fisheyeMargin?String(form.fisheyeMargin):""} onChange={v=>upd("fisheyeMargin",parseFloat(v)||0)} type="number"
+                    placeholder={effMargin.source==="deal" ? `${effMargin.marginValue}${effMargin.marginType==="percent"?"%":" SAR"} (client deal)` : "15"}/>
+                  {!form.fisheyeMargin && effMargin.source==="deal" && (
+                    <p style={{fontSize:10,color:MD,margin:"4px 0 0",fontWeight:600,lineHeight:1.5}}>
+                      مستخدمة مارجن الـ Deal بتاع العميل تلقائي ({effMargin.marginValue}{effMargin.marginType==="percent"?"%":" SAR"}) — اكتبي رقم هنا لو عايزة تخصيص مختلف لهذا الموظف بس.
+                    </p>
+                  )}
+                </div>
             }
             <Inp label="PO Numbers" value={form.poNumbers} onChange={v=>upd("poNumbers",v)}/>
           </div>
@@ -4872,34 +4883,34 @@ function NotificationsSettings({ employees }) {
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
       {/* Status cards */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
-        <Card style={{padding:14,background: urgCount ? '#fef2f2' : '#f0fdf4', border: `1px solid ${urgCount ? '#fca5a5':'#bbf7d0'}`}}>
+        <Card style={{padding:14,background: urgCount ? WF_TOKENS.errorBg : WF_TOKENS.successBg, border: `1px solid ${urgCount ? WF_TOKENS.errorSolid+'40':WF_TOKENS.successSolid+'40'}`}}>
           <p style={{fontSize:11,color:'#6b7280',margin:'0 0 4px',fontWeight:700}}>URGENT (≤7 days)</p>
-          <p style={{fontSize:24,fontWeight:900,margin:0,color: urgCount ? '#dc2626':'#059669'}}>{urgCount}</p>
+          <p style={{fontSize:24,fontWeight:900,margin:0,color: urgCount ? WF_TOKENS.error : WF_TOKENS.success}}>{urgCount}</p>
         </Card>
-        <Card style={{padding:14,background:'#fff7ed',border:'1px solid #fed7aa'}}>
+        <Card style={{padding:14,background:WF_TOKENS.warningBg,border:`1px solid ${WF_TOKENS.warningSolid}40`}}>
           <p style={{fontSize:11,color:'#6b7280',margin:'0 0 4px',fontWeight:700}}>EXPIRING (≤30 days)</p>
-          <p style={{fontSize:24,fontWeight:900,margin:0,color:'#ea580c'}}>{expCount}</p>
+          <p style={{fontSize:24,fontWeight:900,margin:0,color:WF_TOKENS.warning}}>{expCount}</p>
         </Card>
         <Card style={{padding:14}}>
           <p style={{fontSize:11,color:'#6b7280',margin:'0 0 4px',fontWeight:700}}>LAST DIGEST</p>
-          <p style={{fontSize:13,fontWeight:700,margin:0,color:'#374151'}}>{lastDigest || '—'}</p>
+          <p style={{fontSize:13,fontWeight:700,margin:0,color:MD}}>{lastDigest || '—'}</p>
         </Card>
       </div>
 
       {/* Browser notifications */}
       <Card style={{padding:16}}>
-        <h3 style={{fontWeight:700,fontSize:14,margin:'0 0 8px'}}>🔔 Browser Notifications</h3>
+        <h3 style={{fontWeight:700,fontSize:14,margin:'0 0 8px'}}>Browser Notifications</h3>
         <p style={{fontSize:12,color:'#6b7280',margin:'0 0 12px'}}>
           لما تفتحي الـ app كل يوم بيظهرلك notification تلقائي لو في عقود بتنتهي.
         </p>
-        {notifPerm === 'granted' && <p style={{fontSize:13,color:'#059669',fontWeight:700,margin:0}}>✅ Browser notifications enabled</p>}
-        {notifPerm === 'denied'  && <p style={{fontSize:13,color:'#dc2626',margin:0}}>❌ Blocked — enable from browser settings</p>}
+        {notifPerm === 'granted' && <p style={{fontSize:13,color:WF_TOKENS.success,fontWeight:700,margin:0}}>✅ Browser notifications enabled</p>}
+        {notifPerm === 'denied'  && <p style={{fontSize:13,color:WF_TOKENS.error,margin:0}}>❌ Blocked — enable from browser settings</p>}
         {notifPerm === 'default' && <Btn onClick={requestNotifPerm}><Bell size={13}/> Enable Browser Notifications</Btn>}
       </Card>
 
       {/* WhatsApp config */}
       <Card style={{padding:16}}>
-        <h3 style={{fontWeight:700,fontSize:14,margin:'0 0 12px'}}>📱 WhatsApp Digest</h3>
+        <h3 style={{fontWeight:700,fontSize:14,margin:'0 0 12px'}}>WhatsApp Digest</h3>
         <div style={{display:'flex',flexDirection:'column',gap:10}}>
           <div>
             <label style={{fontSize:11,fontWeight:700,color:'#6b7280',display:'block',marginBottom:4}}>OPS MANAGER PHONE (with country code)</label>
@@ -4910,17 +4921,17 @@ function NotificationsSettings({ employees }) {
             <label style={{fontSize:11,fontWeight:700,color:'#6b7280',display:'block',marginBottom:4}}>
               CALLMEBOT API KEY &nbsp;
               <a href="https://www.callmebot.com/blog/free-api-whatsapp-messages/" target="_blank" rel="noreferrer"
-                style={{color:'#2563eb',fontWeight:400}}>كيف تحصلي على API key؟</a>
+                style={{color:M,fontWeight:600}}>كيف تحصلي على API key؟</a>
             </label>
             <input value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="123456"
               style={{width:'100%',padding:'8px 12px',border:'1px solid #e5e7eb',borderRadius:8,fontSize:13,boxSizing:'border-box'}}/>
           </div>
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            <Btn onClick={save}><Save size={13}/> Save</Btn>
+            <Btn onClick={save} style={{...s.btnPrimary,backgroundColor:M}}><Save size={13}/> Save</Btn>
             <Btn onClick={sendWhatsApp} disabled={sending} style={{backgroundColor:'#25d366',border:'none',color:'#fff'}}>
               <MessageCircle size={13}/> {sending ? 'Sending…' : 'Send Digest Now'}
             </Btn>
-            {result && <span style={{fontSize:13,color: result.startsWith('✅') ? '#059669':'#dc2626',fontWeight:600}}>{result}</span>}
+            {result && <span style={{fontSize:13,color: result.startsWith('✅') ? WF_TOKENS.success : WF_TOKENS.error,fontWeight:600}}>{result}</span>}
           </div>
         </div>
       </Card>
@@ -4928,7 +4939,7 @@ function NotificationsSettings({ employees }) {
       {/* Preview */}
       {previewMsg && (
         <Card style={{padding:16}}>
-          <h3 style={{fontWeight:700,fontSize:14,margin:'0 0 8px'}}>👁 Message Preview</h3>
+          <h3 style={{fontWeight:700,fontSize:14,margin:'0 0 8px'}}>Message Preview</h3>
           <pre style={{fontSize:12,color:'#374151',background:'#f9fafb',padding:12,borderRadius:8,whiteSpace:'pre-wrap',margin:0,fontFamily:'monospace'}}>
             {previewMsg}
           </pre>
@@ -4938,6 +4949,62 @@ function NotificationsSettings({ employees }) {
   );
 }
 
+
+// Shared field set for one Deal (the client's default deal, or one of its
+// project-specific deals) -- used twice below so both look and behave
+// identically. `onChange` receives a partial patch to merge into the deal.
+function DealFields({ deal, onChange }) {
+  return (
+    <>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>نوع الخدمة</label>
+          <select value={deal?.serviceType || ""} onChange={e => onChange({ serviceType: e.target.value })}
+            style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 140 }}>
+            <option value="">— اختاري —</option>
+            <option value="Outsourcing">Outsourcing</option>
+            <option value="Recruitment">Recruitment</option>
+            <option value="RPO">RPO (via Partner)</option>
+          </select>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>نوع المارجن</label>
+          <select value={deal?.marginType || "percent"} onChange={e => onChange({ marginType: e.target.value })}
+            style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 120 }}>
+            <option value="percent">نسبة %</option>
+            <option value="fixed">مبلغ ثابت SAR</option>
+            <option value="percent_fixed">نسبة + مبلغ ثابت</option>
+          </select>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>قيمة المارجن</label>
+          <input type="number" value={deal?.marginValue ?? ""} onChange={e => onChange({ marginValue: e.target.value })} placeholder="مثال: 15"
+            style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, width: 90 }}/>
+        </div>
+        {deal?.serviceType === "Recruitment" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>رسوم التوظيف (SAR)</label>
+            <input type="number" value={deal?.recruitmentFee ?? ""} onChange={e => onChange({ recruitmentFee: e.target.value })} placeholder="مثال: 5000"
+              style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, width: 110 }}/>
+          </div>
+        )}
+      </div>
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+        {[["billGosi","GOSI على العميل"],["billMedical","تأمين طبي على العميل"],["billAjeer","Ajeer على العميل"]].map(([key,label]) => (
+          <label key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#374151", cursor: "pointer" }}>
+            <input type="checkbox" checked={!!deal?.[key]} onChange={e => onChange({ [key]: e.target.checked })}/>
+            {label}
+          </label>
+        ))}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>ملاحظات إضافية (زي شروط سعودة/فيزا خاصة)</label>
+        <input value={deal?.note || ""} onChange={e => onChange({ note: e.target.value })} placeholder="مثال: اتفاق سعودة فيزا خاص بديل التوسيع التاني"
+          style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12 }}/>
+      </div>
+    </>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 🗂️ CONFIGURATION PANEL — Settings → Configuration
@@ -4985,14 +5052,49 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
 
   const updateRowName  = (id, val)  => setRows(rs => rs.map(r => r.id === id ? { ...r, name: sanitizeClientName(val) } : r));
   const updateRowColor = (id, meta) => setRows(rs => rs.map(r => r.id === id ? { ...r, meta: { ...r.meta, ...meta } } : r));
-  // Deal Terms: Fisheye's own reference copy of what was agreed with the client (service
+  // Deals: Fisheye's own reference copy of what was agreed with the client (service
   // type, margin, recruitment fee, who bills what) — entered/edited here so account
-  // managers don't need to open the CRM just to check terms, and so Ops's own profit
-  // math has something to point at. This is NOT a live sync with the CRM (the CRM has no
-  // export/API for Ops to read yet) — it's a manual note that mirrors what the sales team
-  // recorded there. Deliberately holds nothing about partner cost/bonus: that stays
-  // per-employee and confidential, same as today.
-  const updateDealTerms = (id, patch) => setRows(rs => rs.map(r => r.id === id ? { ...r, meta: { ...r.meta, dealTerms: { ...r.meta?.dealTerms, ...patch } } } : r));
+  // managers don't need to open the CRM just to check terms. This is NOT a live sync
+  // with the CRM (no export/API yet) — it's a manual note that mirrors what Sales
+  // recorded there, and it deliberately holds nothing about partner cost/bonus: that
+  // stays per-employee and confidential, same as today.
+  //
+  // deals[0] is the client's DEFAULT deal (applies to every project under this client).
+  // deals[1+] are optional deals scoped to specific projects (e.g. one client with two
+  // margins for two different project groups) -- see the "Projects for this deal" list
+  // on each. getEffectiveMargin in utils/appConfig.js is what actually applies these to
+  // profit calculations: an employee's own typed-in Fisheye Margin always wins over any
+  // deal here, so nothing already saved on an employee changes just because a deal is
+  // added or edited.
+  const dealsFor = (row) => (row.meta?.deals && row.meta.deals.length)
+    ? row.meta.deals
+    : [{ id: `deal-${row.id}-base`, ...(row.meta?.dealTerms || {}) }]; // migrate the old single-deal shape
+  const updateDeal = (rowId, dealId, patch) => setRows(rs => rs.map(r => {
+    if (r.id !== rowId) return r;
+    const deals = dealsFor(r).map(d => d.id === dealId ? { ...d, ...patch } : d);
+    return { ...r, meta: { ...r.meta, deals } };
+  }));
+  const addDeal = (rowId) => setRows(rs => rs.map(r => r.id === rowId
+    ? { ...r, meta: { ...r.meta, deals: [...dealsFor(r), { id: `deal-${Date.now()}`, projectMatches: [] }] } }
+    : r));
+  const removeDeal = (rowId, dealId) => setRows(rs => rs.map(r => r.id === rowId
+    ? { ...r, meta: { ...r.meta, deals: dealsFor(r).filter(d => d.id !== dealId) } }
+    : r));
+  const addDealProject = (rowId, dealId) => setRows(rs => rs.map(r => r.id === rowId
+    ? { ...r, meta: { ...r.meta, deals: dealsFor(r).map(d => d.id === dealId
+        ? { ...d, projectMatches: [...(d.projectMatches || []), { id: `pm-${Date.now()}`, matchType: "contains", value: "" }] }
+        : d) } }
+    : r));
+  const updateDealProject = (rowId, dealId, pmId, patch) => setRows(rs => rs.map(r => r.id === rowId
+    ? { ...r, meta: { ...r.meta, deals: dealsFor(r).map(d => d.id === dealId
+        ? { ...d, projectMatches: (d.projectMatches || []).map(pm => pm.id === pmId ? { ...pm, ...patch } : pm) }
+        : d) } }
+    : r));
+  const removeDealProject = (rowId, dealId, pmId) => setRows(rs => rs.map(r => r.id === rowId
+    ? { ...r, meta: { ...r.meta, deals: dealsFor(r).map(d => d.id === dealId
+        ? { ...d, projectMatches: (d.projectMatches || []).filter(pm => pm.id !== pmId) }
+        : d) } }
+    : r));
   const addRow = () => setRows(rs => [...rs, { id: `row-new-${Date.now()}`, origName: "", name: "", meta: CLIENT_COLOR_PALETTE[rs.length % CLIENT_COLOR_PALETTE.length] }]);
   const removeRow = (id) => {
     const row = rows.find(r => r.id === id);
@@ -5255,8 +5357,8 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
           {rows.filter(r => !clientFilter.trim() || r.name.toLowerCase().includes(clientFilter.trim().toLowerCase())).map(row => {
             const count = row.origName ? empCountFor(row.origName) : 0;
             const renamed = row.origName && row.name.trim() && row.origName !== row.name.trim();
-            const deal = row.meta?.dealTerms;
-            const hasDeal = !!(deal && (deal.serviceType || deal.marginValue || deal.recruitmentFee || deal.note));
+            const deals = dealsFor(row);
+            const hasDeal = deals.some(d => d.serviceType || (d.marginValue !== undefined && d.marginValue !== "") || d.recruitmentFee || d.note || (d.projectMatches||[]).length);
             const dealOpen = expandedDealId === row.id;
             const matchName = row.origName || row.name.trim();
             const clientRules = nonDefaultRules.filter(r => r.client === matchName);
@@ -5280,71 +5382,66 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                   {!renamed && count > 0 && <span style={{ fontSize: 10, color: "#9ca3af" }}>{count} موظف حاليًا</span>}
                   <button onClick={() => setExpandedProjectsId(projectsOpen ? null : row.id)}
                     style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 999, border: clientRules.length ? `1px solid ${MD}40` : "1px solid #e5e7eb", backgroundColor: clientRules.length ? `${MD}0e` : "white", color: clientRules.length ? MD : "#6b7280", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-                    🔗 Projects{clientRules.length ? ` (${clientRules.length})` : ""} <ChevronDown size={11} style={{ transform: projectsOpen ? "rotate(180deg)" : "none" }}/>
+                    Projects{clientRules.length ? ` (${clientRules.length})` : ""} <ChevronDown size={11} style={{ transform: projectsOpen ? "rotate(180deg)" : "none" }}/>
                   </button>
                   <button onClick={() => setExpandedDealId(dealOpen ? null : row.id)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 999, border: hasDeal ? `1px solid ${M}40` : "1px solid #e5e7eb", backgroundColor: hasDeal ? `${M}0e` : "white", color: hasDeal ? M : "#6b7280", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-                    🤝 {hasDeal ? (deal.serviceType || "Deal Terms") : "+ Deal Terms"} <ChevronDown size={11} style={{ transform: dealOpen ? "rotate(180deg)" : "none" }}/>
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 999, border: dealOpen ? "none" : (hasDeal ? `1px solid ${M}40` : "1px solid #e5e7eb"), backgroundColor: dealOpen ? MD : (hasDeal ? `${M}0e` : "white"), color: dealOpen ? "#fff" : (hasDeal ? M : "#6b7280"), fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                    {hasDeal ? `Deal Terms${deals.length > 1 ? ` (${deals.length})` : ""}` : "+ Deal Terms"} <ChevronDown size={11} style={{ transform: dealOpen ? "rotate(180deg)" : "none" }}/>
                   </button>
                   <button onClick={() => removeRow(row.id)} title="مسح" style={{ width: 26, height: 26, borderRadius: 7, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
                     <Trash2 size={12}/>
                   </button>
                 </div>
                 {dealOpen && (
-                  <div style={{ padding: "12px 14px", borderTop: "1px solid #f3f4f6", backgroundColor: "#fafafa", display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ padding: "14px 16px", borderTop: "1px solid #f3f4f6", backgroundColor: "#FCFBF9", display: "flex", flexDirection: "column", gap: 14 }}>
                     <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", lineHeight: 1.6 }}>
-                      نسخة فيشآي المرجعية من شروط الديل المتفق عليها مع العميل — مش مربوطة بالـ CRM لحد دلوقتي (لسه مفيش وصلة API/مشاركة بيانات بين الاتنين)، فحدّثيها هنا يدويًا لما الشروط تتغيّر في الـ CRM. تفاصيل تكلفة البارتنر والبونص بتفضل زي ما هي — في سجل كل موظف، سرية زي دلوقتي.
+                      نسخة فيشآي المرجعية من شروط الديل المتفق عليها مع العميل — مش مربوطة بالـ CRM لحد دلوقتي. المارجن الافتراضي بيتطبق تلقائي على حساب ربح كل موظف تحت العميل ده، إلا لو الموظف نفسه عنده مارجن مكتوب يدوي على كارته — في الحالة دي رقمه هو اللي بيفوز دايمًا. تفاصيل تكلفة البارتنر والبونص بتفضل سرية في سجل كل موظف زي دلوقتي.
                     </p>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>نوع الخدمة</label>
-                        <select value={deal?.serviceType || ""} onChange={e => updateDealTerms(row.id, { serviceType: e.target.value })}
-                          style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 140 }}>
-                          <option value="">— اختاري —</option>
-                          <option value="Outsourcing">Outsourcing</option>
-                          <option value="Recruitment">Recruitment</option>
-                          <option value="RPO">RPO (via Partner)</option>
-                        </select>
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>نوع المارجن</label>
-                        <select value={deal?.marginType || "percent"} onChange={e => updateDealTerms(row.id, { marginType: e.target.value })}
-                          style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 120 }}>
-                          <option value="percent">نسبة %</option>
-                          <option value="fixed">مبلغ ثابت SAR</option>
-                          <option value="percent_fixed">نسبة + مبلغ ثابت</option>
-                        </select>
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>قيمة المارجن</label>
-                        <input type="number" value={deal?.marginValue ?? ""} onChange={e => updateDealTerms(row.id, { marginValue: e.target.value })} placeholder="مثال: 15"
-                          style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, width: 90 }}/>
-                      </div>
-                      {deal?.serviceType === "Recruitment" && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                          <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>رسوم التوظيف (SAR)</label>
-                          <input type="number" value={deal?.recruitmentFee ?? ""} onChange={e => updateDealTerms(row.id, { recruitmentFee: e.target.value })} placeholder="مثال: 5000"
-                            style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, width: 110 }}/>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <p style={{ margin: 0, fontSize: 10.5, fontWeight: 700, color: MD, textTransform: "uppercase", letterSpacing: "0.05em" }}>المارجن الافتراضي لكل مشاريع العميل</p>
+                      <DealFields deal={deals[0]} onChange={patch => updateDeal(row.id, deals[0].id, patch)} />
+                    </div>
+
+                    {deals.slice(1).map(d => (
+                      <div key={d.id} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 14, backgroundColor: "white", display: "flex", flexDirection: "column", gap: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <p style={{ margin: 0, fontSize: 10.5, fontWeight: 700, color: M, textTransform: "uppercase", letterSpacing: "0.05em" }}>مارجن خاص بمشروع معين</p>
+                          <button onClick={() => removeDeal(row.id, d.id)} title="مسح الديل ده" style={{ width: 22, height: 22, borderRadius: 6, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                            <Trash2 size={11}/>
+                          </button>
                         </div>
-                      )}
-                    </div>
-                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                      {[["billGosi","GOSI على العميل"],["billMedical","تأمين طبي على العميل"],["billAjeer","Ajeer على العميل"]].map(([key,label]) => (
-                        <label key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#374151", cursor: "pointer" }}>
-                          <input type="checkbox" checked={!!deal?.[key]} onChange={e => updateDealTerms(row.id, { [key]: e.target.checked })}/>
-                          {label}
-                        </label>
-                      ))}
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                      <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>ملاحظات إضافية (زي شروط سعودة/فيزا خاصة)</label>
-                      <input value={deal?.note || ""} onChange={e => updateDealTerms(row.id, { note: e.target.value })} placeholder="مثال: اتفاق سعودة فيزا خاص بديل التوسيع التاني"
-                        style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12 }}/>
-                    </div>
+                        <DealFields deal={d} onChange={patch => updateDeal(row.id, d.id, patch)} />
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          {(d.projectMatches || []).map(pm => (
+                            <div key={pm.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              <select value={pm.matchType} onChange={e => updateDealProject(row.id, d.id, pm.id, { matchType: e.target.value })}
+                                style={{ padding: "4px 5px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 10 }}>
+                                <option value="contains">contains</option>
+                                <option value="exact">= exactly</option>
+                              </select>
+                              <input value={pm.value} onChange={e => updateDealProject(row.id, d.id, pm.id, { value: e.target.value })} placeholder="keyword"
+                                style={{ padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11, fontFamily: "monospace", fontWeight: 600, width: 110, backgroundColor: `${MD}0a`, color: MD }}/>
+                              <button onClick={() => removeDealProject(row.id, d.id, pm.id)} title="مسح" style={{ width: 20, height: 20, borderRadius: 5, border: "none", backgroundColor: "transparent", color: "#c4c4c4", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>×</button>
+                            </div>
+                          ))}
+                          <Btn onClick={() => addDealProject(row.id, d.id)} variant="ghost" style={{ ...s.btnSm, padding: "4px 9px", fontSize: 11 }}>
+                            <Plus size={11}/> Project
+                          </Btn>
+                        </div>
+                        {!(d.projectMatches || []).length && (
+                          <p style={{ margin: 0, fontSize: 10, color: "#c4c4c4" }}>محتاجة على الأقل مشروع واحد هنا عشان المارجن ده يتطبق بدل الافتراضي.</p>
+                        )}
+                      </div>
+                    ))}
+
+                    <Btn onClick={() => addDeal(row.id)} variant="ghost" style={{ ...s.btnSm, alignSelf: "flex-start" }}>
+                      <Plus size={12}/> Add Deal for a Specific Project
+                    </Btn>
                   </div>
                 )}
                 {projectsOpen && (
-                  <div style={{ padding: "12px 14px", borderTop: "1px solid #f3f4f6", backgroundColor: "#fafafa", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ padding: "14px 16px", borderTop: "1px solid #f3f4f6", backgroundColor: "#FCFBF9", display: "flex", flexDirection: "column", gap: 8 }}>
                     <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", lineHeight: 1.6 }}>
                       أي مشروع جديد اسمه (أو جزء منه) يطابق واحدة من الكلمات دي، هيتحط تلقائي تحت "{row.name || matchName}".
                     </p>
@@ -5357,7 +5454,7 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                           <option value="contains">Project contains</option>
                           <option value="exact">Project = exactly</option>
                         </select>
-                        <input value={r.value} onChange={e => updateRule(r.id, { value: e.target.value })} placeholder="keyword" style={{ flex: "1 1 140px", padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, fontFamily: "monospace" }}/>
+                        <input value={r.value} onChange={e => updateRule(r.id, { value: e.target.value })} placeholder="keyword" style={{ flex: "1 1 140px", padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, fontFamily: "monospace", fontWeight: 600, backgroundColor: `${MD}0a`, color: MD }}/>
                         <button onClick={() => removeRule(r.id)} style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
                           <Trash2 size={11}/>
                         </button>
@@ -5579,9 +5676,12 @@ function SettingsView({
         <ConfigurationPanel employees={employees} setEmployees={setEmployees} clients={clients} saveClients={saveClients}/>
       )}
       {tab==="logic"&&(
-        <Card style={{padding:20}}>
-          {["✅ Pending = workflow NOT in [Agreement Signed, Complete]","🚫 Morning report excludes: Expired, Resigned, Combuzz HR","⚠️ PO Alert: Sela only · Empty PO field","📅 Expiry: Rolling 30-day window","💰 Finance: Excludes resigned always. Excludes expired UNLESS Sela with no PO","💹 Profit Direct: fisheyeMargin% × Total Package (or fixed SAR if type = fixed)","💹 Profit Partner: Net = Client Price − Partner Cost (each can be % of Total Package or fixed SAR)","🔴 SAR Discrepancy: Only shown after uploading partner invoice CSV"].map(r=>(
-            <p key={r} style={{fontSize:12,color:"#4b5563",padding:"8px 0",borderBottom:"1px solid #f9fafb",margin:0}}>{r}</p>
+        <Card style={{padding:"4px 20px"}}>
+          {["Pending = workflow NOT in [Agreement Signed, Complete]","Morning report excludes: Expired, Resigned, Combuzz HR","PO Alert: Sela only · Empty PO field","Expiry: Rolling 30-day window","Finance: Excludes resigned always. Excludes expired UNLESS Sela with no PO","Profit Direct: effective margin % × Total Package (employee's own value if set, else the client's Deal — see Clients & Deals) — or fixed SAR if type = fixed","Profit Partner: Net = Client Price − Partner Cost (each can be % of Total Package or fixed SAR)","SAR Discrepancy: Only shown after uploading partner invoice CSV"].map((r,i)=>(
+            <div key={r} style={{display:"flex",gap:14,padding:"14px 0",borderBottom:i<7?"1px solid #f3f4f6":"none"}}>
+              <span style={{fontFamily:"monospace",fontSize:12,fontWeight:700,color:M,flexShrink:0,width:20}}>{String(i+1).padStart(2,"0")}</span>
+              <p style={{fontSize:12.5,color:"#374151",margin:0,lineHeight:1.6}}>{r}</p>
+            </div>
           ))}
         </Card>
       )}
@@ -5622,7 +5722,7 @@ function TeamPanel() {
 
   return (
     <Card style={{ padding: 20 }}>
-      <h3 style={{ fontWeight: 700, fontSize: 14, margin: "0 0 4px" }}>👥 فريق العمل</h3>
+      <h3 style={{ fontWeight: 700, fontSize: 14, margin: "0 0 4px" }}>فريق العمل</h3>
       <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 16px" }}>
         كل الحسابات اللي عملت تسجيل دخول بإيميل @fisheye.sa. Admin يقدر يعدّل ويحذف، Viewer يشوف بس.
       </p>
@@ -5632,13 +5732,13 @@ function TeamPanel() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {rows.map(row => (
-            <div key={row.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", border: "1px solid #f0f2f5", borderRadius: 10 }}>
-              <span style={{ fontSize: 13, color: "#1B2559", fontWeight: 600 }}>{row.email}</span>
+            <div key={row.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", border: "1px solid #f0f2f5", borderRadius: 12 }}>
+              <span style={{ fontSize: 13.5, color: "#1F2933", fontWeight: 600 }}>{row.email}</span>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: row.role === 'admin' ? '#A02843' : '#6b7280' }}>
-                  {row.role === 'admin' ? '🛡️ Admin' : '👁️ Viewer'}
+                <span style={{ fontSize: 11, fontWeight: 700, padding: "5px 11px", borderRadius: 999, backgroundColor: row.role === 'admin' ? MD : '#F1EEE8', color: row.role === 'admin' ? '#fff' : '#374151' }}>
+                  {row.role === 'admin' ? 'Admin' : 'Viewer'}
                 </span>
-                <Btn onClick={() => toggleRole(row)} disabled={busyId === row.id} style={{ ...s.btnGhost, fontSize: 11, padding: "5px 10px" }}>
+                <Btn onClick={() => toggleRole(row)} disabled={busyId === row.id} style={{ ...s.btnGhost, borderColor: `${M}40`, color: M, fontSize: 11, padding: "6px 11px" }}>
                   {busyId === row.id ? '...' : (row.role === 'admin' ? 'خليه Viewer' : 'خليه Admin')}
                 </Btn>
               </div>
