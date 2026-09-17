@@ -5240,6 +5240,26 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
   const clientOptions   = rows.map(r => r.name.trim()).filter(Boolean);
   const nonDefaultRules = rules.filter(r => r.matchType !== "default");
   const defaultRule     = rules.find(r => r.matchType === "default") || { id: "rule-default", client: clientOptions[0] || "", matchType: "default", value: "" };
+  // Flag any project keyword typed into more than one rule under the same
+  // client -- functionally harmless (whichever rule sits later still wins),
+  // but it's exactly how the Finara "duplicate project" ended up on screen:
+  // a coded default rule and a manually-added one both matching "FINARA".
+  // Surfaced both as a page-level summary and a per-row badge below, so a
+  // repeat of that doesn't need to be found by accident again.
+  const duplicateRuleIds = new Set();
+  {
+    const seenByKey = {};
+    nonDefaultRules.forEach(r => {
+      const v = (r.value || "").trim().toUpperCase();
+      if (!v) return;
+      const key = `${r.client}::${v}`;
+      (seenByKey[key] = seenByKey[key] || []).push(r.id);
+    });
+    Object.values(seenByKey).forEach(ids => { if (ids.length > 1) ids.forEach(id => duplicateRuleIds.add(id)); });
+  }
+  const clientsWithDuplicateRules = [...new Set(
+    nonDefaultRules.filter(r => duplicateRuleIds.has(r.id)).map(r => r.client)
+  )];
   const updateRule = (id, patch) => setRules(rs => rs.map(r => r.id === id ? { ...r, ...patch } : r));
   const removeRule = (id) => setRules(rs => rs.filter(r => r.id !== id));
 
@@ -5389,6 +5409,12 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
         </p>
         <Btn onClick={addRow} style={{ ...s.btnPrimary, backgroundColor: M, flexShrink: 0, whiteSpace: "nowrap" }}><Plus size={13}/> Add Client</Btn>
       </div>
+      {clientsWithDuplicateRules.length > 0 && (
+        <div style={{ padding: "10px 14px", borderRadius: 10, backgroundColor: WF_TOKENS.warningBg, border: `1px solid ${WF_TOKENS.warningSolid}40`, display: "flex", flexDirection: "column", gap: 2 }}>
+          <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: WF_TOKENS.warning }}>⚠️ فيه كلمة مشروع مكررة على أكتر من قاعدة عند: {clientsWithDuplicateRules.join("، ")}</p>
+          <p style={{ margin: 0, fontSize: 11.5, color: "#78350f" }}>مش هتبوظ التصنيف (القاعدة الأحدث بتفوز)، بس ده بالظبط اللي حصل مع فينارا — افتحي Projects بتاع كل عميل من دول وشوفي القواعد المتعلّم عليها بعلامة ⚠️ تحت.</p>
+        </div>
+      )}
       <div style={{ position: "relative" }}>
         <Search size={14} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#9ca3af" }} />
         <input value={clientFilter} onChange={e => setClientFilter(e.target.value)} placeholder="Search clients…"
@@ -5410,6 +5436,12 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
             const matchName = row.origName || row.name.trim();
             const clientRules = nonDefaultRules.filter(r => r.client === matchName);
             const projectsOpen = expandedProjectsId === row.id;
+            // The client that catches every project with no matching keyword
+            // rule at all -- it's expected to have zero rules of its own
+            // (that's what "default" means), so its empty Projects panel
+            // isn't a sign anything's missing the way it would be for
+            // anyone else.
+            const isDefaultClient = !!matchName && matchName === defaultRule.client;
             // Real project names already on this client's employee records --
             // offered as suggestions when picking which project a deal applies
             // to, so a Deal Terms project match can be chosen instead of typed
@@ -5443,7 +5475,7 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                   </button>
                   <button onClick={() => setExpandedProjectsId(projectsOpen ? null : row.id)}
                     style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, height: 30, minWidth: 116, padding: "0 14px", borderRadius: 999, border: "none", backgroundColor: projectsOpen ? MD : "#F1EEE8", color: projectsOpen ? "#fff" : "#374151", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxSizing: "border-box", flexShrink: 0 }}>
-                    Projects{clientRules.length ? ` (${clientRules.length})` : ""} <ChevronDown size={11} style={{ transform: projectsOpen ? "rotate(180deg)" : "none" }}/>
+                    Projects{clientRules.length ? ` (${clientRules.length})` : isDefaultClient ? " · Default" : ""} <ChevronDown size={11} style={{ transform: projectsOpen ? "rotate(180deg)" : "none" }}/>
                   </button>
                   <button onClick={() => removeRow(row.id)} title="مسح" style={{ width: 30, height: 30, borderRadius: 8, border: "none", backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, boxSizing: "border-box" }}>
                     <Trash2 size={13}/>
@@ -5531,10 +5563,19 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                       دي أسماء المشاريع الحقيقية المسجلة فعليًا على موظفين تحت العميل ده — مش مربوطة تلقائي بحاجة. اللي بيربطها فعليًا بالعميل ده الكلمات المفتاحية تحت: أي مشروع جديد اسمه (أو جزء منه) يطابق واحدة منها، هيتحط تلقائي تحت "{row.name || matchName}".
                     </p>
                     {clientRules.length === 0 && (
-                      <p style={{ margin: 0, fontSize: 12, color: "#c4c4c4" }}>مفيش مشاريع مربوطة لسه — أي موظف من غير مشروع مطابق هيروح للعميل الافتراضي.</p>
+                      isDefaultClient ? (
+                        <p style={{ margin: 0, fontSize: 12, color: "#9ca3af", lineHeight: 1.6 }}>
+                          "{row.name || matchName}" هي <b style={{ color: MD }}>العميل الافتراضي</b> — أي مشروع جديد ملوش قاعدة كلمة مفتاحية عند عميل تاني بيتحط تلقائي هنا. عشان كده طبيعي إنها من غير قواعد خاصة بيها، مش ناقصها إعداد.
+                        </p>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: 12, color: "#c4c4c4" }}>مفيش مشاريع مربوطة لسه — أي موظف من غير مشروع مطابق هيروح للعميل الافتراضي.</p>
+                      )
                     )}
                     {clientRules.map(r => (
-                      <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", border: "1px solid #f0f0f0", borderRadius: 8, backgroundColor: "white", flexWrap: "wrap" }}>
+                      <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", border: `1px solid ${duplicateRuleIds.has(r.id) ? WF_TOKENS.warningSolid+"50" : "#f0f0f0"}`, borderRadius: 8, backgroundColor: duplicateRuleIds.has(r.id) ? WF_TOKENS.warningBg : "white", flexWrap: "wrap" }}>
+                        {duplicateRuleIds.has(r.id) && (
+                          <span title="نفس الكلمة متكررة في قاعدة تانية تحت العميل ده" style={{ fontSize: 10, fontWeight: 700, color: WF_TOKENS.warning, whiteSpace: "nowrap" }}>⚠️ مكررة</span>
+                        )}
                         <select value={r.matchType} onChange={e => updateRule(r.id, { matchType: e.target.value })} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11 }}>
                           <option value="contains">Project contains</option>
                           <option value="exact">Project = exactly</option>
