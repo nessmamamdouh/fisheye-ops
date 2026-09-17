@@ -1678,6 +1678,7 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
   const [fPartner, setFPartner] = useState(_f.fPartner || "");
   const [fNationality, setFNationality] = useState(_f.fNationality || "");
   const [showImportMenu, setShowImportMenu] = useState(false);
+  const [showClientMenu, setShowClientMenu] = useState(false); // client chip dropdown (replaces the old always-visible client rail)
   const [pendingCSVDiff, setPendingCSVDiff] = useState(null); // { changes, notFound, skipped, applyFn }
   const [importBackup, setImportBackup] = useState(null);     // snapshot for rollback
   const [csvApplying, setCsvApplying] = useState(false);      // loading state for apply btn
@@ -2159,45 +2160,6 @@ const submitRenew = async () => {
         </div>
       )}
 
-      {/* ── Sidebar ── */}
-      <div style={{ width: 180, flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10, padding: "0 8px" }}>
-          <div style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: M, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Building2 size={12} style={{ color: "white" }} />
-          </div>
-          <span style={{ fontSize: 11, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.08em" }}>Clients</span>
-        </div>
-        {["All", ...clientsList].map(c => {
-          const isA = client === c;
-          const count = c === "All" ? employees.filter(e => !isExcluded(e)).length : counts[c] || 0;
-          const dotColor = CLIENT_META[c]?.dot || M;
-          return (
-            <button key={c} onClick={() => setClientP(c)} style={{
-              width: "100%", textAlign: "left", padding: "9px 12px", borderRadius: 10,
-              border: isA ? `1px solid ${M}30` : "1px solid transparent",
-              cursor: "pointer", fontSize: 12, fontWeight: 600,
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              marginBottom: 2,
-              backgroundColor: isA ? `${M}0e` : "transparent",
-              color: isA ? M : "#4b5563", transition: "all 0.15s",
-              borderLeft: isA ? `3px solid ${M}` : "3px solid transparent",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 7, overflow: "hidden" }}>
-                {c !== "All" && <span style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: isA ? M : dotColor, flexShrink: 0 }} />}
-                {c === "All" && <Users size={11} style={{ color: isA ? M : "#9ca3af", flexShrink: 0 }} />}
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c}</span>
-              </div>
-              <span style={{
-                fontSize: 10, fontWeight: 800, padding: "2px 7px", borderRadius: 999,
-                backgroundColor: isA ? M : "#f3f4f6",
-                color: isA ? "white" : "#6b7280", flexShrink: 0, marginLeft: 4,
-                fontFamily: "monospace",
-              }}>{count}</span>
-            </button>
-          );
-        })}
-      </div>
-
       {/* ── Main content: table + side panel ── */}
       <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 16 }}>
 
@@ -2248,6 +2210,49 @@ const submitRenew = async () => {
 
             {/* Toolbar */}
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {/* Client selector — chip + dropdown; replaces the old always-visible client rail */}
+              <div style={{ position: "relative" }}>
+                <button onClick={() => setShowClientMenu(m => !m)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: `1px solid ${M}40`, backgroundColor: `${M}0e`, color: M, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                  <Building2 size={13} /> {client === "All" ? "All Clients" : client} <ChevronDown size={11} style={{ marginLeft: 1 }} />
+                </button>
+                {showClientMenu && (
+                  <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 50, backgroundColor: "white", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", width: 220, maxHeight: 320, overflowY: "auto", overflowX: "hidden" }}
+                    onMouseLeave={() => setShowClientMenu(false)}>
+                    {["All", ...clientsList].map(c => {
+                      const isA = client === c;
+                      const count = c === "All" ? employees.filter(e => !isExcluded(e)).length : counts[c] || 0;
+                      const dotColor = CLIENT_META[c]?.dot || M;
+                      return (
+                        <button key={c} onClick={() => { setClientP(c); setShowClientMenu(false); }}
+                          onMouseEnter={e => e.currentTarget.style.backgroundColor = isA ? `${M}14` : "#f9fafb"}
+                          onMouseLeave={e => e.currentTarget.style.backgroundColor = isA ? `${M}0e` : "transparent"}
+                          style={{
+                            width: "100%", textAlign: "left", padding: "9px 12px",
+                            border: "none", borderBottom: "1px solid #f3f4f6",
+                            cursor: "pointer", fontSize: 12, fontWeight: 600,
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            backgroundColor: isA ? `${M}0e` : "transparent",
+                            color: isA ? M : "#374151",
+                          }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 7, overflow: "hidden" }}>
+                            {c !== "All" && <span style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: isA ? M : dotColor, flexShrink: 0 }} />}
+                            {c === "All" && <Users size={11} style={{ color: isA ? M : "#9ca3af", flexShrink: 0 }} />}
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c}</span>
+                          </div>
+                          <span style={{
+                            fontSize: 10, fontWeight: 800, padding: "2px 7px", borderRadius: 999,
+                            backgroundColor: isA ? M : "#f3f4f6",
+                            color: isA ? "white" : "#6b7280", flexShrink: 0, marginLeft: 8,
+                            fontFamily: "monospace",
+                          }}>{count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div style={{ width: 1, height: 22, backgroundColor: "#e5e7eb", flexShrink: 0 }} />
               {/* Search */}
               <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
                 <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#d1d5db" }} />
