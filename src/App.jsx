@@ -5287,7 +5287,13 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
             const count = row.origName ? empCountFor(row.origName) : 0;
             const renamed = row.origName && row.name.trim() && row.origName !== row.name.trim();
             const deals = dealsFor(row);
-            const hasDeal = deals.some(d => d.serviceType || (d.marginValue !== undefined && d.marginValue !== "") || (d.marginPercent !== undefined && d.marginPercent !== "") || (d.marginFixed !== undefined && d.marginFixed !== "") || (d.saudizationFee !== undefined && d.saudizationFee !== "") || d.recruitmentFee || d.note || (d.projectMatches||[]).length);
+            // A deal only "counts" once it actually has something typed into it --
+            // an empty default deal (service/margin fields still blank) shouldn't
+            // be counted alongside real project-specific deals just because it
+            // exists as a placeholder row in the array.
+            const dealIsFilled = d => !!(d.serviceType || (d.marginValue !== undefined && d.marginValue !== "") || (d.marginPercent !== undefined && d.marginPercent !== "") || (d.marginFixed !== undefined && d.marginFixed !== "") || (d.saudizationFee !== undefined && d.saudizationFee !== "") || d.recruitmentFee || d.note || (d.projectMatches||[]).length);
+            const hasDeal = deals.some(dealIsFilled);
+            const filledDealsCount = deals.filter(dealIsFilled).length;
             const dealOpen = expandedDealId === row.id;
             const matchName = row.origName || row.name.trim();
             const clientRules = nonDefaultRules.filter(r => r.client === matchName);
@@ -5316,7 +5322,7 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                   {!renamed && count > 0 && <span style={{ fontSize: 10, color: "#9ca3af" }}>{count} موظف حاليًا</span>}
                   <button onClick={() => setExpandedDealId(dealOpen ? null : row.id)}
                     style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, height: 30, minWidth: 116, padding: "0 14px", borderRadius: 999, border: "none", backgroundColor: dealOpen ? MD : WF_TOKENS.infoBg, color: dealOpen ? "#fff" : WF_TOKENS.info, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxSizing: "border-box", flexShrink: 0 }}>
-                    {`Deal Terms${deals.length > 1 ? ` (${deals.length})` : ""}`} <ChevronDown size={11} style={{ transform: dealOpen ? "rotate(180deg)" : "none" }}/>
+                    {`Deal Terms${filledDealsCount > 1 ? ` (${filledDealsCount})` : ""}`} <ChevronDown size={11} style={{ transform: dealOpen ? "rotate(180deg)" : "none" }}/>
                   </button>
                   <button onClick={() => setExpandedProjectsId(projectsOpen ? null : row.id)}
                     style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, height: 30, minWidth: 116, padding: "0 14px", borderRadius: 999, border: "none", backgroundColor: projectsOpen ? MD : "#F1EEE8", color: projectsOpen ? "#fff" : "#374151", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxSizing: "border-box", flexShrink: 0 }}>
