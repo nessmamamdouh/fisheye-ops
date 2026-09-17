@@ -982,6 +982,20 @@ function WFWorkflowBadgeMuted({ status }) {
   const label = sl.includes("iqama") && sl.includes("transfer") ? "Transferred" : status;
   return <span style={wfBadgeStyle(bg, color)}>{label}</span>;
 }
+// Plain dot + text — deliberately NOT a pill. Client names vary too much in length
+// for a fixed-shape badge to ever look tidy or consistent; a small identity dot plus
+// plain text stays legible and calm at any length. Kept local to Workforce Explorer —
+// the real global ClientBadge (vivid CLIENT_META fill) stays untouched for Clients Hub,
+// Partners Hub, etc.
+function WFClientTag({ client }) {
+  const dot = CLIENT_META[client]?.dot || M;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#374151", whiteSpace: "nowrap" }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: dot, flexShrink: 0 }} />
+      {client || "—"}
+    </span>
+  );
+}
 
 // ─── EMPLOYEE TABLE ─────────────────────────────────────────────────────
 function EmployeeTable({ rows, onSelect, selected, setSelected, onUpdateField, onRenew, activeSideId }) {
@@ -1054,7 +1068,7 @@ function EmployeeTable({ rows, onSelect, selected, setSelected, onUpdateField, o
                   </td>
 
                   {/* Client */}
-                  <td style={wfTd}><ClientBadge client={e.client} small/></td>
+                  <td style={wfTd}><WFClientTag client={e.client}/></td>
 
                   {/* Start Date */}
                   <td style={wfTd}>
@@ -6813,7 +6827,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
              to live in a topbar here has moved to the sidebar footer (see
              sidebarFooter below); it's global chrome, not something that
              needs to repeat above the content on every single screen. */}
-        {!["action","finance","billing","weeklyreport"].includes(nav) && (
+        {!["action","finance","billing","weeklyreport","workforce"].includes(nav) && (
           <div style={s.topbar} className="fe-topbar">
             <h1 style={{margin:0,fontSize:15,fontWeight:700,color:"#111827",letterSpacing:"-0.02em",fontFamily:"var(--font-sans)"}}>{labels[nav] || nav}</h1>
           </div>
