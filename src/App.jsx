@@ -4977,11 +4977,20 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
   const [renamingProject, setRenamingProject] = useState(false);
   const [projectRenameFlash, setProjectRenameFlash] = useState("");
   const [clientFilter, setClientFilter] = useState("");
+  const [expandedDealId, setExpandedDealId] = useState(null); // which row's Deal Terms panel is open
 
   const empCountFor = (name) => employees.filter(e => e.client === name).length;
 
   const updateRowName  = (id, val)  => setRows(rs => rs.map(r => r.id === id ? { ...r, name: sanitizeClientName(val) } : r));
   const updateRowColor = (id, meta) => setRows(rs => rs.map(r => r.id === id ? { ...r, meta: { ...r.meta, ...meta } } : r));
+  // Deal Terms: Fisheye's own reference copy of what was agreed with the client (service
+  // type, margin, recruitment fee, who bills what) — entered/edited here so account
+  // managers don't need to open the CRM just to check terms, and so Ops's own profit
+  // math has something to point at. This is NOT a live sync with the CRM (the CRM has no
+  // export/API for Ops to read yet) — it's a manual note that mirrors what the sales team
+  // recorded there. Deliberately holds nothing about partner cost/bonus: that stays
+  // per-employee and confidential, same as today.
+  const updateDealTerms = (id, patch) => setRows(rs => rs.map(r => r.id === id ? { ...r, meta: { ...r.meta, dealTerms: { ...r.meta?.dealTerms, ...patch } } } : r));
   const addRow = () => setRows(rs => [...rs, { id: `row-new-${Date.now()}`, origName: "", name: "", meta: CLIENT_COLOR_PALETTE[rs.length % CLIENT_COLOR_PALETTE.length] }]);
   const removeRow = (id) => {
     const row = rows.find(r => r.id === id);
@@ -5246,25 +5255,87 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
           {rows.filter(r => !clientFilter.trim() || r.name.toLowerCase().includes(clientFilter.trim().toLowerCase())).map(row => {
             const count = row.origName ? empCountFor(row.origName) : 0;
             const renamed = row.origName && row.name.trim() && row.origName !== row.name.trim();
+            const deal = row.meta?.dealTerms;
+            const hasDeal = !!(deal && (deal.serviceType || deal.marginValue || deal.recruitmentFee || deal.note));
+            const dealOpen = expandedDealId === row.id;
             return (
-              <div key={row.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", border: "1px solid #f3f4f6", borderRadius: 10, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", gap: 4 }}>
-                  {CLIENT_COLOR_PALETTE.map((pal, i) => (
-                    <button key={i} onClick={() => updateRowColor(row.id, pal)} title="لون"
-                      style={{ width: 16, height: 16, borderRadius: "50%", backgroundColor: pal.dot, border: row.meta?.dot === pal.dot ? `2px solid ${MD}` : "2px solid transparent", cursor: "pointer", padding: 0 }}/>
-                  ))}
+              <div key={row.id} style={{ border: "1px solid #f3f4f6", borderRadius: 10, overflow: "hidden" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {CLIENT_COLOR_PALETTE.map((pal, i) => (
+                      <button key={i} onClick={() => updateRowColor(row.id, pal)} title="لون"
+                        style={{ width: 16, height: 16, borderRadius: "50%", backgroundColor: pal.dot, border: row.meta?.dot === pal.dot ? `2px solid ${MD}` : "2px solid transparent", cursor: "pointer", padding: 0 }}/>
+                    ))}
+                  </div>
+                  <input value={row.name} onChange={e => updateRowName(row.id, e.target.value)} placeholder="اسم العميل"
+                    style={{ flex: "1 1 160px", padding: "6px 10px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600 }}/>
+                  {renamed && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: WF_TOKENS.warningSolid, backgroundColor: WF_TOKENS.warningBg, padding: "3px 8px", borderRadius: 999 }}>
+                      ⚠️ هيتحدث {count} موظف
+                    </span>
+                  )}
+                  {!renamed && count > 0 && <span style={{ fontSize: 10, color: "#9ca3af" }}>{count} موظف حاليًا</span>}
+                  <button onClick={() => setExpandedDealId(dealOpen ? null : row.id)}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 999, border: hasDeal ? `1px solid ${M}40` : "1px solid #e5e7eb", backgroundColor: hasDeal ? `${M}0e` : "white", color: hasDeal ? M : "#6b7280", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                    🤝 {hasDeal ? (deal.serviceType || "Deal Terms") : "+ Deal Terms"} <ChevronDown size={11} style={{ transform: dealOpen ? "rotate(180deg)" : "none" }}/>
+                  </button>
+                  <button onClick={() => removeRow(row.id)} title="مسح" style={{ width: 26, height: 26, borderRadius: 7, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+                    <Trash2 size={12}/>
+                  </button>
                 </div>
-                <input value={row.name} onChange={e => updateRowName(row.id, e.target.value)} placeholder="اسم العميل"
-                  style={{ flex: "1 1 160px", padding: "6px 10px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600 }}/>
-                {renamed && (
-                  <span style={{ fontSize: 10, fontWeight: 700, color: WF_TOKENS.warningSolid, backgroundColor: WF_TOKENS.warningBg, padding: "3px 8px", borderRadius: 999 }}>
-                    ⚠️ هيتحدث {count} موظف
-                  </span>
+                {dealOpen && (
+                  <div style={{ padding: "12px 14px", borderTop: "1px solid #f3f4f6", backgroundColor: "#fafafa", display: "flex", flexDirection: "column", gap: 10 }}>
+                    <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", lineHeight: 1.6 }}>
+                      نسخة فيشآي المرجعية من شروط الديل المتفق عليها مع العميل — مش مربوطة بالـ CRM لحد دلوقتي (لسه مفيش وصلة API/مشاركة بيانات بين الاتنين)، فحدّثيها هنا يدويًا لما الشروط تتغيّر في الـ CRM. تفاصيل تكلفة البارتنر والبونص بتفضل زي ما هي — في سجل كل موظف، سرية زي دلوقتي.
+                    </p>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>نوع الخدمة</label>
+                        <select value={deal?.serviceType || ""} onChange={e => updateDealTerms(row.id, { serviceType: e.target.value })}
+                          style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 140 }}>
+                          <option value="">— اختاري —</option>
+                          <option value="Outsourcing">Outsourcing</option>
+                          <option value="Recruitment">Recruitment</option>
+                          <option value="RPO">RPO (via Partner)</option>
+                        </select>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>نوع المارجن</label>
+                        <select value={deal?.marginType || "percent"} onChange={e => updateDealTerms(row.id, { marginType: e.target.value })}
+                          style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 120 }}>
+                          <option value="percent">نسبة %</option>
+                          <option value="fixed">مبلغ ثابت SAR</option>
+                          <option value="percent_fixed">نسبة + مبلغ ثابت</option>
+                        </select>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>قيمة المارجن</label>
+                        <input type="number" value={deal?.marginValue ?? ""} onChange={e => updateDealTerms(row.id, { marginValue: e.target.value })} placeholder="مثال: 15"
+                          style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, width: 90 }}/>
+                      </div>
+                      {deal?.serviceType === "Recruitment" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                          <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>رسوم التوظيف (SAR)</label>
+                          <input type="number" value={deal?.recruitmentFee ?? ""} onChange={e => updateDealTerms(row.id, { recruitmentFee: e.target.value })} placeholder="مثال: 5000"
+                            style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, width: 110 }}/>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                      {[["billGosi","GOSI على العميل"],["billMedical","تأمين طبي على العميل"],["billAjeer","Ajeer على العميل"]].map(([key,label]) => (
+                        <label key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#374151", cursor: "pointer" }}>
+                          <input type="checkbox" checked={!!deal?.[key]} onChange={e => updateDealTerms(row.id, { [key]: e.target.checked })}/>
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                      <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>ملاحظات إضافية (زي شروط سعودة/فيزا خاصة)</label>
+                      <input value={deal?.note || ""} onChange={e => updateDealTerms(row.id, { note: e.target.value })} placeholder="مثال: اتفاق سعودة فيزا خاص بديل التوسيع التاني"
+                        style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12 }}/>
+                    </div>
+                  </div>
                 )}
-                {!renamed && count > 0 && <span style={{ fontSize: 10, color: "#9ca3af" }}>{count} موظف حاليًا</span>}
-                <button onClick={() => removeRow(row.id)} title="مسح" style={{ marginInlineStart: "auto", width: 26, height: 26, borderRadius: 7, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-                  <Trash2 size={12}/>
-                </button>
               </div>
             );
           })}
