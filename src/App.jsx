@@ -20,7 +20,8 @@ import {
   Download, MessageCircle, Calendar, AlertCircle, Trash2,
   Menu, ChevronDown, Copy, Check, Mail, Filter, FileUp,
   Edit3, Save, Hash, Zap, ClipboardList, Briefcase, Archive, Globe, Link, Inbox, UserPlus, Database,
-  Target, CalendarDays, Receipt, AlertTriangle, RefreshCw, GitBranch, Award, LogOut, Wallet
+  Target, CalendarDays, Receipt, AlertTriangle, RefreshCw, GitBranch, Award, LogOut, Wallet,
+  ChevronRight, ChevronLeft
 } from "lucide-react";
 import { ActionCenter } from './ActionCenterV2';
 import AuthGate, { useAuth } from './AuthGate';
@@ -5465,22 +5466,72 @@ function SettingsView({
 }) {
   const { profile: __profile } = useAuth();
   const isAdmin = __profile?.role === 'admin';
-  const [tab,setTab]=useState("general");
+  const [tab,setTab]=useState(null);
   const [confirmClear,setConfirmClear]=useState(false);
-  const stabs=[{k:"general",l:"General"},{k:"notifications",l:"🔔 Notifications"},{k:"config",l:"🗂️ Configuration"},{k:"logic",l:"Report Logic"}];
-  if (isAdmin) stabs.push({k:"team",l:"👥 Team"});
+
+  const syncMeta = !isOnline ? "Offline" : lastSync
+    ? `Synced ${new Date(lastSync).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}`
+    : "Not synced yet";
+
+  const CATEGORIES=[
+    {k:"config",        l:"Clients & Deals", d:"Rename clients, manage project-matching rules, and keep deal-term references.", icon:Briefcase,    meta:`${clients?.length||0} clients on file`},
+    {k:"notifications",  l:"Notifications",   d:"Configure alerts for expiring documents, approvals, and daily digests.",         icon:Bell,         meta:"Alerts & digests"},
+    {k:"team",           l:"Team & Access",   d:"Control who can sign in and what they can see, Admin down to Viewer.",           icon:Users,        meta:"Roles & access", adminOnly:true},
+    {k:"general",        l:"Data & Sync",     d:"Back up or restore configuration and workforce data with the cloud.",            icon:RefreshCw,    meta:syncMeta},
+    {k:"logic",          l:"Report Logic",    d:"A quick reference for how matching and finance logic work across the app.",      icon:ClipboardList, meta:"Reference only"},
+  ].filter(c=>!c.adminOnly||isAdmin);
+
+  const current = CATEGORIES.find(c=>c.k===tab);
+
+  if (!tab) return (
+    <div style={{maxWidth:960,display:"flex",flexDirection:"column",gap:20}}>
+      <div>
+        <h2 style={{margin:0,fontSize:20,fontWeight:700}}>Settings</h2>
+        <p style={{margin:"4px 0 0",fontSize:13,color:"#6b7280"}}>Everything that shapes how Fisheye Ops runs.</p>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16}}>
+        {CATEGORIES.map(c=>{
+          const Icon=c.icon;
+          return (
+            <button key={c.k} onClick={()=>setTab(c.k)} style={{textAlign:"left",cursor:"pointer",border:"1px solid #e5e7eb",borderRadius:14,padding:20,backgroundColor:"white",display:"flex",flexDirection:"column",gap:10,fontFamily:"inherit"}}>
+              <div style={{width:38,height:38,borderRadius:10,backgroundColor:MD,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <Icon size={18} color="#fff"/>
+              </div>
+              <div style={{fontSize:15,fontWeight:700,color:"#111827"}}>{c.l}</div>
+              <div style={{fontSize:12.5,color:"#6b7280",lineHeight:1.5,flexGrow:1}}>{c.d}</div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:2}}>
+                <span style={{fontSize:11,fontFamily:"monospace",color:"#9ca3af"}}>{c.meta}</span>
+                <ChevronRight size={15} color={M}/>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <div style={{maxWidth:720,display:"flex",flexDirection:"column",gap:20}}>
-      <h2 style={{margin:0,fontSize:20,fontWeight:700}}>Settings</h2>
-      <div style={{display:"flex",borderBottom:"1px solid #e5e7eb"}}>
-        {stabs.map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{padding:"10px 16px",fontSize:12,fontWeight:600,border:"none",borderBottom:`2px solid ${tab===t.k?M:"transparent"}`,backgroundColor:"transparent",cursor:"pointer",color:tab===t.k?M:"#6b7280",marginBottom:-1}}>{t.l}</button>)}
+      <button onClick={()=>setTab(null)} style={{display:"flex",alignItems:"center",gap:6,fontSize:12.5,fontWeight:600,color:"#6b7280",background:"none",border:"none",cursor:"pointer",padding:0,alignSelf:"flex-start"}}>
+        <ChevronLeft size={15}/> Settings
+      </button>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        {current && (
+          <div style={{width:38,height:38,borderRadius:10,backgroundColor:MD,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <current.icon size={18} color="#fff"/>
+          </div>
+        )}
+        <div>
+          <h2 style={{margin:0,fontSize:19,fontWeight:700}}>{current?.l}</h2>
+          {current?.d && <p style={{margin:"2px 0 0",fontSize:12.5,color:"#6b7280"}}>{current.d}</p>}
+        </div>
       </div>
       {tab==="general"&&(
         <div style={{display:'flex',flexDirection:'column',gap:16}}>
           {/* Cloud Sync */}
           {isOnline && (
             <Card style={{padding:20,border:`2px solid ${syncStatus==='error'?WF_TOKENS.errorSolid+'40':syncStatus==='success'?WF_TOKENS.successSolid+'40':'#e5e7eb'}`,backgroundColor:syncStatus==='error'?WF_TOKENS.errorBg:syncStatus==='success'?WF_TOKENS.successBg:'white'}}>
-              <h3 style={{fontWeight:700,fontSize:14,margin:"0 0 4px"}}>☁️ Cloud Sync</h3>
+              <h3 style={{fontWeight:700,fontSize:14,margin:"0 0 4px"}}>Cloud Backup</h3>
               <p style={{fontSize:12,color:'#6b7280',margin:'0 0 14px'}}>مزامنة البيانات مع Supabase{lastSync ? ` · آخر sync: ${new Date(lastSync).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}` : ''}</p>
               <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                 <Btn onClick={uploadToCloud}     disabled={syncStatus==='syncing'} style={{...s.btnPrimary,backgroundColor:M,opacity:syncStatus==='syncing'?0.6:1}}>📤 Upload to Cloud</Btn>
@@ -5529,7 +5580,6 @@ function SettingsView({
       )}
       {tab==="logic"&&(
         <Card style={{padding:20}}>
-          <h3 style={{fontWeight:700,fontSize:14,margin:"0 0 16px"}}>Report & Finance Logic</h3>
           {["✅ Pending = workflow NOT in [Agreement Signed, Complete]","🚫 Morning report excludes: Expired, Resigned, Combuzz HR","⚠️ PO Alert: Sela only · Empty PO field","📅 Expiry: Rolling 30-day window","💰 Finance: Excludes resigned always. Excludes expired UNLESS Sela with no PO","💹 Profit Direct: fisheyeMargin% × Total Package (or fixed SAR if type = fixed)","💹 Profit Partner: Net = Client Price − Partner Cost (each can be % of Total Package or fixed SAR)","🔴 SAR Discrepancy: Only shown after uploading partner invoice CSV"].map(r=>(
             <p key={r} style={{fontSize:12,color:"#4b5563",padding:"8px 0",borderBottom:"1px solid #f9fafb",margin:0}}>{r}</p>
           ))}
