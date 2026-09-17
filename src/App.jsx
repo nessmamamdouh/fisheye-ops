@@ -840,6 +840,31 @@ function EmployeeModal({ emp, onClose, onSave, partners, allEmployees = [], useO
   );
 }
 
+// ─── WORKFORCE EXPLORER — MUTED STATUS TOKENS (scoped; do not use outside Workforce Explorer) ──
+// Softer, de-saturated versions of the shared status colors, matching the approved
+// Workforce Explorer mockup. Kept local to this section so Clients Hub / Partners Hub /
+// the Employee edit Modal (which use the shared WFBadge/StatusBadge globals) are unaffected.
+const WF_TOKENS = {
+  success:        "oklch(34% 0.045 152)",
+  successBg:      "oklch(94.5% 0.02 152)",
+  successBgHover: "oklch(90% 0.035 152)",
+  successSolid:   "oklch(46% 0.09 152)",
+  warning:      "oklch(40% 0.06 80)",
+  warningBg:    "oklch(95% 0.03 80)",
+  warningSolid: "oklch(52% 0.12 80)",
+  error:        "oklch(40% 0.08 25)",
+  errorBg:      "oklch(94.5% 0.03 25)",
+  errorSolid:   "oklch(50% 0.15 25)",
+  info:         "oklch(38% 0.06 235)",
+  infoBg:       "oklch(94.5% 0.02 235)",
+  infoSolid:    "oklch(50% 0.11 235)",
+  violet:       "oklch(38% 0.07 305)",
+  violetBg:     "oklch(94.5% 0.025 305)",
+  violetSolid:  "oklch(50% 0.13 305)",
+  neutral:      "oklch(40% 0.01 260)",
+  neutralBg:    "oklch(95% 0.005 260)",
+};
+
 // ─── EMPLOYEE JOURNEY BAR ────────────────────────────────────────────────
 function JourneyBar({ workflowStatus, status }) {
   const steps = [
@@ -880,16 +905,16 @@ function JourneyBar({ workflowStatus, status }) {
                 <div style={{
                   width: 20, height: 20, borderRadius: '50%', fontSize: 9, fontWeight: 800,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  backgroundColor: done ? '#16a34a' : current ? M : '#e5e7eb',
+                  backgroundColor: done ? WF_TOKENS.successSolid : current ? M : '#e5e7eb',
                   color: done || current ? 'white' : '#9ca3af',
                   border: current ? `2px solid ${MD}` : 'none',
                 }}>
                   {done ? <Check size={9}/> : i + 1}
                 </div>
-                <span style={{ fontSize: 8, fontWeight: 600, color: done ? '#16a34a' : current ? M : '#9ca3af', whiteSpace: 'nowrap' }}>{step.s}</span>
+                <span style={{ fontSize: 8, fontWeight: 600, color: done ? WF_TOKENS.success : current ? M : '#9ca3af', whiteSpace: 'nowrap' }}>{step.s}</span>
               </div>
               {i < steps.length - 1 && (
-                <div style={{ width: 12, height: 2, backgroundColor: done ? '#16a34a' : '#e5e7eb', flexShrink: 0, marginTop: 9 }} />
+                <div style={{ width: 12, height: 2, backgroundColor: done ? WF_TOKENS.successSolid : '#e5e7eb', flexShrink: 0, marginTop: 9 }} />
               )}
             </React.Fragment>
           );
@@ -897,6 +922,65 @@ function JourneyBar({ workflowStatus, status }) {
       </div>
     </div>
   );
+}
+
+// ─── EMPLOYEE TABLE — SCOPED STYLE OVERRIDES (Workforce Explorer only) ─────
+// Crimson-masthead header + top-aligned rows with consistent spacing, matching the
+// approved mockup. Layered on top of the shared s.th / s.td / s.badge so Clients Hub,
+// Partners Hub and the Employee edit Modal keep their original look — s.th / s.td /
+// WFBadge / StatusBadge themselves are never modified.
+const wfTh = {
+  ...s.th,
+  color: "rgba(255,255,255,0.85)",
+  backgroundColor: M,
+  borderBottom: `2px solid ${MD}`,
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: "0.06em",
+};
+const wfTd = {
+  ...s.td,
+  verticalAlign: "top",
+  lineHeight: 1.4,
+};
+
+function wfBadgeStyle(bg, color) {
+  return {
+    ...s.badge(bg, color),
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    minWidth: 68,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    fontSize: 10.5,
+    fontWeight: 800,
+    whiteSpace: "nowrap",
+  };
+}
+// Mirrors StatusBadge's classification exactly, muted palette only.
+function WFStatusBadgeMuted({ status }) {
+  const sl = (status || "").toLowerCase();
+  const cfg =
+    sl === "active"   ? [WF_TOKENS.successBg, WF_TOKENS.success] :
+    sl === "renewal"  ? [WF_TOKENS.infoBg, WF_TOKENS.info] :
+    sl === "new"      ? [WF_TOKENS.violetBg, WF_TOKENS.violet] :
+    sl === "transfer" ? [WF_TOKENS.warningBg, WF_TOKENS.warning] :
+    sl === "expired"  ? [WF_TOKENS.neutralBg, WF_TOKENS.neutral] :
+    sl === "resigned" ? [WF_TOKENS.errorBg, WF_TOKENS.error] :
+    [WF_TOKENS.neutralBg, WF_TOKENS.neutral];
+  return <span style={{...wfBadgeStyle(cfg[0], cfg[1]), textTransform: "capitalize"}}>{status || "—"}</span>;
+}
+// Mirrors WFBadge's classification exactly, muted palette; shortens the long
+// "Iqama Transferred" label to "Transferred" per the approved mockup.
+function WFWorkflowBadgeMuted({ status }) {
+  if (!status) return <span style={{fontSize:12,color:"#9ca3af"}}>—</span>;
+  const sl = status.toLowerCase();
+  const bg = sl.includes("signed")||sl==="complete" ? WF_TOKENS.successBg : sl.includes("pending")||sl==="rejected" ? WF_TOKENS.errorBg : sl.includes("received") ? WF_TOKENS.infoBg : sl.includes("sent")||sl.includes("requested") ? WF_TOKENS.warningBg : sl.includes("qiwa") ? WF_TOKENS.violetBg : WF_TOKENS.neutralBg;
+  const color = sl.includes("signed")||sl==="complete" ? WF_TOKENS.success : sl.includes("pending")||sl==="rejected" ? WF_TOKENS.error : sl.includes("received") ? WF_TOKENS.info : sl.includes("sent")||sl.includes("requested") ? WF_TOKENS.warning : sl.includes("qiwa") ? WF_TOKENS.violet : WF_TOKENS.neutral;
+  const label = sl.includes("iqama") && sl.includes("transfer") ? "Transferred" : status;
+  return <span style={wfBadgeStyle(bg, color)}>{label}</span>;
 }
 
 // ─── EMPLOYEE TABLE ─────────────────────────────────────────────────────
@@ -907,7 +991,7 @@ function EmployeeTable({ rows, onSelect, selected, setSelected, onUpdateField, o
   const allChk=sorted.length>0&&sorted.every(r=>selected.includes(r._id));
   const sort=col=>{if(sCol===col)setSDir(d=>-d);else{setSCol(col);setSDir(1);}};
   const Th=({col,label})=>(
-    <th onClick={()=>sort(col)} style={{...s.th,cursor:"pointer"}}>
+    <th onClick={()=>sort(col)} style={{...wfTh,cursor:"pointer"}}>
       <span style={{display:"flex",alignItems:"center",gap:4}}>{label}{sCol===col&&<ChevronDown size={9} style={{transform:sDir<0?"rotate(180deg)":"none"}}/>}</span>
     </th>
   );
@@ -916,11 +1000,11 @@ function EmployeeTable({ rows, onSelect, selected, setSelected, onUpdateField, o
       <div style={{overflowX:"auto", maxHeight:"calc(100vh - 280px)", overflowY:"auto"}}>
         <table className="fe-table" style={{...s.table,minWidth:900}}>
           <thead style={{position:"sticky",top:0,zIndex:2}}>
-            <tr style={{backgroundColor:"#f9fafb"}}>
-              <th style={{...s.th,width:36,paddingRight:0}}>
+            <tr>
+              <th style={{...wfTh,width:36,paddingRight:0,verticalAlign:"middle"}}>
                 <input type="checkbox" checked={allChk} onChange={()=>setSelected(allChk?[]:sorted.map(r=>r._id))}/>
               </th>
-              <th onClick={()=>sort("name")} style={{...s.th,cursor:"pointer",width:"1%",whiteSpace:"nowrap"}}>
+              <th onClick={()=>sort("name")} style={{...wfTh,cursor:"pointer",width:"1%",whiteSpace:"nowrap"}}>
                 <span style={{display:"flex",alignItems:"center",gap:4}}>Employee{sCol==="name"&&<ChevronDown size={9} style={{transform:sDir<0?"rotate(180deg)":"none"}}/>}</span>
               </th>
               <Th col="position"     label="Position"/>
@@ -928,9 +1012,9 @@ function EmployeeTable({ rows, onSelect, selected, setSelected, onUpdateField, o
               <Th col="startDate"    label="Start Date"/>
               <Th col="endDate"      label="End Date"/>
               <Th col="totalPackage" label="Package / Profit"/>
-              <th style={s.th}>Status</th>
-              <th style={s.th}>Workflow</th>
-              <th style={{...s.th,textAlign:"right"}}>Actions</th>
+              <th style={wfTh}>Status</th>
+              <th style={wfTh}>Workflow</th>
+              <th style={{...wfTh,textAlign:"right",verticalAlign:"middle"}}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -953,58 +1037,53 @@ function EmployeeTable({ rows, onSelect, selected, setSelected, onUpdateField, o
                   onMouseLeave={ev=>{ ev.currentTarget.style.backgroundColor=isActive?`${M}08`:isSelected?"#fff5f5":"white"; }}>
 
                   {/* Checkbox */}
-                  <td style={{...s.td,paddingRight:0,width:36}} onClick={ev=>ev.stopPropagation()}>
+                  <td style={{...wfTd,paddingRight:0,width:36,verticalAlign:"middle"}} onClick={ev=>ev.stopPropagation()}>
                     <input type="checkbox" checked={isSelected} onChange={()=>setSelected(sel=>sel.includes(e._id)?sel.filter(x=>x!==e._id):[...sel,e._id])}/>
                   </td>
 
                   {/* Employee: name + ID */}
-                  <td style={{...s.td,whiteSpace:"nowrap",width:"1%"}}>
+                  <td style={{...wfTd,whiteSpace:"nowrap",width:"1%"}}>
                     <div style={{fontWeight:700,fontSize:13,color:"#111827"}}>{e.name}</div>
-                    {e.idNumber&&<div style={{fontSize:11,color:"#9ca3af",fontFamily:"monospace",marginTop:1}}>{e.idNumber}</div>}
+                    {e.idNumber&&<div style={{fontSize:11,color:"#9ca3af",fontFamily:"monospace",marginTop:3}}>{e.idNumber}</div>}
                   </td>
 
                   {/* Position + Project */}
-                  <td style={{...s.td,maxWidth:160}}>
+                  <td style={{...wfTd,maxWidth:160}}>
                     <div style={{fontSize:12,color:"#374151",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500}}>{e.position||"—"}</div>
-                    {e.project&&<div style={{fontSize:11,color:"#9ca3af",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginTop:1}}>{e.project}</div>}
+                    {e.project&&<div style={{fontSize:11,color:"#9ca3af",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginTop:3}}>{e.project}</div>}
                   </td>
 
                   {/* Client */}
-                  <td style={s.td}><ClientBadge client={e.client} small/></td>
+                  <td style={wfTd}><ClientBadge client={e.client} small/></td>
 
                   {/* Start Date */}
-                  <td style={s.td}>
-                    <span style={{fontSize:12,color:"#6b7280",whiteSpace:"nowrap"}}>{fmt(e.startDate)}</span>
+                  <td style={wfTd}>
+                    <span style={{fontSize:12,color:"#6b7280",whiteSpace:"nowrap",fontFamily:"var(--font-mono, monospace)"}}>{fmt(e.startDate)}</span>
                   </td>
 
                   {/* End Date */}
-                  <td style={s.td}>
-                    <div style={{display:"flex",alignItems:"center",gap:5}}>
-                      <span style={{width:6,height:6,borderRadius:"50%",flexShrink:0,display:"inline-block",
-                        backgroundColor: expired?"#9ca3af":urgent?"#d97706":"#16a34a"}}/>
-                      <span style={{fontSize:12,fontWeight:500,color:urgent?"#b45309":expired?"#9ca3af":"#374151",whiteSpace:"nowrap"}}>
-                        {fmt(e.endDate)}
-                      </span>
-                    </div>
-                    {urgent&&<div style={{fontSize:10,color:"#d97706",fontWeight:700,marginTop:1}}>{days}d left</div>}
-                    {expired&&<div style={{fontSize:10,color:"#9ca3af",marginTop:1}}>Expired</div>}
-                    {!urgent&&!expired&&<div style={{fontSize:10,color:"#16a34a",marginTop:1}}>Active</div>}
+                  <td style={wfTd}>
+                    <span style={{fontSize:12,fontWeight:500,color:urgent?WF_TOKENS.warningSolid:expired?"#9ca3af":"#374151",whiteSpace:"nowrap",fontFamily:"var(--font-mono, monospace)"}}>
+                      {fmt(e.endDate)}
+                    </span>
+                    {urgent&&<div style={{fontSize:10,color:WF_TOKENS.warningSolid,fontWeight:700,marginTop:3}}>{days}d left</div>}
+                    {expired&&<div style={{fontSize:10,color:"#9ca3af",marginTop:3}}>Expired</div>}
                   </td>
 
                   {/* Package + Profit */}
-                  <td style={s.td}>
+                  <td style={wfTd}>
                     <div style={{fontSize:12,fontFamily:"monospace",fontWeight:700,color:"#111827"}}>{e.totalPackage?`SAR ${e.totalPackage.toLocaleString()}`:"—"}</div>
-                    {profit>0&&<div style={{fontSize:11,color:"#16a34a",fontWeight:600,marginTop:1}}>+{profit.toLocaleString()}</div>}
+                    {profit>0&&<div style={{fontSize:11,color:WF_TOKENS.success,fontWeight:600,marginTop:3}}>+{profit.toLocaleString()}</div>}
                   </td>
 
                   {/* Status badge */}
-                  <td style={s.td}><StatusBadge status={e.status}/></td>
+                  <td style={wfTd}><WFStatusBadgeMuted status={e.status}/></td>
 
                   {/* Workflow badge */}
-                  <td style={s.td}><WFBadge status={e.workflowStatus}/></td>
+                  <td style={wfTd}><WFWorkflowBadgeMuted status={e.workflowStatus}/></td>
 
                   {/* Actions */}
-                  <td style={{...s.td,whiteSpace:"nowrap"}} onClick={ev=>ev.stopPropagation()}>
+                  <td style={{...wfTd,whiteSpace:"nowrap",verticalAlign:"middle"}} onClick={ev=>ev.stopPropagation()}>
                     <div style={{display:"flex",gap:4,alignItems:"center",justifyContent:"flex-end"}}>
                       {/* Renew — left */}
                       {days<=30&&(
@@ -1015,15 +1094,20 @@ function EmployeeTable({ rows, onSelect, selected, setSelected, onUpdateField, o
                           <RefreshCw size={13}/>
                         </button>
                       )}
-                      {/* WA — right */}
-                      {waHref(e.phone)&&(
+                      {/* WA — right; always occupies the slot so row widths stay consistent */}
+                      {waHref(e.phone)?(
                         <a href={waHref(e.phone)} target="_blank" rel="noreferrer" onClick={ev=>ev.stopPropagation()}
                           title="WhatsApp"
-                          style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:28,height:28,borderRadius:7,border:"1px solid #dcfce7",backgroundColor:"#f0fdf4",color:"#16a34a",cursor:"pointer",textDecoration:"none",flexShrink:0}}
-                          onMouseEnter={ev=>ev.currentTarget.style.backgroundColor="#dcfce7"}
-                          onMouseLeave={ev=>ev.currentTarget.style.backgroundColor="#f0fdf4"}>
+                          style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:28,height:28,borderRadius:7,border:`1px solid ${WF_TOKENS.successBg}`,backgroundColor:WF_TOKENS.successBg,color:WF_TOKENS.successSolid,cursor:"pointer",textDecoration:"none",flexShrink:0}}
+                          onMouseEnter={ev=>ev.currentTarget.style.backgroundColor=WF_TOKENS.successBgHover}
+                          onMouseLeave={ev=>ev.currentTarget.style.backgroundColor=WF_TOKENS.successBg}>
                           <MessageCircle size={13}/>
                         </a>
+                      ):(
+                        <span title="No phone on file"
+                          style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:28,height:28,borderRadius:7,border:"1px solid #f0eff1",backgroundColor:"#f9fafb",color:"#d1d5db",flexShrink:0}}>
+                          <MessageCircle size={13}/>
+                        </span>
                       )}
                     </div>
                   </td>
@@ -1098,8 +1182,12 @@ function EmployeeContextPanel({ emp, onClose, onOpenFull, onUpdateField }) {
           <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.7)", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 0 0 8px" }}>✕</button>
         </div>
         <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-          <StatusBadge status={emp.status} />
-          <WFBadge status={emp.workflowStatus} />
+          {/* Translucent-white badges — the header's own crimson/navy gradient already
+              carries the color, so the muted semantic palette would clash here. */}
+          <span style={{...wfBadgeStyle("rgba(255,255,255,0.18)","white"), textTransform:"capitalize", border:"1px solid rgba(255,255,255,0.28)"}}>{emp.status || "—"}</span>
+          <span style={{...wfBadgeStyle("rgba(255,255,255,0.18)","white"), border:"1px solid rgba(255,255,255,0.28)"}}>
+            {(emp.workflowStatus||"").toLowerCase().includes("iqama") && (emp.workflowStatus||"").toLowerCase().includes("transfer") ? "Transferred" : (emp.workflowStatus || "—")}
+          </span>
           {emp.gosiOption && (
             <span style={{ fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 999, backgroundColor: "rgba(253,224,71,0.25)", color: "#fef08a", border: "1px solid rgba(253,224,71,0.4)" }}>
               🏛 GOSI
@@ -1113,7 +1201,7 @@ function EmployeeContextPanel({ emp, onClose, onOpenFull, onUpdateField }) {
         {[
           { l: "Days Left",  v: days < 0 ? "Expired" : `${days}d`,                          c: days < 0 ? "#dc2626" : days <= 30 ? "#d97706" : "#374151" },
           { l: "Package",    v: emp.totalPackage ? `SAR ${emp.totalPackage.toLocaleString()}` : "—", c: "#1d4ed8" },
-          { l: "Profit",     v: profit > 0 ? `+${profit.toLocaleString()}` : "—",                  c: "#16a34a" },
+          { l: "Profit",     v: profit > 0 ? `+${profit.toLocaleString()}` : "—",                  c: WF_TOKENS.success },
         ].map(({ l, v, c }) => (
           <div key={l} style={{ padding: "10px 6px", textAlign: "center", borderRight: "1px solid #f3f4f6" }}>
             <div style={{ fontSize: 9, color: "#9ca3af", fontWeight: 700, textTransform: "uppercase", marginBottom: 2 }}>{l}</div>
@@ -1128,7 +1216,7 @@ function EmployeeContextPanel({ emp, onClose, onOpenFull, onUpdateField }) {
           <Edit3 size={12}/> Edit Profile
         </button>
         {wa && (
-          <a href={wa} target="_blank" rel="noreferrer" style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: "1px solid #16a34a", backgroundColor: "#f0fdf4", color: "#16a34a", fontSize: 11, fontWeight: 700, cursor: "pointer", textDecoration: "none", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+          <a href={wa} target="_blank" rel="noreferrer" style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: `1px solid ${WF_TOKENS.successSolid}`, backgroundColor: WF_TOKENS.successBg, color: WF_TOKENS.successSolid, fontSize: 11, fontWeight: 700, cursor: "pointer", textDecoration: "none", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
             <MessageCircle size={12}/> WhatsApp
           </a>
         )}
@@ -1138,9 +1226,11 @@ function EmployeeContextPanel({ emp, onClose, onOpenFull, onUpdateField }) {
       <div style={{ display: "flex", borderBottom: "1px solid #f3f4f6", flexShrink: 0 }}>
         {[{ k: "context", l: "Context" }, { k: "history", l: "History" }, { k: "timeline", l: "Timeline" }, { k: "comms", l: "Comms" }].map(t => (
           <button key={t.k} onClick={() => setPanelTab(t.k)} style={{
-            flex: 1, padding: "9px 0", fontSize: 11, fontWeight: 700,
-            border: "none", cursor: "pointer",
-            borderBottom: `2px solid ${panelTab === t.k ? M : "transparent"}`,
+            flex: 1, padding: "9px 0", fontSize: 11,
+            fontWeight: panelTab === t.k ? 800 : 700,
+            border: "none", borderBottom: panelTab === t.k ? "3px solid" : "2px solid transparent",
+            borderImage: panelTab === t.k ? `linear-gradient(90deg, ${M}, ${MD}) 1` : "none",
+            cursor: "pointer",
             backgroundColor: "transparent", color: panelTab === t.k ? M : "#9ca3af",
           }}>{t.l}</button>
         ))}
@@ -1171,7 +1261,7 @@ function EmployeeContextPanel({ emp, onClose, onOpenFull, onUpdateField }) {
                 <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 8 }}>Onboarding</div>
                 {Object.entries(emp.onboardingSteps).map(([step, done]) => (
                   <div key={step} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 11, marginBottom: 5 }}>
-                    <div style={{ width: 14, height: 14, borderRadius: "50%", backgroundColor: done ? "#16a34a" : "#e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <div style={{ width: 14, height: 14, borderRadius: "50%", backgroundColor: done ? WF_TOKENS.successSolid : "#e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       {done && <span style={{ fontSize: 8, color: "white", fontWeight: 900 }}>✓</span>}
                     </div>
                     <span style={{ color: done ? "#374151" : "#9ca3af", textTransform: "capitalize" }}>{step.replace(/_/g, " ")}</span>
@@ -1195,7 +1285,7 @@ function EmployeeContextPanel({ emp, onClose, onOpenFull, onUpdateField }) {
             <div style={{ padding: "10px 12px", borderRadius: 10, border: `2px solid ${M}30`, backgroundColor: `${M}06`, borderLeft: `4px solid ${M}` }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <span style={{ fontSize: 10, fontWeight: 800, color: M, textTransform: "uppercase", letterSpacing: "0.06em" }}>Current Contract</span>
-                <StatusBadge status={emp.status} />
+                <WFStatusBadgeMuted status={emp.status} />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
                 {[
@@ -1291,7 +1381,7 @@ function EmployeeContextPanel({ emp, onClose, onOpenFull, onUpdateField }) {
               </div>
             ))}
             {wa && (
-              <a href={wa} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10, padding: "9px 12px", borderRadius: 9, border: "1px solid #16a34a", backgroundColor: "#f0fdf4", color: "#16a34a", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>
+              <a href={wa} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10, padding: "9px 12px", borderRadius: 9, border: `1px solid ${WF_TOKENS.successSolid}`, backgroundColor: WF_TOKENS.successBg, color: WF_TOKENS.successSolid, fontSize: 12, fontWeight: 700, textDecoration: "none" }}>
                 💬 Open WhatsApp
               </a>
             )}
