@@ -4978,6 +4978,7 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
   const [projectRenameFlash, setProjectRenameFlash] = useState("");
   const [clientFilter, setClientFilter] = useState("");
   const [expandedDealId, setExpandedDealId] = useState(null); // which row's Deal Terms panel is open
+  const [expandedProjectsId, setExpandedProjectsId] = useState(null); // which row's Projects panel is open
 
   const empCountFor = (name) => employees.filter(e => e.client === name).length;
 
@@ -5110,19 +5111,17 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
     }
   };
 
-  const addRule = () => setRules(rs => {
+  // Inserts a new keyword rule pinned to one client — used by the "+ Project" button
+  // under each client row, so adding a project keyword never requires picking the
+  // client from a dropdown (it's already the row you're in). Order among rules for
+  // DIFFERENT clients no longer needs manual reordering here (see Project Matching
+  // card below) since keywords are looked up per-client rather than as one flat,
+  // priority-ordered list.
+  const addRuleForClient = (clientName) => setRules(rs => {
     const idx = rs.findIndex(r => r.matchType === "default");
-    const newRule = { id: `rule-new-${Date.now()}`, client: clientOptions[0] || "", matchType: "contains", value: "" };
+    const newRule = { id: `rule-new-${Date.now()}`, client: clientName, matchType: "contains", value: "" };
     const arr = [...rs];
     if (idx === -1) arr.push(newRule); else arr.splice(idx, 0, newRule);
-    return arr;
-  });
-  const moveRule = (id, dir) => setRules(rs => {
-    const arr = [...rs];
-    const i = arr.findIndex(r => r.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= arr.length || arr[j].matchType === "default" || arr[i].matchType === "default") return rs;
-    [arr[i], arr[j]] = [arr[j], arr[i]];
     return arr;
   });
 
@@ -5258,6 +5257,9 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
             const deal = row.meta?.dealTerms;
             const hasDeal = !!(deal && (deal.serviceType || deal.marginValue || deal.recruitmentFee || deal.note));
             const dealOpen = expandedDealId === row.id;
+            const matchName = row.origName || row.name.trim();
+            const clientRules = nonDefaultRules.filter(r => r.client === matchName);
+            const projectsOpen = expandedProjectsId === row.id;
             return (
               <div key={row.id} style={{ border: "1px solid #f3f4f6", borderRadius: 10, overflow: "hidden" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", flexWrap: "wrap" }}>
@@ -5275,6 +5277,10 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                     </span>
                   )}
                   {!renamed && count > 0 && <span style={{ fontSize: 10, color: "#9ca3af" }}>{count} موظف حاليًا</span>}
+                  <button onClick={() => setExpandedProjectsId(projectsOpen ? null : row.id)}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 999, border: clientRules.length ? `1px solid ${MD}40` : "1px solid #e5e7eb", backgroundColor: clientRules.length ? `${MD}0e` : "white", color: clientRules.length ? MD : "#6b7280", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                    🔗 Projects{clientRules.length ? ` (${clientRules.length})` : ""} <ChevronDown size={11} style={{ transform: projectsOpen ? "rotate(180deg)" : "none" }}/>
+                  </button>
                   <button onClick={() => setExpandedDealId(dealOpen ? null : row.id)}
                     style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 999, border: hasDeal ? `1px solid ${M}40` : "1px solid #e5e7eb", backgroundColor: hasDeal ? `${M}0e` : "white", color: hasDeal ? M : "#6b7280", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
                     🤝 {hasDeal ? (deal.serviceType || "Deal Terms") : "+ Deal Terms"} <ChevronDown size={11} style={{ transform: dealOpen ? "rotate(180deg)" : "none" }}/>
@@ -5336,6 +5342,31 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                     </div>
                   </div>
                 )}
+                {projectsOpen && (
+                  <div style={{ padding: "12px 14px", borderTop: "1px solid #f3f4f6", backgroundColor: "#fafafa", display: "flex", flexDirection: "column", gap: 8 }}>
+                    <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", lineHeight: 1.6 }}>
+                      أي مشروع جديد اسمه (أو جزء منه) يطابق واحدة من الكلمات دي، هيتحط تلقائي تحت "{row.name || matchName}".
+                    </p>
+                    {clientRules.length === 0 && (
+                      <p style={{ margin: 0, fontSize: 12, color: "#c4c4c4" }}>مفيش مشاريع مربوطة لسه — أي موظف من غير مشروع مطابق هيروح للعميل الافتراضي.</p>
+                    )}
+                    {clientRules.map(r => (
+                      <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", border: "1px solid #f0f0f0", borderRadius: 8, backgroundColor: "white", flexWrap: "wrap" }}>
+                        <select value={r.matchType} onChange={e => updateRule(r.id, { matchType: e.target.value })} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11 }}>
+                          <option value="contains">Project contains</option>
+                          <option value="exact">Project = exactly</option>
+                        </select>
+                        <input value={r.value} onChange={e => updateRule(r.id, { value: e.target.value })} placeholder="keyword" style={{ flex: "1 1 140px", padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, fontFamily: "monospace" }}/>
+                        <button onClick={() => removeRule(r.id)} style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+                          <Trash2 size={11}/>
+                        </button>
+                      </div>
+                    ))}
+                    <Btn onClick={() => addRuleForClient(matchName)} variant="ghost" style={{ ...s.btnSm, alignSelf: "flex-start" }}>
+                      <Plus size={12}/> Add Project
+                    </Btn>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -5343,41 +5374,15 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
       </Card>
 
       <Card style={{ padding: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-          <h3 style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>Auto-Classification Rules</h3>
-          <Btn onClick={addRule}><Plus size={13}/> Add Rule</Btn>
-        </div>
+        <h3 style={{ fontWeight: 700, fontSize: 14, margin: "0 0 4px" }}>Project Matching</h3>
         <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 14px" }}>
-          لما موظف جديد ييجي بمشروع معين، النظام بيحدد العميل تلقائي بالقواعد دي بالترتيب (أول قاعدة تتطابق تكسب). آخر قاعدة هي الافتراضي لو مفيش أي تطابق.
+          لما موظف جديد ييجي بمشروع معين، النظام بيحدد العميل تلقائي بمطابقة اسم المشروع مع المشاريع المربوطة بكل عميل (اضبطيها من كارت <b>Client Names</b> فوق، تحت "🔗 Projects" لكل عميل). لو مفيش تطابق، بيتحط تحت العميل الافتراضي هنا.
         </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {nonDefaultRules.map((r, idx) => (
-            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", border: "1px solid #f3f4f6", borderRadius: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 10, color: "#9ca3af", width: 16, textAlign: "center" }}>{idx + 1}</span>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <button onClick={() => moveRule(r.id, -1)} disabled={idx === 0} style={{ border: "none", background: "none", cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1, fontSize: 10, lineHeight: 1, padding: 0 }}>▲</button>
-                <button onClick={() => moveRule(r.id, 1)} disabled={idx === nonDefaultRules.length - 1} style={{ border: "none", background: "none", cursor: idx === nonDefaultRules.length - 1 ? "default" : "pointer", opacity: idx === nonDefaultRules.length - 1 ? 0.3 : 1, fontSize: 10, lineHeight: 1, padding: 0 }}>▼</button>
-              </div>
-              <select value={r.matchType} onChange={e => updateRule(r.id, { matchType: e.target.value })} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11 }}>
-                <option value="contains">Project contains</option>
-                <option value="exact">Project = exactly</option>
-              </select>
-              <input value={r.value} onChange={e => updateRule(r.id, { value: e.target.value })} placeholder="keyword" style={{ flex: "1 1 120px", padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, fontFamily: "monospace" }}/>
-              <span style={{ fontSize: 11, color: "#9ca3af" }}>→</span>
-              <select value={r.client} onChange={e => updateRule(r.id, { client: e.target.value })} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11, fontWeight: 600 }}>
-                {clientOptions.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <button onClick={() => removeRule(r.id)} style={{ marginInlineStart: "auto", width: 24, height: 24, borderRadius: 6, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-                <Trash2 size={11}/>
-              </button>
-            </div>
-          ))}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 8px", border: "1px dashed #d1d5db", borderRadius: 8, backgroundColor: "#f9fafb" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280" }}>Default (no match) →</span>
-            <select value={defaultRule.client} onChange={e => updateRule(defaultRule.id, { client: e.target.value })} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11, fontWeight: 600 }}>
-              {clientOptions.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 8px", border: "1px dashed #d1d5db", borderRadius: 8, backgroundColor: "#f9fafb" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#6b7280" }}>Default (no match) →</span>
+          <select value={defaultRule.client} onChange={e => updateRule(defaultRule.id, { client: e.target.value })} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11, fontWeight: 600 }}>
+            {clientOptions.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
         </div>
 
         <div style={{ marginTop: 16, padding: "10px 12px", backgroundColor: "#f9fafb", borderRadius: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
