@@ -222,8 +222,52 @@ export function classifyProject(project = "", rules = null) {
   return list[0] || "Sela";
 }
 
-// Resolves the margin (type + value) that actually applies to a Direct-mode
-// employee's profit calculation. Precedence:
+// A deal's margin can combine THREE independent pieces, all of which count
+// toward Fisheye's margin on this employee (never separate income):
+//   - a percentage of the employee's salary (of either their MONTHLY
+//     totalPackage, or ANNUAL = totalPackage * 12, per the deal's marginBasis)
+//   - a flat SAR amount
+//   - a flat SAR Saudization-visa fee, addable regardless of the above
+function dealHasAnyValue(deal) {
+  const type = deal?.marginType || "percent";
+  const numOrEmpty = v => v !== undefined && v !== null && v !== "" && !Number.isNaN(Number(v));
+  if ((type === "percent" || type === "percent_fixed") && numOrEmpty(deal?.marginPercent ?? (type === "percent" ? deal?.marginValue : undefined))) return true;
+  if ((type === "fixed" || type === "percent_fixed") && numOrEmpty(deal?.marginFixed ?? (type === "fixed" ? deal?.marginValue : undefined))) return true;
+  if (numOrEmpty(deal?.saudizationFee)) return true;
+  return false;
+}
+function computeDealMargin(deal, totalPackage) {
+  const type = deal?.marginType || "percent";
+  let amount = 0;
+  const parts = [];
+  if (type === "percent" || type === "percent_fixed") {
+    // Older deals (saved before the percent/fixed split) kept their one
+    // number in `marginValue` -- fall back to it so nothing already
+    // configured silently loses its percentage.
+    const pct = Number(deal?.marginPercent ?? (type === "percent" ? deal?.marginValue : undefined));
+    if (!Number.isNaN(pct) && pct) {
+      const basis = deal?.marginBasis === "annual" ? totalPackage * 12 : totalPackage;
+      amount += (pct / 100) * basis;
+      parts.push(`${pct}% ${deal?.marginBasis === "annual" ? "annual" : "monthly"}`);
+    }
+  }
+  if (type === "fixed" || type === "percent_fixed") {
+    const fixed = Number(deal?.marginFixed ?? (type === "fixed" ? deal?.marginValue : undefined));
+    if (!Number.isNaN(fixed) && fixed) {
+      amount += fixed;
+      parts.push(`${fixed} SAR`);
+    }
+  }
+  const saudization = Number(deal?.saudizationFee);
+  if (!Number.isNaN(saudization) && saudization) {
+    amount += saudization;
+    parts.push(`${saudization} SAR Saudization`);
+  }
+  return { amount, display: parts.join(" + ") };
+}
+
+// Resolves the margin that actually applies to a Direct-mode employee's
+// profit calculation, as a fully computed SAR amount. Precedence:
 //   1. The employee's OWN Fisheye Margin, if one has been typed on their
 //      record — this always wins, so nothing already saved on an employee
 //      ever changes silently when a client's Deal is added or edited later.
@@ -235,9 +279,12 @@ export function classifyProject(project = "", rules = null) {
 // Used by calcProfit (App.jsx) and calcLine (FinanceModule.jsx) so every
 // profit/billing number in the app stays consistent with the same rule.
 export function getEffectiveMargin(emp) {
+  const totalPackage = Number(emp?.totalPackage) || 0;
   const manual = Number(emp?.fisheyeMargin) || 0;
   if (manual) {
-    return { marginType: emp.fisheyeMarginType || "percent", marginValue: manual, source: "manual" };
+    const type = emp.fisheyeMarginType || "percent";
+    const amount = type === "percent" ? (manual / 100) * totalPackage : manual;
+    return { source: "manual", amount, display: type === "percent" ? `${manual}%` : `${manual} SAR` };
   }
   const meta = getEffectiveClientMeta();
   const deals = meta?.[emp?.client]?.deals;
@@ -252,16 +299,16 @@ export function getEffectiveMargin(emp) {
         if (!v) return false;
         return pm.matchType === "exact" ? project === v : project.includes(v);
       });
-      if (matched && d.marginValue !== "" && d.marginValue != null) {
-        const v = Number(d.marginValue);
-        if (!Number.isNaN(v)) return { marginType: d.marginType || "percent", marginValue: v, source: "deal" };
+      if (matched && dealHasAnyValue(d)) {
+        const { amount, display } = computeDealMargin(d, totalPackage);
+        return { source: "deal", amount, display };
       }
     }
     const base = deals[0];
-    if (base && base.marginValue !== "" && base.marginValue != null) {
-      const v = Number(base.marginValue);
-      if (!Number.isNaN(v)) return { marginType: base.marginType || "percent", marginValue: v, source: "deal" };
+    if (base && dealHasAnyValue(base)) {
+      const { amount, display } = computeDealMargin(base, totalPackage);
+      return { source: "deal", amount, display };
     }
   }
-  return { marginType: emp?.fisheyeMarginType || "percent", marginValue: manual, source: "none" };
+  return { source: "none", amount: 0, display: "" };
 }

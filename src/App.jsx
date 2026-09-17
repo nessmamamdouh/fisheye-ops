@@ -175,15 +175,11 @@ const waHref = phone => { const c=(phone||"").replace(/[^0-9+]/g,"").replace(/^\
 const isContractExpired = e => e.endDate && daysUntil(e.endDate) < 0;
 const calcProfit = e => {
   if (e.profitMode === "direct") {
-    // Direct mode: Fisheye Margin * Total Package. The margin itself comes
-    // from getEffectiveMargin: the employee's own typed-in value if there is
-    // one, else the matching client Deal (see utils/appConfig.js).
-    const { marginType, marginValue } = getEffectiveMargin(e);
-    if (marginType === "percent") {
-      return Math.round((marginValue / 100) * e.totalPackage);
-    } else {
-      return marginValue; // Fixed amount
-    }
+    // Direct mode: the margin comes fully computed from getEffectiveMargin --
+    // the employee's own typed-in value if there is one, else the matching
+    // client Deal (percentage of monthly/annual salary, a flat amount, and a
+    // Saudization fee, all combined -- see utils/appConfig.js).
+    return Math.round(getEffectiveMargin(e).amount);
   } else {
     // Partner mode: Client Price - Partner Cost
     if (e.clientPriceType === "percent") {
@@ -762,10 +758,10 @@ function EmployeeModal({ emp, onClose, onSave, partners, allEmployees = [], useO
               ?<Inp label="Partner Cost (SAR)" value={String(form.partnerCost||"")} onChange={v=>upd("partnerCost",parseFloat(v)||0)} type="number"/>
               :<div>
                   <Inp label="Fisheye Margin (%)" value={form.fisheyeMargin?String(form.fisheyeMargin):""} onChange={v=>upd("fisheyeMargin",parseFloat(v)||0)} type="number"
-                    placeholder={effMargin.source==="deal" ? `${effMargin.marginValue}${effMargin.marginType==="percent"?"%":" SAR"} (client deal)` : "15"}/>
+                    placeholder={effMargin.source==="deal" ? `${effMargin.display} = ${fmtSAR(Math.round(effMargin.amount))} (client deal)` : "15"}/>
                   {!form.fisheyeMargin && effMargin.source==="deal" && (
                     <p style={{fontSize:10,color:MD,margin:"4px 0 0",fontWeight:600,lineHeight:1.5}}>
-                      مستخدمة مارجن الـ Deal بتاع العميل تلقائي ({effMargin.marginValue}{effMargin.marginType==="percent"?"%":" SAR"}) — اكتبي رقم هنا لو عايزة تخصيص مختلف لهذا الموظف بس.
+                      مستخدمة مارجن الـ Deal بتاع العميل تلقائي ({effMargin.display} = {fmtSAR(Math.round(effMargin.amount))}) — اكتبي رقم هنا لو عايزة تخصيص مختلف لهذا الموظف بس.
                     </p>
                   )}
                 </div>
@@ -4961,6 +4957,15 @@ function NotificationsSettings({ employees }) {
 // project-specific deals) -- used twice below so both look and behave
 // identically. `onChange` receives a partial patch to merge into the deal.
 function DealFields({ deal, onChange }) {
+  const type = deal?.marginType || "percent";
+  const showPercent = type === "percent" || type === "percent_fixed";
+  const showFixed   = type === "fixed" || type === "percent_fixed";
+  // Backward-compat reads: older deals only ever had one `marginValue` field
+  // (paired with `marginType`). A deal that hasn't been touched since the
+  // percent+fixed split shipped still has its number sitting in `marginValue`
+  // -- fall back to it once, scoped to whichever new field it originally meant.
+  const percentVal = deal?.marginPercent ?? (type === "percent" ? deal?.marginValue : undefined);
+  const fixedVal   = deal?.marginFixed   ?? (type === "fixed"   ? deal?.marginValue : undefined);
   return (
     <>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -4976,17 +4981,41 @@ function DealFields({ deal, onChange }) {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Margin Type</label>
-          <select value={deal?.marginType || "percent"} onChange={e => onChange({ marginType: e.target.value })}
-            style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 120 }}>
+          <select value={type} onChange={e => onChange({ marginType: e.target.value })}
+            style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 170 }}>
             <option value="percent">Percentage</option>
             <option value="fixed">Fixed amount (SAR)</option>
             <option value="percent_fixed">Percentage + fixed amount</option>
           </select>
         </div>
+        {showPercent && (
+          <>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Margin %</label>
+              <input type="number" value={percentVal ?? ""} onChange={e => onChange({ marginPercent: e.target.value })} placeholder="e.g. 6"
+                style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, width: 80 }}/>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Based On</label>
+              <select value={deal?.marginBasis || "monthly"} onChange={e => onChange({ marginBasis: e.target.value })}
+                style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 130 }}>
+                <option value="monthly">Monthly salary</option>
+                <option value="annual">Annual salary</option>
+              </select>
+            </div>
+          </>
+        )}
+        {showFixed && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Fixed Amount (SAR)</label>
+            <input type="number" value={fixedVal ?? ""} onChange={e => onChange({ marginFixed: e.target.value })} placeholder="e.g. 500"
+              style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, width: 100 }}/>
+          </div>
+        )}
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Margin Value</label>
-          <input type="number" value={deal?.marginValue ?? ""} onChange={e => onChange({ marginValue: e.target.value })} placeholder="e.g. 15"
-            style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, width: 90 }}/>
+          <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Saudization Visa Fee (SAR)</label>
+          <input type="number" value={deal?.saudizationFee ?? ""} onChange={e => onChange({ saudizationFee: e.target.value })} placeholder="e.g. 1000 (optional)"
+            style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, width: 130 }}/>
         </div>
         {deal?.serviceType === "Recruitment" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -4996,6 +5025,9 @@ function DealFields({ deal, onChange }) {
           </div>
         )}
       </div>
+      <p style={{ margin: 0, fontSize: 10.5, color: "#9ca3af", lineHeight: 1.5 }}>
+        The percentage, the fixed amount, and the Saudization fee are all added together into one margin — none of it is separate income.
+      </p>
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
         {[["billGosi","Bill GOSI"],["billMedical","Bill Medical"],["billAjeer","Bill Ajeer"]].map(([key,label]) => (
           <label key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#374151", cursor: "pointer" }}>
@@ -5005,8 +5037,8 @@ function DealFields({ deal, onChange }) {
         ))}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-        <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Notes (e.g. Saudization / special visa terms)</label>
-        <input value={deal?.note || ""} onChange={e => onChange({ note: e.target.value })} placeholder="e.g. Saudization deal in place of a special visa slot"
+        <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Notes</label>
+        <input value={deal?.note || ""} onChange={e => onChange({ note: e.target.value })} placeholder="e.g. special visa slot arrangement"
           style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12 }}/>
       </div>
     </>
@@ -5255,11 +5287,19 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
             const count = row.origName ? empCountFor(row.origName) : 0;
             const renamed = row.origName && row.name.trim() && row.origName !== row.name.trim();
             const deals = dealsFor(row);
-            const hasDeal = deals.some(d => d.serviceType || (d.marginValue !== undefined && d.marginValue !== "") || d.recruitmentFee || d.note || (d.projectMatches||[]).length);
+            const hasDeal = deals.some(d => d.serviceType || (d.marginValue !== undefined && d.marginValue !== "") || (d.marginPercent !== undefined && d.marginPercent !== "") || (d.marginFixed !== undefined && d.marginFixed !== "") || (d.saudizationFee !== undefined && d.saudizationFee !== "") || d.recruitmentFee || d.note || (d.projectMatches||[]).length);
             const dealOpen = expandedDealId === row.id;
             const matchName = row.origName || row.name.trim();
             const clientRules = nonDefaultRules.filter(r => r.client === matchName);
             const projectsOpen = expandedProjectsId === row.id;
+            // Real project names already on this client's employee records --
+            // offered as suggestions when picking which project a deal applies
+            // to, so a Deal Terms project match can be chosen instead of typed
+            // from scratch (free text still works for a project not yet in the
+            // system).
+            const clientProjectNames = [...new Set(
+              employees.filter(e => e.client === matchName).map(e => (e.project || "").trim()).filter(Boolean)
+            )].sort((a, b) => a.localeCompare(b));
             return (
               <div key={row.id} style={{ border: "1px solid #E5E1DC", borderRadius: 14, overflow: "hidden", backgroundColor: "white" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", flexWrap: "wrap" }}>
@@ -5286,6 +5326,9 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                     <Trash2 size={13}/>
                   </button>
                 </div>
+                <datalist id={`proj-list-${row.id}`}>
+                  {clientProjectNames.map(p => <option key={p} value={p} />)}
+                </datalist>
                 {colorPickerId === row.id && (
                   <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 18px 14px 18px" }}>
                     {CLIENT_COLOR_PALETTE.map((pal, i) => (
@@ -5322,8 +5365,9 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                                 <option value="contains">contains</option>
                                 <option value="exact">= exactly</option>
                               </select>
-                              <input value={pm.value} onChange={e => updateDealProject(row.id, d.id, pm.id, { value: e.target.value })} placeholder="keyword"
-                                style={{ padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11, fontFamily: "monospace", fontWeight: 600, width: 110, backgroundColor: `${MD}0a`, color: MD }}/>
+                              <input value={pm.value} onChange={e => updateDealProject(row.id, d.id, pm.id, { value: e.target.value })}
+                                placeholder="pick or type a project" list={`proj-list-${row.id}`}
+                                style={{ padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11, fontFamily: "monospace", fontWeight: 600, width: 160, backgroundColor: `${MD}0a`, color: MD }}/>
                               <button onClick={() => removeDealProject(row.id, d.id, pm.id)} title="Remove" style={{ width: 20, height: 20, borderRadius: 5, border: "none", backgroundColor: "transparent", color: "#c4c4c4", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>×</button>
                             </div>
                           ))}

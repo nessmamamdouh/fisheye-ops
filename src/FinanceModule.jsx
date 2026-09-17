@@ -40,11 +40,11 @@ export const calcLine = emp => {
     const pType  = emp.clientPriceType || "percent";
     marginAmount = pType === "percent" ? (pValue / 100) * totalPkg : pValue;
   } else {
-    // Direct mode: margin comes from getEffectiveMargin -- the employee's own
-    // typed-in value if there is one, else the matching client Deal (see
-    // utils/appConfig.js) -- on top of totalPackage.
-    const { marginType: mType, marginValue: mValue } = getEffectiveMargin(emp);
-    marginAmount = mType === "percent" ? (mValue / 100) * totalPkg : mValue;
+    // Direct mode: the margin comes fully computed from getEffectiveMargin --
+    // the employee's own typed-in value if there is one, else the matching
+    // client Deal (percentage of monthly/annual salary, a flat amount, and a
+    // Saudization fee, all combined -- see utils/appConfig.js).
+    marginAmount = getEffectiveMargin(emp).amount;
   }
 
   const baseAmount = totalPkg + marginAmount; // total invoice to client (consistent for both modes)
