@@ -5054,6 +5054,7 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
   const [clientFilter, setClientFilter] = useState("");
   const [expandedDealId, setExpandedDealId] = useState(null); // which row's Deal Terms panel is open
   const [expandedProjectsId, setExpandedProjectsId] = useState(null); // which row's Projects panel is open
+  const [colorPickerId, setColorPickerId] = useState(null); // which row's color swatch picker is open
 
   const empCountFor = (name) => employees.filter(e => e.client === name).length;
 
@@ -5369,12 +5370,8 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
             return (
               <div key={row.id} style={{ border: "1px solid #E5E1DC", borderRadius: 14, overflow: "hidden", backgroundColor: "white" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    {CLIENT_COLOR_PALETTE.map((pal, i) => (
-                      <button key={i} onClick={() => updateRowColor(row.id, pal)} title="لون"
-                        style={{ width: 16, height: 16, borderRadius: "50%", backgroundColor: pal.dot, border: row.meta?.dot === pal.dot ? `2px solid ${MD}` : "2px solid transparent", cursor: "pointer", padding: 0 }}/>
-                    ))}
-                  </div>
+                  <button onClick={() => setColorPickerId(colorPickerId === row.id ? null : row.id)} title="تغيير لون العميل"
+                    style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: row.meta?.dot || "#9ca3af", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}/>
                   <input value={row.name} onChange={e => updateRowName(row.id, e.target.value)} placeholder="اسم العميل"
                     style={{ flex: "1 1 160px", padding: "7px 10px", border: "1px solid transparent", borderRadius: 8, fontSize: 14.5, fontWeight: 600, backgroundColor: "transparent" }}
                     onFocus={e => e.target.style.border = "1px solid #E5E1DC"} onBlur={e => e.target.style.border = "1px solid transparent"}/>
@@ -5384,18 +5381,26 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                     </span>
                   )}
                   {!renamed && count > 0 && <span style={{ fontSize: 10, color: "#9ca3af" }}>{count} موظف حاليًا</span>}
-                  <button onClick={() => setExpandedProjectsId(projectsOpen ? null : row.id)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 999, border: projectsOpen ? "none" : "1px solid #e5e1dc", backgroundColor: projectsOpen ? MD : "#F1EEE8", color: projectsOpen ? "#fff" : "#374151", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-                    Projects{clientRules.length ? ` (${clientRules.length})` : ""} <ChevronDown size={11} style={{ transform: projectsOpen ? "rotate(180deg)" : "none" }}/>
-                  </button>
                   <button onClick={() => setExpandedDealId(dealOpen ? null : row.id)}
                     style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 999, border: dealOpen ? "none" : (hasDeal ? "1px solid transparent" : "1px solid #e5e7eb"), backgroundColor: dealOpen ? MD : (hasDeal ? WF_TOKENS.infoBg : "white"), color: dealOpen ? "#fff" : (hasDeal ? WF_TOKENS.info : "#6b7280"), fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
                     {hasDeal ? `Deal Terms${deals.length > 1 ? ` (${deals.length})` : ""}` : "+ Deal Terms"} <ChevronDown size={11} style={{ transform: dealOpen ? "rotate(180deg)" : "none" }}/>
+                  </button>
+                  <button onClick={() => setExpandedProjectsId(projectsOpen ? null : row.id)}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 999, border: projectsOpen ? "none" : "1px solid #e5e1dc", backgroundColor: projectsOpen ? MD : "#F1EEE8", color: projectsOpen ? "#fff" : "#374151", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                    Projects{clientRules.length ? ` (${clientRules.length})` : ""} <ChevronDown size={11} style={{ transform: projectsOpen ? "rotate(180deg)" : "none" }}/>
                   </button>
                   <button onClick={() => removeRow(row.id)} title="مسح" style={{ width: 26, height: 26, borderRadius: 7, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
                     <Trash2 size={12}/>
                   </button>
                 </div>
+                {colorPickerId === row.id && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 18px 14px 18px" }}>
+                    {CLIENT_COLOR_PALETTE.map((pal, i) => (
+                      <button key={i} onClick={() => { updateRowColor(row.id, pal); setColorPickerId(null); }} title="لون"
+                        style={{ width: 18, height: 18, borderRadius: "50%", backgroundColor: pal.dot, border: row.meta?.dot === pal.dot ? `2px solid ${MD}` : "2px solid transparent", boxShadow: "0 0 0 1px #E5E1DC", cursor: "pointer", padding: 0 }}/>
+                    ))}
+                  </div>
+                )}
                 {dealOpen && (
                   <div style={{ padding: "14px 16px", borderTop: "1px solid #f3f4f6", backgroundColor: "#FCFBF9", display: "flex", flexDirection: "column", gap: 14 }}>
                     <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", lineHeight: 1.6 }}>
