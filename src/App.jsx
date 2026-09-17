@@ -840,10 +840,12 @@ function EmployeeModal({ emp, onClose, onSave, partners, allEmployees = [], useO
   );
 }
 
-// ─── WORKFORCE EXPLORER — MUTED STATUS TOKENS (scoped; do not use outside Workforce Explorer) ──
-// Softer, de-saturated versions of the shared status colors, matching the approved
-// Workforce Explorer mockup. Kept local to this section so Clients Hub / Partners Hub /
-// the Employee edit Modal (which use the shared WFBadge/StatusBadge globals) are unaffected.
+// ─── MUTED STATUS TOKENS ──────────────────────────────────────────────────
+// Softer, de-saturated versions of the shared status colors — originally built for
+// the Workforce Explorer redesign, now the app's shared palette for any new/restyled
+// success/warning/error/info accent (Settings, etc.). The OLD global WFBadge/StatusBadge/
+// CLIENT_META colors are left as they are everywhere they're already used — this is only
+// applied to sections deliberately restyled to match the newer, calmer visual language.
 const WF_TOKENS = {
   success:        "oklch(34% 0.045 152)",
   successBg:      "oklch(94.5% 0.02 152)",
@@ -4974,6 +4976,7 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
   const [renameToProject, setRenameToProject] = useState("");
   const [renamingProject, setRenamingProject] = useState(false);
   const [projectRenameFlash, setProjectRenameFlash] = useState("");
+  const [clientFilter, setClientFilter] = useState("");
 
   const empCountFor = (name) => employees.filter(e => e.client === name).length;
 
@@ -5226,14 +5229,21 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
 
       <Card style={{ padding: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-          <h3 style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>Client Names</h3>
+          <h3 style={{ fontWeight: 700, fontSize: 14, margin: 0 }}>Client Names <span style={{fontWeight:600,color:"#9ca3af",fontSize:12}}>({rows.length})</span></h3>
           <Btn onClick={addRow}><Plus size={13}/> Add Client</Btn>
         </div>
-        <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 14px" }}>
+        <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 10px" }}>
           دول أسماء العملاء اللي بتظهر في كل الفلاتر والداشبورد والتقارير. غيّري الاسم وهيتحدث تلقائي في كل حتة، شامل سجلات الموظفين الحاليين.
         </p>
+        {rows.length > 6 && (
+          <div style={{ position: "relative", marginBottom: 10 }}>
+            <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#d1d5db" }} />
+            <input value={clientFilter} onChange={e => setClientFilter(e.target.value)} placeholder="دوّري على عميل..."
+              style={{ width: "100%", boxSizing: "border-box", padding: "6px 10px 6px 30px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12 }}/>
+          </div>
+        )}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {rows.map(row => {
+          {rows.filter(r => !clientFilter.trim() || r.name.toLowerCase().includes(clientFilter.trim().toLowerCase())).map(row => {
             const count = row.origName ? empCountFor(row.origName) : 0;
             const renamed = row.origName && row.name.trim() && row.origName !== row.name.trim();
             return (
@@ -5247,12 +5257,12 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                 <input value={row.name} onChange={e => updateRowName(row.id, e.target.value)} placeholder="اسم العميل"
                   style={{ flex: "1 1 160px", padding: "6px 10px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, fontWeight: 600 }}/>
                 {renamed && (
-                  <span style={{ fontSize: 10, fontWeight: 700, color: "#d97706", backgroundColor: "#fffbeb", padding: "3px 8px", borderRadius: 999 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: WF_TOKENS.warningSolid, backgroundColor: WF_TOKENS.warningBg, padding: "3px 8px", borderRadius: 999 }}>
                     ⚠️ هيتحدث {count} موظف
                   </span>
                 )}
                 {!renamed && count > 0 && <span style={{ fontSize: 10, color: "#9ca3af" }}>{count} موظف حاليًا</span>}
-                <button onClick={() => removeRow(row.id)} title="مسح" style={{ marginInlineStart: "auto", width: 26, height: 26, borderRadius: 7, border: "1px solid #fecaca", backgroundColor: "#fff1f2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                <button onClick={() => removeRow(row.id)} title="مسح" style={{ marginInlineStart: "auto", width: 26, height: 26, borderRadius: 7, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                   <Trash2 size={12}/>
                 </button>
               </div>
@@ -5286,7 +5296,7 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
               <select value={r.client} onChange={e => updateRule(r.id, { client: e.target.value })} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 11, fontWeight: 600 }}>
                 {clientOptions.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
-              <button onClick={() => removeRule(r.id)} style={{ marginInlineStart: "auto", width: 24, height: 24, borderRadius: 6, border: "1px solid #fecaca", backgroundColor: "#fff1f2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              <button onClick={() => removeRule(r.id)} style={{ marginInlineStart: "auto", width: 24, height: 24, borderRadius: 6, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg, color: WF_TOKENS.errorSolid, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                 <Trash2 size={11}/>
               </button>
             </div>
@@ -5306,21 +5316,21 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
         </div>
 
         {mismatchGroups.length > 0 && (
-          <div style={{ marginTop: 12, padding: "10px 12px", backgroundColor: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10 }}>
-            <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: "#9a3412" }}>
+          <div style={{ marginTop: 12, padding: "10px 12px", backgroundColor: WF_TOKENS.warningBg, border: `1px solid ${WF_TOKENS.warningSolid}30`, borderRadius: 10 }}>
+            <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: WF_TOKENS.warning }}>
               ⚠️ {mismatches.length} موظف الـ Client بتاعهم مش متطابق مع قواعد التصنيف فوق:
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
               {mismatchGroups.map(g => (
-                <div key={`${g.project}|${g.from}|${g.to}`} style={{ fontSize: 11, color: "#7c2d12" }}>
+                <div key={`${g.project}|${g.from}|${g.to}`} style={{ fontSize: 11, color: WF_TOKENS.warning }}>
                   {g.project}: {g.items.length} موظف — {g.from} → {g.to}
                 </div>
               ))}
             </div>
-            <Btn onClick={applyReconcile} disabled={reconciling} style={{ ...s.btnPrimary, backgroundColor: "#ea580c", opacity: reconciling ? 0.6 : 1 }}>
+            <Btn onClick={applyReconcile} disabled={reconciling} style={{ ...s.btnPrimary, backgroundColor: WF_TOKENS.warningSolid, opacity: reconciling ? 0.6 : 1 }}>
               {reconciling ? "جاري التصحيح..." : `✅ صحّح Client لـ ${mismatches.length} موظف`}
             </Btn>
-            {reconcileFlash && <span style={{ marginInlineStart: 10, fontSize: 12, fontWeight: 700, color: "#16a34a" }}>{reconcileFlash}</span>}
+            {reconcileFlash && <span style={{ marginInlineStart: 10, fontSize: 12, fontWeight: 700, color: WF_TOKENS.success }}>{reconcileFlash}</span>}
           </div>
         )}
 
@@ -5339,14 +5349,14 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
               {renamingProject ? "جاري التعديل..." : `غيّري (${projectRenameAffectedCount} موظف)`}
             </Btn>
           </div>
-          {projectRenameFlash && <span style={{ display: "inline-block", marginTop: 6, fontSize: 12, fontWeight: 700, color: "#16a34a" }}>{projectRenameFlash}</span>}
+          {projectRenameFlash && <span style={{ display: "inline-block", marginTop: 6, fontSize: 12, fontWeight: 700, color: WF_TOKENS.success }}>{projectRenameFlash}</span>}
         </div>
       </Card>
 
       <Card style={{ padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
         <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>عايزة تعدّلي أسماء الـ Partners؟ ده متاح من صفحة <b>Partner Hub</b> نفسها (إضافة/تعديل/حذف partner).</p>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {savedFlash && <span style={{ fontSize: 12, fontWeight: 700, color: "#16a34a" }}>✅ محفوظ — بيتم تحديث الصفحة...</span>}
+          {savedFlash && <span style={{ fontSize: 12, fontWeight: 700, color: WF_TOKENS.success }}>✅ محفوظ — بيتم تحديث الصفحة...</span>}
           {isViewer ? (
             <span style={{ fontSize: 12, color: "#9ca3af" }}>👁️ Viewer — read only</span>
           ) : (
@@ -5381,7 +5391,7 @@ function SettingsView({
   const isAdmin = __profile?.role === 'admin';
   const [tab,setTab]=useState("general");
   const [confirmClear,setConfirmClear]=useState(false);
-  const stabs=[{k:"general",l:"General"},{k:"notifications",l:"🔔 Notifications"},{k:"config",l:"🗂️ Configuration"},{k:"integration",l:"Integration Guide"},{k:"logic",l:"Report Logic"}];
+  const stabs=[{k:"general",l:"General"},{k:"notifications",l:"🔔 Notifications"},{k:"config",l:"🗂️ Configuration"},{k:"logic",l:"Report Logic"}];
   if (isAdmin) stabs.push({k:"team",l:"👥 Team"});
   return (
     <div style={{maxWidth:720,display:"flex",flexDirection:"column",gap:20}}>
@@ -5393,28 +5403,28 @@ function SettingsView({
         <div style={{display:'flex',flexDirection:'column',gap:16}}>
           {/* Cloud Sync */}
           {isOnline && (
-            <Card style={{padding:20,border:`2px solid ${syncStatus==='error'?'#fca5a5':syncStatus==='success'?'#bbf7d0':'#e5e7eb'}`,backgroundColor:syncStatus==='error'?'#fff1f2':syncStatus==='success'?'#f0fdf4':'white'}}>
+            <Card style={{padding:20,border:`2px solid ${syncStatus==='error'?WF_TOKENS.errorSolid+'40':syncStatus==='success'?WF_TOKENS.successSolid+'40':'#e5e7eb'}`,backgroundColor:syncStatus==='error'?WF_TOKENS.errorBg:syncStatus==='success'?WF_TOKENS.successBg:'white'}}>
               <h3 style={{fontWeight:700,fontSize:14,margin:"0 0 4px"}}>☁️ Cloud Sync</h3>
               <p style={{fontSize:12,color:'#6b7280',margin:'0 0 14px'}}>مزامنة البيانات مع Supabase{lastSync ? ` · آخر sync: ${new Date(lastSync).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}` : ''}</p>
               <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                <Btn onClick={uploadToCloud}     disabled={syncStatus==='syncing'} style={{...s.btnPrimary,backgroundColor:'#3b82f6',opacity:syncStatus==='syncing'?0.6:1}}>📤 Upload to Cloud</Btn>
-                <Btn onClick={downloadFromCloud} disabled={syncStatus==='syncing'} style={{...s.btnPrimary,backgroundColor:'#7c3aed',opacity:syncStatus==='syncing'?0.6:1}}>📥 Download from Cloud</Btn>
-                <Btn onClick={backup}            disabled={syncStatus==='syncing'} style={{...s.btnPrimary,backgroundColor:'#16a34a',opacity:syncStatus==='syncing'?0.6:1}}>💾 Backup</Btn>
-                <Btn onClick={bidirectionalSync} disabled={syncStatus==='syncing'} style={{...s.btnPrimary,backgroundColor:'#0891b2',opacity:syncStatus==='syncing'?0.6:1}}>⇄ Sync Both</Btn>
+                <Btn onClick={uploadToCloud}     disabled={syncStatus==='syncing'} style={{...s.btnPrimary,backgroundColor:M,opacity:syncStatus==='syncing'?0.6:1}}>📤 Upload to Cloud</Btn>
+                <Btn onClick={downloadFromCloud} disabled={syncStatus==='syncing'} style={{...s.btnPrimary,backgroundColor:MD,opacity:syncStatus==='syncing'?0.6:1}}>📥 Download from Cloud</Btn>
+                <Btn onClick={backup}            disabled={syncStatus==='syncing'} style={{...s.btnPrimary,backgroundColor:'white',color:M,border:`1px solid ${M}40`,opacity:syncStatus==='syncing'?0.6:1}}>💾 Backup</Btn>
+                <Btn onClick={bidirectionalSync} disabled={syncStatus==='syncing'} style={{...s.btnPrimary,backgroundColor:'white',color:MD,border:`1px solid ${MD}40`,opacity:syncStatus==='syncing'?0.6:1}}>⇄ Sync Both</Btn>
               </div>
               {syncStatus==='syncing' && (
                 <div style={{marginTop:12}}>
                   <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
-                    <span style={{fontSize:11,fontWeight:700,color:'#1e40af'}}>{syncMessage||'جاري المزامنة...'}</span>
-                    <span style={{fontSize:11,fontWeight:700,color:'#1e40af'}}>{syncProgress}%</span>
+                    <span style={{fontSize:11,fontWeight:700,color:MD}}>{syncMessage||'جاري المزامنة...'}</span>
+                    <span style={{fontSize:11,fontWeight:700,color:MD}}>{syncProgress}%</span>
                   </div>
-                  <div style={{height:6,backgroundColor:'#bfdbfe',borderRadius:999,overflow:'hidden'}}>
-                    <div style={{height:'100%',width:`${syncProgress}%`,backgroundColor:'#2563eb',borderRadius:999,transition:'width 0.3s ease'}}/>
+                  <div style={{height:6,backgroundColor:`${MD}20`,borderRadius:999,overflow:'hidden'}}>
+                    <div style={{height:'100%',width:`${syncProgress}%`,backgroundColor:MD,borderRadius:999,transition:'width 0.3s ease'}}/>
                   </div>
                 </div>
               )}
               {syncMessage && syncStatus!=='syncing' && (
-                <p key={syncMessage} className={syncStatus==='success'?'fe-flash-success':syncStatus==='error'?'fe-flash-error':''} style={{margin:'10px 0 0',fontSize:12,fontWeight:700,color:syncStatus==='error'?'#dc2626':'#16a34a',padding:'4px 6px'}}>{syncMessage}</p>
+                <p key={syncMessage} className={syncStatus==='success'?'fe-flash-success':syncStatus==='error'?'fe-flash-error':''} style={{margin:'10px 0 0',fontSize:12,fontWeight:700,color:syncStatus==='error'?WF_TOKENS.error:WF_TOKENS.success,padding:'4px 6px'}}>{syncMessage}</p>
               )}
             </Card>
           )}
@@ -5440,36 +5450,6 @@ function SettingsView({
       )}
       {tab==="config"&&(
         <ConfigurationPanel employees={employees} setEmployees={setEmployees} clients={clients} saveClients={saveClients}/>
-      )}
-      {tab==="integration"&&(
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          {[
-            {title:"🗄️ Supabase Setup",bg:"#f0fdf4",border:"#bbf7d0",steps:[
-              {n:"1",t:"Create project","d":"supabase.com → New Project → Region: Middle East (Bahrain)"},
-              {n:"2",t:"Your table is ready","d":"You already have 'Employees Master' table set up ✅"},
-              {n:"3",t:"Get your Anon Key","d":"Settings → API → copy 'anon public' key → paste in src/supabase.js"},
-              {n:"4",t:"Enable read policy","d":"Authentication → Policies → Employees Master → New Policy → Enable read access"},
-            ]},
-            {title:"⚡ Zapier Setup",bg:"#fffbeb",border:"#fde68a",steps:[
-              {n:"1",t:"Create Zapier account","d":"zapier.com → free plan (100 tasks/month)"},
-              {n:"2",t:"Ticket → Gmail Zap","d":"Trigger: Webhooks (Catch Hook) → Action: Gmail Send Email → paste webhook URL in ticket settings"},
-              {n:"3",t:"WhatsApp via CallMeBot","d":"callmebot.com → get free API key → automated WA messages for renewals"},
-              {n:"4",t:"Contract renewal alerts","d":"Zapier Schedule (daily 7am) → query Supabase → send WA + email summary"},
-            ]},
-          ].map(section=>(
-            <Card key={section.title} style={{padding:20,backgroundColor:section.bg,border:`1px solid ${section.border}`}}>
-              <h3 style={{fontWeight:700,fontSize:14,margin:"0 0 16px"}}>{section.title}</h3>
-              <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                {section.steps.map(step=>(
-                  <div key={step.n} style={{display:"flex",gap:12,padding:12,backgroundColor:"white",borderRadius:12,border:"1px solid rgba(0,0,0,0.06)"}}>
-                    <div style={{width:24,height:24,borderRadius:"50%",backgroundColor:M,color:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,flexShrink:0}}>{step.n}</div>
-                    <div><p style={{fontWeight:600,fontSize:13,margin:"0 0 2px"}}>{step.t}</p><p style={{fontSize:12,color:"#6b7280",margin:0,fontFamily:"monospace"}}>{step.d}</p></div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          ))}
-        </div>
       )}
       {tab==="logic"&&(
         <Card style={{padding:20}}>
@@ -5520,7 +5500,7 @@ function TeamPanel() {
       <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 16px" }}>
         كل الحسابات اللي عملت تسجيل دخول بإيميل @fisheye.sa. Admin يقدر يعدّل ويحذف، Viewer يشوف بس.
       </p>
-      {err && <p style={{ fontSize: 12, color: "#dc2626", margin: "0 0 10px" }}>{err}</p>}
+      {err && <p style={{ fontSize: 12, color: WF_TOKENS.error, margin: "0 0 10px" }}>{err}</p>}
       {loading ? (
         <p style={{ fontSize: 13, color: "#9ca3af" }}>جاري التحميل...</p>
       ) : (
