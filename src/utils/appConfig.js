@@ -228,7 +228,7 @@ export function classifyProject(project = "", rules = null) {
 //     totalPackage, or ANNUAL = totalPackage * 12, per the deal's marginBasis)
 //   - a flat SAR amount
 //   - a flat SAR Saudization-visa fee, addable regardless of the above
-function dealHasAnyValue(deal) {
+export function dealHasAnyValue(deal) {
   const type = deal?.marginType || "percent";
   const numOrEmpty = v => v !== undefined && v !== null && v !== "" && !Number.isNaN(Number(v));
   if ((type === "percent" || type === "percent_fixed") && numOrEmpty(deal?.marginPercent ?? (type === "percent" ? deal?.marginValue : undefined))) return true;
@@ -236,7 +236,7 @@ function dealHasAnyValue(deal) {
   if (numOrEmpty(deal?.saudizationFee)) return true;
   return false;
 }
-function computeDealMargin(deal, totalPackage) {
+export function computeDealMargin(deal, totalPackage) {
   const type = deal?.marginType || "percent";
   let amount = 0;
   const parts = [];

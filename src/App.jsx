@@ -12,7 +12,7 @@ import WeeklyReportGenerator from './Weeklyreportgenerator';
 import { useSupabaseSync } from './hooks/useSupabaseSync';
 import { supabase, testConnection } from './utils/supabase';
 import { isExcluded, isWFDone, hasMissingPO, hasValidPO, getClientsList } from './utils/helpers';
-import { getEffectiveClientsList, getEffectiveClientMeta, getEffectiveMappingRules, CLIENT_COLOR_PALETTE, CONFIG_KEY, classifyProject, classifyProjectStrict, sanitizeClientName, clientRequiresPO, DEFAULT_CLIENTS_LIST, DEFAULT_CLIENT_META, loadAppConfig, getEffectiveMargin } from './utils/appConfig';
+import { getEffectiveClientsList, getEffectiveClientMeta, getEffectiveMappingRules, CLIENT_COLOR_PALETTE, CONFIG_KEY, classifyProject, classifyProjectStrict, sanitizeClientName, clientRequiresPO, DEFAULT_CLIENTS_LIST, DEFAULT_CLIENT_META, loadAppConfig, getEffectiveMargin, dealHasAnyValue, computeDealMargin } from './utils/appConfig';
 import {
   LayoutDashboard, Users, DollarSign, Ticket, Settings, Building2,
   Bell, Clock, FileText, Upload, Plus, X, Send, Eye,
@@ -4851,13 +4851,39 @@ function NotificationsSettings({ employees }) {
       .filter(e => e.d >= 0 && e.d <= 30)
       .sort((a, b) => a.d - b.d);
 
-    if (!expiring.length) return null;
+    // Direct-mode employees whose margin comes from a client Deal (never
+    // typed in manually) but no Deal actually matches them -- their profit
+    // is silently computing as 0 SAR, which is easy to miss since nothing
+    // on their own card looks wrong. See utils/appConfig.js getEffectiveMargin.
+    const noDeal = employees.filter(e => !isExcluded(e) && e.profitMode === "direct" && getEffectiveMargin(e).source === "none");
+
+    // Sela is the one client where an empty PO field is a real compliance
+    // flag (see Report Logic reference) -- surface it here too instead of
+    // relying on someone remembering to filter for it in the table.
+    const noPOSela = employees.filter(e => !isExcluded(e) && e.client === "Sela" && !(e.poNumbers && String(e.poNumbers).trim()));
+
+    if (!expiring.length && !noDeal.length && !noPOSela.length) return null;
+
     const urgent = expiring.filter(e => e.d <= 7);
-    const lines  = expiring.map(e => `• ${e.name} (${e.client || '—'}) — ${e.d} day${e.d !== 1 ? 's' : ''}`);
-    return `🔔 Fisheye Daily Digest — ${new Date().toLocaleDateString('en-GB')}\n\n`
-      + (urgent.length ? `🚨 URGENT (≤7 days): ${urgent.length}\n` : '')
-      + `⚠️ Expiring within 30 days: ${expiring.length}\n\n`
-      + lines.join('\n');
+    const expLines = expiring.map(e => `• ${e.name} (${e.client || '—'}) — ${e.d} day${e.d !== 1 ? 's' : ''}`);
+
+    let msg = `🔔 Fisheye Daily Digest — ${new Date().toLocaleDateString('en-GB')}\n\n`;
+    if (expiring.length) {
+      msg += (urgent.length ? `🚨 URGENT (≤7 days): ${urgent.length}\n` : '')
+        + `⚠️ Expiring within 30 days: ${expiring.length}\n\n`
+        + expLines.join('\n') + '\n\n';
+    }
+    if (noDeal.length) {
+      msg += `💰 No Deal margin set (profit computing as 0 SAR): ${noDeal.length}\n`
+        + noDeal.slice(0, 15).map(e => `• ${e.name} (${e.client || '—'})`).join('\n')
+        + (noDeal.length > 15 ? `\n…and ${noDeal.length - 15} more` : '') + '\n\n';
+    }
+    if (noPOSela.length) {
+      msg += `📋 Sela — missing PO number: ${noPOSela.length}\n`
+        + noPOSela.slice(0, 15).map(e => `• ${e.name}`).join('\n')
+        + (noPOSela.length > 15 ? `\n…and ${noPOSela.length - 15} more` : '');
+    }
+    return msg.trim();
   };
 
   const sendWhatsApp = async () => {
@@ -4877,15 +4903,17 @@ function NotificationsSettings({ employees }) {
     img.src = url;
   };
 
-  const previewMsg = buildDigest();
-  const expCount   = employees.filter(e => !isExcluded(e) && daysUntil(e.endDate) >= 0 && daysUntil(e.endDate) <= 30).length;
-  const urgCount   = employees.filter(e => !isExcluded(e) && daysUntil(e.endDate) >= 0 && daysUntil(e.endDate) <= 7).length;
-  const lastDigest = localStorage.getItem('fisheye_last_digest_date');
+  const previewMsg  = buildDigest();
+  const expCount    = employees.filter(e => !isExcluded(e) && daysUntil(e.endDate) >= 0 && daysUntil(e.endDate) <= 30).length;
+  const urgCount    = employees.filter(e => !isExcluded(e) && daysUntil(e.endDate) >= 0 && daysUntil(e.endDate) <= 7).length;
+  const noDealCount = employees.filter(e => !isExcluded(e) && e.profitMode === "direct" && getEffectiveMargin(e).source === "none").length;
+  const noPOCount   = employees.filter(e => !isExcluded(e) && e.client === "Sela" && !(e.poNumbers && String(e.poNumbers).trim())).length;
+  const lastDigest  = localStorage.getItem('fisheye_last_digest_date');
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
       {/* Status cards */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:10}}>
         <Card style={{padding:14,background: urgCount ? WF_TOKENS.errorBg : WF_TOKENS.successBg, border: `1px solid ${urgCount ? WF_TOKENS.errorSolid+'40':WF_TOKENS.successSolid+'40'}`}}>
           <p style={{fontSize:11,color:'#6b7280',margin:'0 0 4px',fontWeight:700}}>URGENT (≤7 days)</p>
           <p style={{fontSize:24,fontWeight:900,margin:0,color: urgCount ? WF_TOKENS.error : WF_TOKENS.success}}>{urgCount}</p>
@@ -4893,6 +4921,14 @@ function NotificationsSettings({ employees }) {
         <Card style={{padding:14,background:WF_TOKENS.warningBg,border:`1px solid ${WF_TOKENS.warningSolid}40`}}>
           <p style={{fontSize:11,color:'#6b7280',margin:'0 0 4px',fontWeight:700}}>EXPIRING (≤30 days)</p>
           <p style={{fontSize:24,fontWeight:900,margin:0,color:WF_TOKENS.warning}}>{expCount}</p>
+        </Card>
+        <Card style={{padding:14,background: noDealCount ? WF_TOKENS.errorBg : WF_TOKENS.successBg, border: `1px solid ${noDealCount ? WF_TOKENS.errorSolid+'40':WF_TOKENS.successSolid+'40'}`}}>
+          <p style={{fontSize:11,color:'#6b7280',margin:'0 0 4px',fontWeight:700}}>NO DEAL (profit = 0)</p>
+          <p style={{fontSize:24,fontWeight:900,margin:0,color: noDealCount ? WF_TOKENS.error : WF_TOKENS.success}}>{noDealCount}</p>
+        </Card>
+        <Card style={{padding:14,background: noPOCount ? WF_TOKENS.warningBg : WF_TOKENS.successBg, border: `1px solid ${noPOCount ? WF_TOKENS.warningSolid+'40':WF_TOKENS.successSolid+'40'}`}}>
+          <p style={{fontSize:11,color:'#6b7280',margin:'0 0 4px',fontWeight:700}}>SELA — NO PO</p>
+          <p style={{fontSize:24,fontWeight:900,margin:0,color: noPOCount ? WF_TOKENS.warning : WF_TOKENS.success}}>{noPOCount}</p>
         </Card>
         <Card style={{padding:14}}>
           <p style={{fontSize:11,color:'#6b7280',margin:'0 0 4px',fontWeight:700}}>LAST DIGEST</p>
@@ -4953,10 +4989,36 @@ function NotificationsSettings({ employees }) {
 }
 
 
+// Does `project` match one of a deal's own project-match keywords? Mirrors
+// the matching logic in utils/appConfig.js's getEffectiveMargin exactly, so
+// the live preview below agrees with what real payroll math will do.
+function projectMatchesDeal(deal, project) {
+  const p = (project || "").trim().toUpperCase();
+  return (deal?.projectMatches || []).some(pm => {
+    const v = (pm.value || "").trim().toUpperCase();
+    if (!v) return false;
+    return pm.matchType === "exact" ? p === v : p.includes(v);
+  });
+}
+// Which deal (by index into the client's full deals array) would actually
+// apply to an employee with this project name, under the same
+// higher-index-wins precedence getEffectiveMargin uses. Index 0 is always
+// the fallback (the default deal), whether or not it has anything filled in.
+function winningDealIndexForProject(deals, project) {
+  for (let j = deals.length - 1; j >= 1; j--) {
+    if (dealHasAnyValue(deals[j]) && projectMatchesDeal(deals[j], project)) return j;
+  }
+  return 0;
+}
+
 // Shared field set for one Deal (the client's default deal, or one of its
 // project-specific deals) -- used twice below so both look and behave
 // identically. `onChange` receives a partial patch to merge into the deal.
-function DealFields({ deal, onChange }) {
+// `previewEmployees` (optional) is the list of REAL current employees this
+// exact deal would apply to -- used to show a live "here's what this margin
+// actually comes out to" preview, since the same percentage means a
+// different SAR amount for every employee's own salary.
+function DealFields({ deal, onChange, previewEmployees }) {
   const type = deal?.marginType || "percent";
   const showPercent = type === "percent" || type === "percent_fixed";
   const showFixed   = type === "fixed" || type === "percent_fixed";
@@ -5028,6 +5090,41 @@ function DealFields({ deal, onChange }) {
       <p style={{ margin: 0, fontSize: 10.5, color: "#9ca3af", lineHeight: 1.5 }}>
         The percentage, the fixed amount, and the Saudization fee are all added together into one margin — none of it is separate income.
       </p>
+      {dealHasAnyValue(deal) && previewEmployees && (
+        <div style={{ padding: "8px 10px", backgroundColor: `${MD}0a`, border: `1px solid ${MD}20`, borderRadius: 8 }}>
+          {previewEmployees.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 11, color: "#9ca3af" }}>No current employee matches this deal yet — nothing to preview against.</p>
+          ) : (() => {
+            const rows = previewEmployees.map(e => ({
+              name: e.name || "—",
+              pkg: Number(e.totalPackage) || 0,
+              margin: computeDealMargin(deal, Number(e.totalPackage) || 0).amount,
+            }));
+            if (rows.length <= 4) {
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: MD, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Preview on {rows.length === 1 ? "this employee" : "current employees"}
+                  </p>
+                  {rows.map((r, i) => (
+                    <p key={i} style={{ margin: 0, fontSize: 11.5, color: "#374151" }}>
+                      {r.name} <span style={{ color: "#9ca3af" }}>(SAR {r.pkg.toLocaleString()}/mo)</span> → margin <b style={{ color: MD }}>SAR {Math.round(r.margin).toLocaleString()}</b>
+                    </p>
+                  ))}
+                </div>
+              );
+            }
+            const amounts = rows.map(r => r.margin);
+            const min = Math.min(...amounts), max = Math.max(...amounts);
+            const avg = amounts.reduce((a, b) => a + b, 0) / amounts.length;
+            return (
+              <p style={{ margin: 0, fontSize: 11.5, color: "#374151" }}>
+                Applies to <b style={{ color: MD }}>{rows.length} employees</b> right now — margin ranges from <b>SAR {Math.round(min).toLocaleString()}</b> to <b>SAR {Math.round(max).toLocaleString()}</b> (avg SAR {Math.round(avg).toLocaleString()}), based on each one's own salary.
+              </p>
+            );
+          })()}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
         {[["billGosi","Bill GOSI"],["billMedical","Bill Medical"],["billAjeer","Bill Ajeer"]].map(([key,label]) => (
           <label key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#374151", cursor: "pointer" }}>
@@ -5306,6 +5403,11 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
             const clientProjectNames = [...new Set(
               employees.filter(e => e.client === matchName).map(e => (e.project || "").trim()).filter(Boolean)
             )].sort((a, b) => a.localeCompare(b));
+            // Employees this client's Deals could actually apply to for the live
+            // margin preview -- excludes anyone with their own manually-typed
+            // Fisheye Margin, since that always overrides any client Deal and a
+            // Deal preview would be misleading for them.
+            const dealPreviewPool = employees.filter(e => e.client === matchName && !(Number(e.fisheyeMargin) || 0));
             return (
               <div key={row.id} style={{ border: "1px solid #E5E1DC", borderRadius: 14, overflow: "hidden", backgroundColor: "white" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", flexWrap: "wrap" }}>
@@ -5351,10 +5453,11 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
 
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       <p style={{ margin: 0, fontSize: 10.5, fontWeight: 700, color: MD, textTransform: "uppercase", letterSpacing: "0.05em" }}>Default margin for all of this client's projects</p>
-                      <DealFields deal={deals[0]} onChange={patch => updateDeal(row.id, deals[0].id, patch)} />
+                      <DealFields deal={deals[0]} onChange={patch => updateDeal(row.id, deals[0].id, patch)}
+                        previewEmployees={dealPreviewPool.filter(e => winningDealIndexForProject(deals, e.project) === 0)} />
                     </div>
 
-                    {deals.slice(1).map(d => (
+                    {deals.slice(1).map((d, dIdx) => (
                       <div key={d.id} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 14, backgroundColor: "white", display: "flex", flexDirection: "column", gap: 10 }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                           <p style={{ margin: 0, fontSize: 10.5, fontWeight: 700, color: M, textTransform: "uppercase", letterSpacing: "0.05em" }}>Margin for a specific project</p>
@@ -5362,7 +5465,8 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                             <Trash2 size={11}/>
                           </button>
                         </div>
-                        <DealFields deal={d} onChange={patch => updateDeal(row.id, d.id, patch)} />
+                        <DealFields deal={d} onChange={patch => updateDeal(row.id, d.id, patch)}
+                          previewEmployees={dealPreviewPool.filter(e => winningDealIndexForProject(deals, e.project) === dIdx + 1)} />
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                           {(d.projectMatches || []).map(pm => (
                             <div key={pm.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
