@@ -5019,20 +5019,22 @@ function winningDealIndexForProject(deals, project) {
 // actually comes out to" preview, since the same percentage means a
 // different SAR amount for every employee's own salary.
 function DealFields({ deal, onChange, previewEmployees, positionOptions }) {
-  const billingModel = deal?.billingModel || "per_employee";
+  // "per_employee" was retired as its own option in the dropdown -- Cost
+  // Plus renders the exact same fields/logic, so any deal that isn't
+  // explicitly Lump Sum (including old deals saved before this change, with
+  // billingModel unset or still "per_employee") is treated as Cost Plus.
+  const billingModel = deal?.billingModel === "lump_sum" ? "lump_sum" : "cost_plus";
   return (
     <>
       <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
         <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Billing Model</label>
         <select value={billingModel} onChange={e => onChange({ billingModel: e.target.value })}
           style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 220, fontWeight: 700, color: MD }}>
-          <option value="per_employee">Per-Employee Margin (% / fixed of salary)</option>
-          <option value="lump_sum">Lump Sum (flat rate/hour by position, or one flat total)</option>
-          <option value="cost_plus">Cost Plus (actual cost + % / fixed markup)</option>
+          <option value="cost_plus">Cost Plus</option>
+          <option value="lump_sum">Lump Sum</option>
         </select>
       </div>
 
-      {billingModel === "per_employee" && <PerEmployeeDealFields deal={deal} onChange={onChange} previewEmployees={previewEmployees} />}
       {billingModel === "lump_sum" && <LumpSumDealFields deal={deal} onChange={onChange} positionOptions={positionOptions} />}
       {billingModel === "cost_plus" && <CostPlusDealFields deal={deal} onChange={onChange} previewEmployees={previewEmployees} />}
 
@@ -5207,8 +5209,8 @@ function LumpSumDealFields({ deal, onChange, positionOptions }) {
         <label style={{ fontSize: 10, fontWeight: 700, color: "#6b7280" }}>Structure</label>
         <select value={structure} onChange={e => onChange({ lumpSumStructure: e.target.value })}
           style={{ padding: "6px 8px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, minWidth: 220 }}>
-          <option value="positions">Flat rate/hour, per position (e.g. Sela)</option>
-          <option value="flat">One flat total for the whole project (e.g. Riva rental)</option>
+          <option value="positions">Flat rate/hour, per position</option>
+          <option value="flat">One flat total for the whole project</option>
         </select>
       </div>
 
@@ -5349,7 +5351,7 @@ function CostPlusDealFields({ deal, onChange, previewEmployees }) {
   return (
     <>
       <p style={{ margin: 0, fontSize: 10.5, color: "#9ca3af", lineHeight: 1.5 }}>
-        Cost Plus = the actual cost (salary, plus GOSI/Medical/Ajeer below if billed) + a percentage or fixed amount on top. Same calculation as Per-Employee Margin — just labeled for a cost-plus contract like Sela's.
+        Cost Plus = the actual cost (salary, plus GOSI/Medical/Ajeer below if billed) + a percentage or fixed amount on top.
       </p>
       <PerEmployeeDealFields deal={deal} onChange={onChange} previewEmployees={previewEmployees} />
     </>
