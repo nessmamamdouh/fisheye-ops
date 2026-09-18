@@ -2061,6 +2061,13 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
       }
       setEmployees(prev => [...allInserted, ...prev]);
       setPendingAddCSV(null);
+      // Best-effort timestamp of this getonboarded.net CSV import, so the CRM's Connected
+      // Systems status page can show "last synced" for this link instead of having no
+      // visibility into it at all -- see the CRM's fisheye-status action. Never blocks or
+      // fails the import itself if this write doesn't go through.
+      supabase.from('fisheye_app_data')
+        .upsert({ key: 'fisheyeLastGetonboardedImport_v1', data: { ts: new Date().toISOString(), count: allInserted.length } }, { onConflict: 'key' })
+        .then(({ error }) => { if (error) console.warn('getonboarded import timestamp sync error:', error.message); });
       let msg = `✅ تم رفع ${allInserted.length} موظف بنجاح!`;
       if (collided.length > 0) {
         msg += `\n\n⚠️ ${collided.length} موظف اتسجلوا برقم عقد اتصادف نفسه مع موظف تاني قديم (شخص مختلف تمامًا) — راجعي ترقيم العقود القديمة لو حابة توحديها:\n` +
@@ -3652,15 +3659,8 @@ const DEF_CLIENTS=[
   {id:"C-04",name:"Riva Engineering 2",region:"Riyadh",email:"ops@riva.sa",status:"active",contacts:[{name:"Mohammed CEO",role:"Executive",phone:"+966501111111"}],notes:"CEO projects",requestLog:[]},
 ];
 
-function ClientHub({ employees, clients, saveClients, partners }) {
+function ClientHub({ employees, clients, saveClients }) {
   if (!clients) clients = [];
-  // Structured partner names from the Partner Hub (People > Partners) --
-  // offered as suggestions for the Lump Sum Position Rates "Partner" field
-  // so a rate row can link back to an existing partner instead of a loose
-  // spelling. Free text still works for a partner not yet in the Hub.
-  const partnerNameOptions = [...new Set(
-    (partners || []).filter(p => p.status !== "archived").map(p => (p.name || "").trim()).filter(Boolean)
-  )].sort((a, b) => a.localeCompare(b));
   const [showAdd,setShowAdd]=useState(false);
   const [filter,setFilter]=useState("active");
   const [search,setSearch]=useState("");
@@ -5393,9 +5393,16 @@ function CostPlusDealFields({ deal, onChange, previewEmployees }) {
 // hardcoded (CLIENTS_LIST, CLIENT_META, mapClient). Renaming a client cascades
 // to existing employee records and Client Hub records, then persists + reloads.
 // ═══════════════════════════════════════════════════════════════════════════════
-function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
+function ConfigurationPanel({ employees, setEmployees, clients, saveClients, partners }) {
   const { profile: __profile } = useAuth();
   const isViewer = __profile?.role === 'viewer';
+  // Structured partner names from the Partner Hub (People > Partners) -- offered as suggestions
+  // for the Lump Sum Position Rates "Partner" field below so a rate row can link back to an
+  // existing partner instead of a loose spelling. Free text still works for a partner not yet
+  // added to the Hub.
+  const partnerNameOptions = [...new Set(
+    (partners || []).filter(p => p.status !== "archived").map(p => (p.name || "").trim()).filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b));
   const [rows, setRows] = useState(() => {
     const list = getEffectiveClientsList();
     const meta = getEffectiveClientMeta();
@@ -5889,6 +5896,7 @@ function SettingsView({
   setEmployees,
   clients,
   saveClients,
+  partners,
 }) {
   const { profile: __profile } = useAuth();
   const isAdmin = __profile?.role === 'admin';
@@ -6002,7 +6010,7 @@ function SettingsView({
         <NotificationsSettings employees={employees}/>
       )}
       {tab==="config"&&(
-        <ConfigurationPanel employees={employees} setEmployees={setEmployees} clients={clients} saveClients={saveClients}/>
+        <ConfigurationPanel employees={employees} setEmployees={setEmployees} clients={clients} saveClients={saveClients} partners={partners}/>
       )}
       {tab==="logic"&&(
         <Card style={{padding:"4px 20px"}}>
@@ -7378,7 +7386,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
 
           {/* ── ENTITY VIEWS ── */}
           {nav==="workforce"  && <WorkforceView employees={employees} setEmployees={setEmployees} partners={partners} clients={clients} exportCSV={exportCSV} pendingOpenEmpId={pendingOpenEmpId} onPendingOpenHandled={() => setPendingOpenEmpId(null)}/>}
-          {nav==="clients"    && <ClientHub employees={employees} clients={clients} saveClients={saveClients} partners={partners}/>}
+          {nav==="clients"    && <ClientHub employees={employees} clients={clients} saveClients={saveClients}/>}
           {nav==="partners"   && <PartnerHub employees={employees} partners={partners} savePartners={savePartners}/>}
 
           {/* ── FINANCE (consolidated: Payroll · Billing · Settlements) ── */}
@@ -7409,6 +7417,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
             setEmployees={setEmployees}
             clients={clients}
             saveClients={saveClients}
+            partners={partners}
           />}
 
           {/* ── DEEP LINKS (accessible via URL/nav programmatically, not in sidebar) ── */}
