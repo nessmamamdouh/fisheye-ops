@@ -7034,6 +7034,10 @@ function FisheyeOpsPro({ employees, setEmployees }) {
     count += uninvoicedNames.size;
     // Negative net profit: partner payout exceeds gross margin
     count += activeEmps.filter(e => {
+      // Same Lump Sum precedence as calcProfit/calcLine, so this alert
+      // never disagrees with the numbers shown on the employee or in Finance.
+      const lumpSum = getLumpSumPositionMargin(e);
+      if (lumpSum) return lumpSum.grossMargin - lumpSum.partnerPayout < 0;
       if (e.profitMode !== 'partner') return false;
       const totalPkg = Number(e.totalPackage || 0);
       const pValue = Number(e.clientPrice || 0);
