@@ -2391,6 +2391,17 @@ const submitRenew = async () => {
                             if (field === 'phone' && val && /^\+\d{1,4}$/.test(val.trim())) return;
                             if (val) fieldsToUpdate[field] = val;
                           });
+                          // Contract Start/End Date — opt-in: only touched when the CSV
+                          // actually has a matching column with a value for this row.
+                          // A CSV without these columns leaves dates completely untouched.
+                          if (endIdx !== -1 && cols[endIdx]) {
+                            const normEnd = normalizeDate(cols[endIdx]);
+                            if (normEnd) fieldsToUpdate.endDate = normEnd;
+                          }
+                          if (startIdx !== -1 && cols[startIdx]) {
+                            const normStart = normalizeDate(cols[startIdx]);
+                            if (normStart) fieldsToUpdate.startDate = normStart;
+                          }
                           if (fieldsToUpdate.workflowStatus) {
                             if (['Qiwa Submitted','Qiwa Approved','Iqama Transferred'].includes(emp.workflowStatus))
                               delete fieldsToUpdate.workflowStatus;
