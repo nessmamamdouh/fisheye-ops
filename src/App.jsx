@@ -12,7 +12,7 @@ import WeeklyReportGenerator from './Weeklyreportgenerator';
 import { useSupabaseSync } from './hooks/useSupabaseSync';
 import { supabase, testConnection } from './utils/supabase';
 import { isExcluded, isWFDone, hasMissingPO, hasValidPO, getClientsList } from './utils/helpers';
-import { getEffectiveClientsList, getEffectiveClientMeta, getEffectiveMappingRules, CLIENT_COLOR_PALETTE, CONFIG_KEY, classifyProject, classifyProjectStrict, sanitizeClientName, clientRequiresPO, DEFAULT_CLIENTS_LIST, DEFAULT_CLIENT_META, DEFAULT_MAPPING_RULES, loadAppConfig, getEffectiveMargin, dealHasAnyValue, computeDealMargin } from './utils/appConfig';
+import { getEffectiveClientsList, getEffectiveClientMeta, getEffectiveMappingRules, CLIENT_COLOR_PALETTE, CONFIG_KEY, classifyProject, classifyProjectStrict, sanitizeClientName, clientRequiresPO, DEFAULT_CLIENTS_LIST, DEFAULT_CLIENT_META, DEFAULT_MAPPING_RULES, loadAppConfig, getEffectiveMargin, getLumpSumPositionMargin, dealHasAnyValue, computeDealMargin } from './utils/appConfig';
 import {
   LayoutDashboard, Users, DollarSign, Ticket, Settings, Building2,
   Bell, Clock, FileText, Upload, Plus, X, Send, Eye,
@@ -174,6 +174,11 @@ const fmtSARShort = n => n ? `SAR ${fmtNum(n)}` : "—";
 const waHref = phone => { const c=(phone||"").replace(/[^0-9+]/g,"").replace(/^\+/,""); return c.length>6?`https://wa.me/${c}`:null; };
 const isContractExpired = e => e.endDate && daysUntil(e.endDate) < 0;
 const calcProfit = e => {
+  // A Lump Sum Deal with a matching Position Rate always wins — it's the
+  // real, project-specific rate table, more accurate than either the
+  // generic Cost Plus margin or the per-employee partner-percent fields.
+  const lumpSum = getLumpSumPositionMargin(e);
+  if (lumpSum) return Math.round(lumpSum.netMargin);
   if (e.profitMode === "direct") {
     // Direct mode: the margin comes fully computed from getEffectiveMargin --
     // the employee's own typed-in value if there is one, else the matching

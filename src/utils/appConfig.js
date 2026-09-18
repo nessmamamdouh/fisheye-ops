@@ -286,6 +286,71 @@ export function computeDealMargin(deal, totalPackage) {
 //      margin and no deal configured).
 // Used by calcProfit (App.jsx) and calcLine (FinanceModule.jsx) so every
 // profit/billing number in the app stays consistent with the same rule.
+
+// Resolves a Lump Sum "position rate" margin for an employee, when their
+// client's effective Deal (same project-match precedence as
+// getEffectiveMargin above) is billingModel "lump_sum" / structure
+// "positions" AND has a Position Rates row matching this employee's own
+// `position` field (case-insensitive exact match).
+//
+// The math: an employee's stored totalPackage already equals
+// workerRate * hoursWorked (that's how these Lump Sum packages are built
+// from the client's real timesheet), so hoursWorked = totalPackage /
+// workerRate can be derived WITHOUT any new per-employee hours field.
+// From there:
+//   grossMargin  = hours * (clientRate - workerRate)   // what Fisheye bills on top of payroll
+//   partnerPayout = hours * partnerRate                // what Fisheye pays the named partner
+//   netMargin     = grossMargin - partnerPayout         // what Fisheye actually keeps
+//
+// Returns null when no Lump Sum position match applies, so every caller
+// falls back to its existing (Cost Plus / manual / partner-percent) logic
+// completely unchanged.
+export function getLumpSumPositionMargin(emp) {
+  const totalPackage = Number(emp?.totalPackage) || 0;
+  if (!totalPackage) return null;
+  const meta = getEffectiveClientMeta();
+  const deals = meta?.[emp?.client]?.deals;
+  if (!Array.isArray(deals) || !deals.length) return null;
+
+  const project = (emp?.project || "").trim().toUpperCase();
+  let effectiveDeal = null;
+  for (let i = deals.length - 1; i >= 1; i--) {
+    const d = deals[i];
+    const matched = (d.projectMatches || []).some(pm => {
+      const v = (pm.value || "").trim().toUpperCase();
+      if (!v) return false;
+      return pm.matchType === "exact" ? project === v : project.includes(v);
+    });
+    if (matched) { effectiveDeal = d; break; }
+  }
+  if (!effectiveDeal) effectiveDeal = deals[0];
+  if (!effectiveDeal || effectiveDeal.billingModel !== "lump_sum" || effectiveDeal.lumpSumStructure !== "positions") {
+    return null;
+  }
+
+  const rates = effectiveDeal.positionRates || [];
+  const posNorm = (emp?.position || "").trim().toLowerCase();
+  const row = rates.find(r => (r.position || "").trim().toLowerCase() === posNorm);
+  if (!row) return null;
+
+  const workerRate = Number(row.workerRate) || 0;
+  const clientRate = Number(row.clientRate) || 0;
+  const partnerRate = Number(row.partnerRate) || 0;
+  if (!workerRate) return null;
+
+  const hours = totalPackage / workerRate;
+  const grossMargin = hours * (clientRate - workerRate);
+  const partnerPayout = hours * partnerRate;
+  const netMargin = grossMargin - partnerPayout;
+
+  return {
+    source: "lump_sum",
+    hours, workerRate, clientRate, partnerRate,
+    grossMargin, partnerPayout, netMargin,
+    partnerName: row.partnerName || "",
+  };
+}
+
 export function getEffectiveMargin(emp) {
   const totalPackage = Number(emp?.totalPackage) || 0;
   const manual = Number(emp?.fisheyeMargin) || 0;

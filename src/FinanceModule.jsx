@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { isExcluded } from "./utils/helpers";
 import { supabase } from "./utils/supabase";
-import { clientRequiresPO, getEffectiveMargin } from "./utils/appConfig";
+import { clientRequiresPO, getEffectiveMargin, getLumpSumPositionMargin } from "./utils/appConfig";
 
 // ─── CONSTANTS & HELPERS ─────────────────────────────────────────────────────
 const M   = "#A02843";
@@ -34,7 +34,15 @@ export const calcLine = emp => {
   const totalPkg = Number(emp.totalPackage || 0);
   let marginAmount = 0;
 
-  if (emp.profitMode === "partner") {
+  // A Lump Sum Deal with a matching Position Rate always wins -- same
+  // precedence as calcProfit in App.jsx, so Profit and Finance numbers
+  // never disagree for the same employee. margin here is GROSS (before
+  // partner payout), matching what this function returns for every other
+  // mode -- calcPartnerPayout below subtracts the partner side separately.
+  const lumpSum = getLumpSumPositionMargin(emp);
+  if (lumpSum) {
+    marginAmount = lumpSum.grossMargin;
+  } else if (emp.profitMode === "partner") {
     // Partner mode: margin = what Fisheye charges CLIENT (clientPrice), not what it pays partner
     const pValue = Number(emp.clientPrice || 0);
     const pType  = emp.clientPriceType || "percent";
@@ -54,6 +62,8 @@ export const calcLine = emp => {
 
 /** What Fisheye pays the partner (cost side) */
 export const calcPartnerPayout = emp => {
+  const lumpSum = getLumpSumPositionMargin(emp);
+  if (lumpSum) return Math.round(lumpSum.partnerPayout);
   if (emp.profitMode !== "partner") return 0;
   const totalPkg = Number(emp.totalPackage || 0);
   if (emp.partnerCostType === "percent") return Math.round((Number(emp.partnerCost || 0) / 100) * totalPkg);
