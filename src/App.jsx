@@ -4400,9 +4400,6 @@ function PartnerHub({ employees, partners, savePartners }) {
     {k:"contacts",  l:"Contacts"},
   ];
 
-  const PU="linear-gradient(135deg,#4c1d95,#7c3aed)";
-  const PC="#7c3aed";
-
   // partner health score (simple)
   const calcPartnerHealth=(pid)=>{
     const linked=getLinked(pid);
@@ -4423,63 +4420,59 @@ function PartnerHub({ employees, partners, savePartners }) {
   };
 
   return (
-    <div style={{ display:"flex", height:"calc(100vh - 140px)", gap:0, backgroundColor:"#f3f4f6", borderRadius:16, border:"1px solid #e5e7eb", overflow:"hidden" }}>
+    <div className="flex h-[calc(100vh-140px)] gap-0 bg-stone-100 rounded-2xl border border-stone-200 overflow-hidden">
 
       {/* ── LEFT SIDEBAR ── */}
-      <div style={{ width:256, flexShrink:0, display:"flex", flexDirection:"column", borderRight:"1px solid #e5e7eb", backgroundColor:"white" }}>
+      <div className="w-64 flex-shrink-0 flex flex-col border-r border-stone-200 bg-white">
 
         {/* Sidebar header */}
-        <div style={{ padding:"16px 16px 12px", background:PU, flexShrink:0 }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:7 }}>
-              <Users size={16} style={{ color:"white" }}/>
-              <span style={{ fontWeight:800, fontSize:15, color:"white", letterSpacing:"-0.01em" }}>Partner Hub</span>
+        <div className="px-4 pt-4 pb-3 bg-gradient-to-br from-primary to-secondary flex-shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Users size={16} className="text-white"/>
+              <span className="font-serif font-bold text-[15px] text-white tracking-tight">Partner Hub</span>
             </div>
-            <button onClick={()=>setShowAdd(true)} title="Add Partner" style={{ width:26, height:26, borderRadius:7, border:"1px solid rgba(255,255,255,0.35)", backgroundColor:"rgba(255,255,255,0.15)", color:"white", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0 }}>
+            <button onClick={()=>setShowAdd(true)} title="Add Partner" className="w-[26px] h-[26px] rounded-md border border-white/35 bg-white/15 text-white flex items-center justify-center cursor-pointer flex-shrink-0 [@media(hover:hover)]:hover:bg-white/25 transition-colors duration-150">
               <Plus size={13}/>
             </button>
           </div>
           {/* Mini KPI strip */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
+          <div className="grid grid-cols-3 gap-1.5">
             {[
               { l:"Partners", v:partners.filter(p=>p.status==="active").length, alert:false },
               { l:"Pending",  v:totalPending,  alert:totalOverdue>0 },
               { l:"Expiring", v:totalExpiring, alert:totalExpiring>0 },
             ].map(k => (
-              <div key={k.l} style={{ backgroundColor:"rgba(255,255,255,0.13)", borderRadius:8, padding:"7px 8px", textAlign:"center" }}>
-                <div style={{ fontSize:9, color:"rgba(220,200,255,0.85)", fontWeight:700, textTransform:"uppercase", marginBottom:3 }}>{k.l}</div>
-                <div style={{ fontSize:17, fontWeight:900, color:k.alert?"#fca5a5":"white", fontFamily:"monospace", lineHeight:1 }}>{k.v}</div>
+              <div key={k.l} className="bg-white/15 rounded-md px-2 py-1.5 text-center">
+                <div className="text-[9px] text-white/70 font-bold uppercase mb-0.5 tracking-wide">{k.l}</div>
+                <div className={`text-[17px] font-black font-mono tabular-nums leading-none ${k.alert?"text-red-300":"text-white"}`}>{k.v}</div>
               </div>
             ))}
           </div>
         </div>
 
         {/* Filter pills */}
-        <div style={{ padding:"8px 10px", borderBottom:"1px solid #f3f4f6", display:"flex", gap:4 }}>
+        <div className="px-2.5 py-2 border-b border-stone-100 flex gap-1">
           {[["active","Active"],["archived","Archived"],["all","All"]].map(([k,l]) => (
-            <button key={k} onClick={()=>setFilter(k)} style={{ flex:1, padding:"4px 0", border:"none", fontSize:10, fontWeight:700, cursor:"pointer", borderRadius:6, backgroundColor:filter===k?PC:"#f3f4f6", color:filter===k?"white":"#9ca3af", transition:"all 0.12s" }}>{l}</button>
+            <button key={k} onClick={()=>setFilter(k)} className={`flex-1 py-1 border-none text-[10px] font-bold cursor-pointer rounded-md transition-colors duration-150 ${filter===k?"bg-secondary text-white":"bg-stone-100 text-stone-400 [@media(hover:hover)]:hover:bg-stone-200"}`}>{l}</button>
           ))}
         </div>
-        <div style={{ padding:"6px 10px", borderBottom:"1px solid #f3f4f6" }}>
-          <div style={{ position:"relative" }}>
-            <Search size={11} style={{ position:"absolute", left:8, top:"50%", transform:"translateY(-50%)", color:"#9ca3af", pointerEvents:"none" }}/>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search partners…"
-              style={{ width:"100%", padding:"5px 8px 5px 24px", borderRadius:7, border:"1px solid #e5e7eb", fontSize:11, outline:"none", backgroundColor:"white", boxSizing:"border-box" }}/>
-          </div>
+        <div className="px-2.5 py-1.5 border-b border-stone-100">
+          <DSInput value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search partners…" icon={Search} className="text-[11px] py-1.5"/>
         </div>
         {/* Type filter pills */}
-        <div style={{ padding:"6px 10px", borderBottom:"1px solid #f3f4f6", display:"flex", gap:4 }}>
+        <div className="px-2.5 py-1.5 border-b border-stone-100 flex gap-1">
           {[["all","All"],["operational","Operational"],["commission","Commission"]].map(([k,l])=>(
-            <button key={k} onClick={()=>setTypeFilter(k)} style={{ flex:1, padding:"4px 0", border:"none", fontSize:9, fontWeight:700, cursor:"pointer", borderRadius:6, backgroundColor:typeFilter===k?PC:"#f3f4f6", color:typeFilter===k?"white":"#9ca3af", transition:"all 0.12s", whiteSpace:"nowrap" }}>{l}</button>
+            <button key={k} onClick={()=>setTypeFilter(k)} className={`flex-1 py-1 border-none text-[9px] font-bold cursor-pointer rounded-md transition-colors duration-150 whitespace-nowrap ${typeFilter===k?"bg-secondary text-white":"bg-stone-100 text-stone-400 [@media(hover:hover)]:hover:bg-stone-200"}`}>{l}</button>
           ))}
         </div>
 
         {/* Partner list */}
-        <div style={{ flex:1, overflowY:"auto" }}>
+        <div className="flex-1 overflow-y-auto">
           {displayed.length===0 && (
-            <div style={{ textAlign:"center", padding:"32px 16px", color:"#9ca3af" }}>
-              <Users size={24} style={{ opacity:0.25, margin:"0 auto 8px", display:"block" }}/>
-              <p style={{ fontSize:12, margin:0 }}>No partners</p>
+            <div className="text-center px-4 py-8 text-stone-400">
+              <Users size={24} className="opacity-25 mx-auto mb-2 block"/>
+              <p className="text-xs m-0">No partners</p>
             </div>
           )}
           {displayed.map(p => {
@@ -4492,26 +4485,28 @@ function PartnerHub({ employees, partners, savePartners }) {
             return (
               <div key={p.id}
                 onClick={()=>{ setOpenId(p.id===openId?null:p.id); setDetailTab("overview"); setEditingInfo(false); }}
-                style={{ padding:"10px 14px", cursor:"pointer", borderLeft:`3px solid ${isSelected?PC:"transparent"}`, backgroundColor:isSelected?`${PC}14`:"transparent", transition:"background 0.1s, border-color 0.1s", borderBottom:"1px solid #f9fafb" }}
-                onMouseEnter={e=>{ if(!isSelected) e.currentTarget.style.backgroundColor="#f9fafb"; }}
+                className="px-3.5 py-2.5 cursor-pointer border-b border-stone-50 transition-colors duration-150"
+                style={{ borderLeft:`3px solid ${isSelected?"#00293A":"transparent"}`, backgroundColor:isSelected?"#00293A14":"transparent" }}
+                onMouseEnter={e=>{ if(!isSelected) e.currentTarget.style.backgroundColor="#fafaf9"; }}
                 onMouseLeave={e=>{ if(!isSelected) e.currentTarget.style.backgroundColor="transparent"; }}>
 
-                <div style={{ display:"flex", alignItems:"center", gap:9 }}>
-                  <div style={{ width:33, height:33, borderRadius:9, background:isArchived?"#e5e7eb":PU, display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontWeight:900, fontSize:11, flexShrink:0, opacity:isArchived?0.5:1 }}>
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-[33px] h-[33px] rounded-lg flex items-center justify-center text-white font-black text-[11px] flex-shrink-0 ${isArchived?"opacity-50":""}`}
+                    style={{ background:isArchived?"#e5e7eb":"linear-gradient(135deg,#A02843,#00293A)" }}>
                     {p.name.split(" ").map(w=>w[0]).join("").slice(0,2)}
                   </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontWeight:700, fontSize:12, color:isArchived?"#9ca3af":"#111827", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</div>
-                    <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:2 }}>
-                      {!isArchived && <span style={{ width:6, height:6, borderRadius:"50%", backgroundColor:healthColor, flexShrink:0, display:"inline-block" }}/>}
-                      <span style={{ fontSize:10, color:"#9ca3af", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  <div className="flex-1 min-w-0">
+                    <div className={`font-bold text-xs truncate ${isArchived?"text-stone-400":"text-stone-900"}`}>{p.name}</div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {!isArchived && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 inline-block" style={{ backgroundColor:healthColor }}/>}
+                      <span className="text-[10px] text-stone-400 truncate">
                         {isArchived ? "Archived" : `${linked.length} employees · ${healthLabel}`}
                       </span>
                     </div>
                   </div>
-                  <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:2, flexShrink:0 }}>
-                    {overdue>0 && <span style={{ fontSize:9, fontWeight:700, padding:"2px 5px", borderRadius:999, backgroundColor:"#fef2f2", color:"#dc2626", border:"1px solid #fecaca" }}>{overdue}!</span>}
-                    {pending>0 && overdue===0 && <span style={{ fontSize:9, fontWeight:700, padding:"2px 5px", borderRadius:999, backgroundColor:"#ede9fe", color:"#6d28d9", border:"1px solid #ddd6fe" }}>{pending}</span>}
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    {overdue>0 && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-error-100 text-error-800 border border-error-100">{overdue}!</span>}
+                    {pending>0 && overdue===0 && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-info-100 text-info-800 border border-info-100">{pending}</span>}
                   </div>
                 </div>
               </div>
@@ -4522,134 +4517,132 @@ function PartnerHub({ employees, partners, savePartners }) {
 
       {/* ── RIGHT DETAIL PANEL ── */}
       {!openPartner ? (
-        <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:10 }}>
-          <Users size={44} style={{ color:"#e5e7eb" }}/>
-          <p style={{ fontSize:14, fontWeight:600, margin:0, color:"#9ca3af" }}>Select a partner to view details</p>
-          <p style={{ fontSize:11, margin:0, color:"#d1d5db" }}>{partners.filter(p=>p.status==="active").length} active partners</p>
+        <div className="flex-1 flex items-center justify-center flex-col gap-2.5">
+          <Users size={44} className="text-stone-200"/>
+          <p className="text-sm font-semibold m-0 text-stone-400">Select a partner to view details</p>
+          <p className="text-[11px] m-0 text-stone-300">{partners.filter(p=>p.status==="active").length} active partners</p>
         </div>
       ) : (
-        <div key={`detail-${openId}`} style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", backgroundColor:"white" }}>
+        <div key={`detail-${openId}`} className="flex-1 flex flex-col overflow-hidden bg-white">
 
           {/* Detail Header */}
-          <div style={{ padding:"18px 24px 14px", background:PU, flexShrink:0 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+          <div className="px-6 pt-[18px] pb-3.5 bg-gradient-to-br from-primary to-secondary flex-shrink-0">
+            <div className="flex justify-between items-start">
               {editingInfo ? (
-                <div style={{ display:"flex", flexDirection:"column", gap:7, flex:1, marginRight:12 }}>
+                <div className="flex flex-col gap-1.5 flex-1 mr-3">
                   <input
                     autoFocus
                     value={infoForm.name}
                     onChange={e=>setInfoForm(f=>({...f,name:e.target.value}))}
                     placeholder="Partner name"
-                    style={{ fontSize:17, fontWeight:800, color:"white", background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.35)", borderRadius:8, padding:"5px 10px", outline:"none", letterSpacing:"-0.01em", fontFamily:"inherit" }}
+                    className="text-[17px] font-extrabold text-white bg-white/15 border border-white/35 rounded-md px-2.5 py-1 outline-none tracking-tight font-serif placeholder:text-white/50"
                   />
-                  <div style={{ display:"flex", gap:7 }}>
-                    <input value={infoForm.region} onChange={e=>setInfoForm(f=>({...f,region:e.target.value}))} placeholder="Region" style={{ flex:1, fontSize:12, color:"white", background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:7, padding:"4px 9px", outline:"none", fontFamily:"inherit" }}/>
-                    <input value={infoForm.email} onChange={e=>setInfoForm(f=>({...f,email:e.target.value}))} placeholder="Email" type="email" style={{ flex:2, fontSize:12, color:"white", background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:7, padding:"4px 9px", outline:"none", fontFamily:"inherit" }}/>
+                  <div className="flex gap-1.5">
+                    <input value={infoForm.region} onChange={e=>setInfoForm(f=>({...f,region:e.target.value}))} placeholder="Region" className="flex-1 text-xs text-white bg-white/10 border border-white/25 rounded-sm px-2.5 py-1 outline-none placeholder:text-white/50"/>
+                    <input value={infoForm.email} onChange={e=>setInfoForm(f=>({...f,email:e.target.value}))} placeholder="Email" type="email" className="flex-[2] text-xs text-white bg-white/10 border border-white/25 rounded-sm px-2.5 py-1 outline-none placeholder:text-white/50"/>
                   </div>
-                  <div style={{ display:"flex", gap:6 }}>
+                  <div className="flex gap-1.5">
                     {["operational","commission"].map(t=>(
-                      <button key={t} onClick={()=>setInfoForm(f=>({...f,partnerType:t}))} style={{ flex:1, padding:"4px 8px", borderRadius:7, fontSize:11, fontWeight:700, cursor:"pointer", border:`1px solid ${infoForm.partnerType===t?"rgba(255,255,255,0.7)":"rgba(255,255,255,0.2)"}`, backgroundColor:infoForm.partnerType===t?"rgba(255,255,255,0.25)":"transparent", color:"white", textTransform:"capitalize" }}>{t}</button>
+                      <button key={t} onClick={()=>setInfoForm(f=>({...f,partnerType:t}))} className={`flex-1 px-2 py-1 rounded-sm text-[11px] font-bold cursor-pointer capitalize border ${infoForm.partnerType===t?"border-white/70 bg-white/25":"border-white/20 bg-transparent"} text-white`}>{t}</button>
                     ))}
                   </div>
                 </div>
               ) : (
-                <div style={{ flex:1, minWidth:0 }}>
-                  <h3 style={{ margin:0, fontSize:19, fontWeight:800, color:"white", letterSpacing:"-0.01em" }}>{safePartner.name}</h3>
-                  <p style={{ margin:"4px 0 0", fontSize:12, color:"rgba(220,200,255,0.9)" }}>
+                <div className="flex-1 min-w-0">
+                  <h3 className="m-0 text-[19px] font-serif font-bold text-white tracking-tight">{safePartner.name}</h3>
+                  <p className="mt-1 mb-0 text-xs text-white/75">
                     {[safePartner.region, safePartner.email].filter(Boolean).join(" · ") || "—"}
-                    {safePartner.partnerType && <span style={{ marginLeft:8, fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:999, backgroundColor:"rgba(255,255,255,0.18)", color:"white" }}>{safePartner.partnerType}</span>}
+                    {safePartner.partnerType && <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white capitalize">{safePartner.partnerType}</span>}
                   </p>
                 </div>
               )}
-              <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+              <div className="flex gap-1.5 flex-shrink-0">
                 {editingInfo ? (
                   <>
-                    <button onClick={()=>{ if(infoForm.name.trim()) save(partners.map(p=>p.id===openId?{...p,...infoForm}:p)); setEditingInfo(false); }} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.5)", backgroundColor:"rgba(255,255,255,0.22)", color:"white", cursor:"pointer" }}>Save</button>
-                    <button onClick={()=>setEditingInfo(false)} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.2)", backgroundColor:"transparent", color:"rgba(255,255,255,0.7)", cursor:"pointer" }}>Cancel</button>
+                    <DSButton size="sm" variant="ghost" onClick={()=>{ if(infoForm.name.trim()) save(partners.map(p=>p.id===openId?{...p,...infoForm}:p)); setEditingInfo(false); }}>Save</DSButton>
+                    <DSButton size="sm" variant="ghost" onClick={()=>setEditingInfo(false)}>Cancel</DSButton>
                   </>
                 ) : (
                   <>
-                    <button onClick={()=>{ setInfoForm({name:safePartner.name||"",region:safePartner.region||"",email:safePartner.email||"",notes:safePartner.notes||"",partnerType:safePartner.partnerType||"operational"}); setEditingInfo(true); }} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.3)", backgroundColor:"rgba(255,255,255,0.12)", color:"white", cursor:"pointer" }}>Edit</button>
-                    <button onClick={()=>safePartner.status==="archived"?unarchive(openId):archive(openId)} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.3)", backgroundColor:"rgba(255,255,255,0.12)", color:"white", cursor:"pointer" }}>
+                    <DSButton size="sm" variant="ghost" onClick={()=>{ setInfoForm({name:safePartner.name||"",region:safePartner.region||"",email:safePartner.email||"",notes:safePartner.notes||"",partnerType:safePartner.partnerType||"operational"}); setEditingInfo(true); }}>Edit</DSButton>
+                    <DSButton size="sm" variant="ghost" onClick={()=>safePartner.status==="archived"?unarchive(openId):archive(openId)}>
                       {safePartner.status==="archived" ? "Restore" : "Archive"}
-                    </button>
-                    <button onClick={()=>setConfirmDeleteId(openId)} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,100,100,0.4)", backgroundColor:"rgba(255,100,100,0.15)", color:"#fca5a5", cursor:"pointer" }}>Delete</button>
+                    </DSButton>
+                    <DSButton size="sm" variant="danger" onClick={()=>setConfirmDeleteId(openId)}>Delete</DSButton>
                   </>
                 )}
               </div>
             </div>
             {/* Performance bar — uses pre-computed partnerStats */}
             {(()=>{ const h=partnerStats[safePartner.id]||{score:100,label:"No Data"}; return (
-              <div style={{ marginTop:13 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
-                  <span style={{ fontSize:11, color:"rgba(220,200,255,0.85)", fontWeight:600 }}>Performance</span>
-                  <span style={{ fontSize:12, fontWeight:800, color:"white" }}>{h.label} · {h.score}/100</span>
+              <div className="mt-3.5">
+                <div className="flex justify-between mb-1.5">
+                  <span className="text-[11px] text-white/75 font-semibold">Performance</span>
+                  <span className="text-xs font-extrabold text-white font-mono">{h.label} · {h.score}/100</span>
                 </div>
-                <div style={{ height:5, backgroundColor:"rgba(255,255,255,0.2)", borderRadius:999, overflow:"hidden" }}>
-                  <div style={{ height:"100%", width:`${h.score}%`, backgroundColor:"white", borderRadius:999 }}/>
+                <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full bg-white transition-[width] duration-300 ease-out" style={{ width:`${h.score}%` }}/>
                 </div>
               </div>
             ); })()}
           </div>
 
           {/* Quick stats row */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", borderBottom:"1px solid #f3f4f6", flexShrink:0, backgroundColor:"white" }}>
+          <div className="grid grid-cols-4 border-b border-stone-100 flex-shrink-0 bg-white">
             {[
-              { l:"Headcount",    v:linkedEmps.length,                                                             c:PC },
-              { l:"Expiring ≤30d",v:expiringLinked,                                                                c:expiringLinked>0?"#d97706":"#374151" },
-              { l:"WF Pending",   v:linkedEmps.filter(e=>{const wf=(e.workflowStatus||"").trim();return wf&&!isWFDone(wf);}).length, c:"#dc2626" },
-              { l:"Completion",   v:completionLabel,                                                                c:completionRate===null?"#9ca3af":completionRate>=80?"#16a34a":"#d97706" },
-            ].map(({l,v,c})=>(
-              <div key={l} style={{ padding:"11px 8px", textAlign:"center", borderRight:"1px solid #f3f4f6" }}>
-                <div style={{ fontSize:9, color:"#9ca3af", fontWeight:700, textTransform:"uppercase", marginBottom:3 }}>{l}</div>
-                <div style={{ fontSize:l==="Completion"?12:19, fontWeight:900, color:c, lineHeight:1 }}>{v}</div>
+              { l:"Headcount",    v:linkedEmps.length,                                                             tone:"secondary" },
+              { l:"Expiring ≤30d",v:expiringLinked,                                                                tone:expiringLinked>0?"warning":"stone" },
+              { l:"WF Pending",   v:linkedEmps.filter(e=>{const wf=(e.workflowStatus||"").trim();return wf&&!isWFDone(wf);}).length, tone:"error" },
+              { l:"Completion",   v:completionLabel,                                                                tone:completionRate===null?"stone":completionRate>=80?"success":"warning" },
+            ].map(({l,v,tone})=>(
+              <div key={l} className="px-2 py-2.5 text-center border-r border-stone-100 last:border-r-0">
+                <div className="text-[9px] text-stone-400 font-bold uppercase mb-0.5 tracking-wide">{l}</div>
+                <div className={`${l==="Completion"?"text-xs":"text-[19px]"} font-black font-mono tabular-nums leading-none ${tone==="warning"?"text-warning-800":tone==="error"?"text-error-800":tone==="success"?"text-success-800":tone==="secondary"?"text-secondary":"text-stone-700"}`}>{v}</div>
               </div>
             ))}
           </div>
 
           {/* Tabs */}
-          <div style={{ display:"flex", borderBottom:"1px solid #f3f4f6", flexShrink:0, overflowX:"auto", backgroundColor:"white" }}>
-            {TABS.map(t=>(
-              <button key={t.k} onClick={()=>setDetailTab(t.k)} style={{ padding:"10px 16px", fontSize:11, fontWeight:700, border:"none", cursor:"pointer", whiteSpace:"nowrap", flexShrink:0, backgroundColor:"transparent", color:detailTab===t.k?PC:"#9ca3af", borderBottom:`2px solid ${detailTab===t.k?PC:"transparent"}`, transition:"color 0.1s" }}>{t.l}</button>
-            ))}
-            <div style={{ flex:1, display:"flex", justifyContent:"flex-end", alignItems:"center", padding:"0 16px" }}>
-              <button onClick={()=>setShowNewAction(true)} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:`1px solid ${PC}`, backgroundColor:PC, color:"white", cursor:"pointer" }}>
-                + New Action
-              </button>
+          <div className="flex items-center flex-shrink-0 bg-white">
+            <div className="flex-1 overflow-x-auto">
+              <DSTabs tabs={TABS.map(t=>({key:t.k,label:t.l}))} active={detailTab} onChange={setDetailTab}/>
+            </div>
+            <div className="flex items-center pr-4 pl-2 border-b border-stone-200 h-full flex-shrink-0">
+              <DSButton size="sm" variant="secondary" icon={Plus} onClick={()=>setShowNewAction(true)}>New Action</DSButton>
             </div>
           </div>
 
           {/* Tab Content */}
-          <div style={{ flex:1, overflowY:"auto", padding:"18px 24px" }}>
+          <div className="flex-1 overflow-y-auto px-6 py-[18px]">
 
             {/* OVERVIEW */}
             {detailTab==="overview" && (
-              <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+              <div className="flex flex-col gap-3.5">
                 {/* Editable notes */}
-                <div style={{ padding:"10px 14px", borderRadius:10, backgroundColor:"#faf5ff", border:"1px solid #e9d5ff" }}>
-                  <div style={{ fontSize:10, fontWeight:700, color:"#6b21a8", marginBottom:6 }}>NOTES</div>
+                <div className="px-3.5 py-2.5 rounded-lg bg-info-100/60 border border-info-100">
+                  <div className="text-[10px] font-extrabold text-info-800 mb-1.5 uppercase tracking-wide">Notes</div>
                   <textarea
                     value={notesVal}
                     onChange={e=>handleNotesChange(e.target.value)}
                     placeholder="Add notes about this partner…"
                     rows={3}
-                    style={{ width:"100%", border:"none", backgroundColor:"transparent", fontSize:12, color:"#374151", lineHeight:1.6, resize:"vertical", outline:"none", fontFamily:"inherit", padding:0, margin:0 }}
+                    className="w-full border-none bg-transparent text-xs text-stone-700 leading-relaxed resize-y outline-none font-sans p-0 m-0"
                   />
                 </div>
                 {/* Workflow breakdown */}
                 {wfBreakdown.length>0 && (
                   <div>
-                    <p style={{ fontSize:11, fontWeight:700, color:"#9ca3af", textTransform:"uppercase", margin:"0 0 8px" }}>Workflow Breakdown</p>
-                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                    <p className="text-[11px] font-bold text-stone-400 uppercase mb-2 m-0">Workflow Breakdown</p>
+                    <div className="flex flex-col gap-1.5 mt-2">
                       {wfBreakdown.map(([wf,count])=>(
-                        <div key={wf} style={{ display:"flex", alignItems:"center", gap:10 }}>
-                          <div style={{ flex:1 }}>
-                            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
+                        <div key={wf} className="flex items-center gap-2.5">
+                          <div className="flex-1">
+                            <div className="flex justify-between mb-1">
                               <WFBadge status={wf}/>
-                              <span style={{ fontSize:11, fontWeight:700, color:"#374151" }}>{count}</span>
+                              <span className="text-[11px] font-bold text-stone-700">{count}</span>
                             </div>
-                            <div style={{ height:4, backgroundColor:"#f3f4f6", borderRadius:999, overflow:"hidden" }}>
-                              <div style={{ height:"100%", width:`${Math.round((count/linkedEmps.length)*100)}%`, backgroundColor:PC, borderRadius:999 }}/>
+                            <div className="h-1 bg-stone-100 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full bg-secondary" style={{ width:`${Math.round((count/linkedEmps.length)*100)}%` }}/>
                             </div>
                           </div>
                         </div>
@@ -4659,24 +4652,24 @@ function PartnerHub({ employees, partners, savePartners }) {
                 )}
                 {/* By client */}
                 {byClient.map(([client,emps])=>(
-                  <div key={client} style={{ padding:"10px 14px", borderRadius:10, border:"1px solid #f3f4f6", backgroundColor:"#f9fafb" }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-                      <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{client}</span>
-                      <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#ede9fe", color:PC }}>{emps.length}</span>
+                  <div key={client} className="px-3.5 py-2.5 rounded-lg border border-stone-100 bg-stone-50">
+                    <div className="flex justify-between mb-1.5">
+                      <span className="text-xs font-bold text-stone-700">{client}</span>
+                      <DSBadge color="primary">{emps.length}</DSBadge>
                     </div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                      {emps.slice(0,6).map(e=>{ const d=daysUntil(e.endDate); const urg=d>=0&&d<=14; return <span key={e._id} style={{ fontSize:11, padding:"2px 8px", borderRadius:999, backgroundColor:urg?"#fff7ed":"white", border:`1px solid ${urg?"#fed7aa":"#e5e7eb"}`, color:urg?"#c2410c":"#374151" }}>{e.name}{urg?` ⚠${d}d`:""}</span>; })}
-                      {emps.length>6 && <span style={{ fontSize:11, color:"#9ca3af" }}>+{emps.length-6}</span>}
+                    <div className="flex flex-wrap gap-1">
+                      {emps.slice(0,6).map(e=>{ const d=daysUntil(e.endDate); const urg=d>=0&&d<=14; return <span key={e._id} className={`text-[11px] px-2 py-0.5 rounded-full border ${urg?"bg-warning-100/60 border-warning-100 text-warning-800":"bg-white border-stone-200 text-stone-700"}`}>{e.name}{urg?` ⚠${d}d`:""}</span>; })}
+                      {emps.length>6 && <span className="text-[11px] text-stone-400">+{emps.length-6}</span>}
                     </div>
                   </div>
                 ))}
-                {linkedEmps.length===0 && <p style={{ textAlign:"center", color:"#9ca3af", padding:"32px 0", fontSize:13 }}>No employees assigned to this partner.</p>}
+                {linkedEmps.length===0 && <p className="text-center text-stone-400 py-8 text-sm">No employees assigned to this partner.</p>}
               </div>
             )}
 
             {/* ACTIONS */}
             {detailTab==="actions" && (
-              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              <div className="flex flex-col gap-2.5">
                 {(() => {
                   const allActions=safePartner.requestLog.map((r,i)=>({...r,i,dw:Math.floor((Date.now()-new Date(r.ts))/864e5)}));
                   const pendingCnt=allActions.filter(r=>r.status==="Pending").length;
@@ -4684,32 +4677,32 @@ function PartnerHub({ employees, partners, savePartners }) {
                   const shown=actionsFilter==="all"?allActions:allActions.filter(r=>r.status===(actionsFilter==="pending"?"Pending":"Completed"));
                   return (
                     <>
-                      <div style={{ display:"flex", gap:5, marginBottom:2 }}>
+                      <div className="flex gap-1.5 mb-0.5">
                         {[["pending",`Pending · ${pendingCnt}`],["completed",`Completed · ${completedCnt}`],["all","All"]].map(([k,l])=>(
-                          <button key={k} onClick={()=>setActionsFilter(k)} style={{ padding:"4px 11px", borderRadius:20, fontSize:10, fontWeight:700, cursor:"pointer", border:`1.5px solid ${actionsFilter===k?PC:"#e5e7eb"}`, backgroundColor:actionsFilter===k?`${PC}10`:"white", color:actionsFilter===k?PC:"#6b7280" }}>{l}</button>
+                          <button key={k} onClick={()=>setActionsFilter(k)} className={`px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer border transition-colors duration-150 ${actionsFilter===k?"border-secondary bg-secondary/10 text-secondary":"border-stone-200 bg-white text-stone-500 [@media(hover:hover)]:hover:border-stone-400"}`}>{l}</button>
                         ))}
                       </div>
                       {shown.length===0 && (
-                        <div style={{ textAlign:"center", padding:"32px 0" }}>
-                          <CheckCircle size={28} style={{ margin:"0 auto 8px", display:"block", color:"#16a34a", opacity:0.4 }}/>
-                          <p style={{ fontWeight:600, fontSize:13, color:"#374151", margin:"0 0 4px" }}>No {actionsFilter==="all"?"":actionsFilter} actions</p>
+                        <div className="text-center py-8">
+                          <CheckCircle size={28} className="mx-auto mb-2 block text-success-600 opacity-40"/>
+                          <p className="font-semibold text-sm text-stone-700 mb-1">No {actionsFilter==="all"?"":actionsFilter} actions</p>
                         </div>
                       )}
                       {shown.map(r=>(
-                        <div key={r.i} style={{ padding:"12px 14px", borderRadius:12, border:`1px solid ${r.status==="Completed"?"#bbf7d0":r.dw>5?"#fecaca":"#f3f4f6"}`, backgroundColor:r.status==="Completed"?"#f0fdf4":r.dw>5?"#fef2f2":"#f9fafb", display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
-                          <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:4 }}>
-                              <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#ede9fe", color:"#6d28d9" }}>{r.type}</span>
-                              {r.status==="Pending"&&r.dw>5&&<span style={{ fontSize:10, fontWeight:700, color:"#dc2626" }}>⚠ Delayed {r.dw}d</span>}
-                              {r.status==="Completed"&&<span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#dcfce7", color:"#166534" }}>✓ Done</span>}
+                        <div key={r.i} className={`px-3.5 py-3 rounded-xl border flex justify-between items-start gap-2.5 ${r.status==="Completed"?"border-success-100 bg-success-100/40":r.dw>5?"border-error-100 bg-error-100/40":"border-stone-100 bg-stone-50"}`}>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <DSBadge color="info">{r.type}</DSBadge>
+                              {r.status==="Pending"&&r.dw>5&&<span className="text-[10px] font-bold text-error-800">⚠ Delayed {r.dw}d</span>}
+                              {r.status==="Completed"&&<DSBadge color="success">✓ Done</DSBadge>}
                             </div>
-                            <p style={{ fontWeight:600, fontSize:13, margin:"0 0 2px", color:"#1f2937" }}>{r.employee}</p>
-                            <p style={{ fontSize:11, color:"#9ca3af", margin:0 }}>
+                            <p className="font-semibold text-[13px] mb-0.5 text-stone-800">{r.employee}</p>
+                            <p className="text-[11px] text-stone-400 m-0">
                               {new Date(r.ts).toLocaleDateString("en-GB")}
-                              {r.status==="Pending"&&r.dw>0&&<span style={{ marginLeft:6, fontWeight:700, color:r.dw>5?"#dc2626":"#d97706" }}>· {r.dw}d waiting</span>}
+                              {r.status==="Pending"&&r.dw>0&&<span className={`ml-1.5 font-bold ${r.dw>5?"text-error-800":"text-warning-800"}`}>· {r.dw}d waiting</span>}
                             </p>
                           </div>
-                          {r.status==="Pending"&&<button onClick={()=>updReqStatus(safePartner.id,r.i,"Completed")} style={{ fontSize:11, fontWeight:700, padding:"5px 10px", borderRadius:8, border:"1px solid #bbf7d0", backgroundColor:"#f0fdf4", color:"#16a34a", cursor:"pointer", whiteSpace:"nowrap" }}>✓ Done</button>}
+                          {r.status==="Pending"&&<DSButton size="sm" variant="success" onClick={()=>updReqStatus(safePartner.id,r.i,"Completed")}>✓ Done</DSButton>}
                         </div>
                       ))}
                     </>
@@ -4720,20 +4713,20 @@ function PartnerHub({ employees, partners, savePartners }) {
 
             {/* EMPLOYEES — sorted by urgency (soonest expiry first) */}
             {detailTab==="employees" && (
-              <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-                {sortedLinkedEmps.length===0 && <p style={{ textAlign:"center", color:"#9ca3af", padding:"32px 0", fontSize:13 }}>No employees assigned.</p>}
+              <div className="flex flex-col gap-1.5">
+                {sortedLinkedEmps.length===0 && <p className="text-center text-stone-400 py-8 text-sm">No employees assigned.</p>}
                 {sortedLinkedEmps.map(e=>{
                   const d=daysUntil(e.endDate);
                   const urg=d>=0&&d<=30;
                   return (
-                    <div key={e._id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"9px 12px", borderRadius:10, border:`1px solid ${urg?"#fed7aa":"#f3f4f6"}`, backgroundColor:urg?"#fffbf5":"#f9fafb" }}>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontWeight:600, fontSize:12, color:"#1f2937" }}>{e.name}</div>
-                        <div style={{ fontSize:11, color:"#9ca3af" }}>{e.client||"—"} · {e.project||"—"}</div>
+                    <div key={e._id} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${urg?"border-warning-100 bg-warning-100/30":"border-stone-100 bg-stone-50"}`}>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-xs text-stone-800">{e.name}</div>
+                        <div className="text-[11px] text-stone-400">{e.client||"—"} · {e.project||"—"}</div>
                       </div>
-                      <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <WFBadge status={e.workflowStatus}/>
-                        <span style={{ fontSize:11, fontWeight:600, color:d<0?"#9ca3af":urg?"#d97706":"#374151" }}>
+                        <span className={`text-[11px] font-semibold ${d<0?"text-stone-400":urg?"text-warning-800":"text-stone-700"}`}>
                           {d<0?"Expired":urg?`${d}d`:fmt(e.endDate)}
                         </span>
                       </div>
@@ -4746,25 +4739,25 @@ function PartnerHub({ employees, partners, savePartners }) {
             {/* CONTACTS */}
             {detailTab==="contacts" && (
               <div>
-                <div style={{ ...s.flexBetween, marginBottom:12 }}>
-                  <span style={{ fontSize:11, fontWeight:700, color:"#9ca3af", textTransform:"uppercase" }}>Contacts ({safePartner.contacts.length})</span>
-                  <button onClick={()=>addContact(safePartner.id)} style={{ fontSize:11, fontWeight:700, color:PC, background:"none", border:"none", cursor:"pointer" }}>+ Add</button>
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wide">Contacts ({safePartner.contacts.length})</span>
+                  <button onClick={()=>addContact(safePartner.id)} className="text-[11px] font-bold text-secondary bg-transparent border-none cursor-pointer [@media(hover:hover)]:hover:underline">+ Add</button>
                 </div>
-                {safePartner.contacts.length===0 && <p style={{ textAlign:"center", color:"#9ca3af", padding:"24px 0", fontSize:13 }}>No contacts yet.</p>}
+                {safePartner.contacts.length===0 && <p className="text-center text-stone-400 py-6 text-sm">No contacts yet.</p>}
                 {safePartner.contacts.map((co,ci)=>(
-                  <div key={ci} style={{ display:"flex", alignItems:"center", gap:10, padding:10, borderRadius:10, backgroundColor:"#f9fafb", marginBottom:6, border:"1px solid #f3f4f6" }}>
-                    <div style={{ width:34, height:34, borderRadius:10, background:PU, display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:13, fontWeight:700, flexShrink:0 }}>{(co.name||"?")[0]}</div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <input value={co.name} onChange={e=>updContact(safePartner.id,ci,"name",e.target.value)} style={{ width:"100%", border:"none", backgroundColor:"transparent", fontSize:12, fontWeight:600, outline:"none" }}/>
-                      <input value={co.role} onChange={e=>updContact(safePartner.id,ci,"role",e.target.value)} style={{ width:"100%", border:"none", backgroundColor:"transparent", fontSize:11, color:"#9ca3af", outline:"none" }}/>
+                  <div key={ci} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-stone-50 mb-1.5 border border-stone-100">
+                    <div className="w-[34px] h-[34px] rounded-lg flex items-center justify-center text-white text-[13px] font-bold flex-shrink-0" style={{ background:"linear-gradient(135deg,#A02843,#00293A)" }}>{(co.name||"?")[0]}</div>
+                    <div className="flex-1 min-w-0">
+                      <input value={co.name} onChange={e=>updContact(safePartner.id,ci,"name",e.target.value)} className="w-full border-none bg-transparent text-xs font-semibold outline-none text-stone-800"/>
+                      <input value={co.role} onChange={e=>updContact(safePartner.id,ci,"role",e.target.value)} className="w-full border-none bg-transparent text-[11px] text-stone-400 outline-none"/>
                     </div>
-                    <input value={co.phone} onChange={e=>updContact(safePartner.id,ci,"phone",e.target.value)} style={{ width:130, border:"none", backgroundColor:"transparent", fontSize:11, textAlign:"right", outline:"none", direction:"ltr" }}/>
+                    <input value={co.phone} onChange={e=>updContact(safePartner.id,ci,"phone",e.target.value)} className="w-[130px] border-none bg-transparent text-[11px] text-right outline-none text-stone-700" style={{ direction:"ltr" }}/>
                     {co.phone && (
-                      <button onClick={()=>{ const msg=`مرحباً ${co.name},\n\nأتواصل معك بخصوص شراكتنا.\n\nتحياتي`; window.open(`https://wa.me/${co.phone.replace(/\D/g,"")}?text=${encodeURIComponent(msg)}`,"_blank"); }} style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:30, height:30, borderRadius:8, border:"1px solid #16a34a", backgroundColor:"white", color:"#16a34a", cursor:"pointer", flexShrink:0 }}>
+                      <button onClick={()=>{ const msg=`مرحباً ${co.name},\n\nأتواصل معك بخصوص شراكتنا.\n\nتحياتي`; window.open(`https://wa.me/${co.phone.replace(/\D/g,"")}?text=${encodeURIComponent(msg)}`,"_blank"); }} className="inline-flex items-center justify-center w-[30px] h-[30px] rounded-lg border border-success-600 bg-white text-success-600 cursor-pointer flex-shrink-0 [@media(hover:hover)]:hover:bg-success-100 transition-colors duration-150">
                         <MessageCircle size={13}/>
                       </button>
                     )}
-                    <button onClick={()=>delContact(safePartner.id,ci)} title="Remove contact" style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:26, height:26, borderRadius:7, border:"1px solid #fecaca", backgroundColor:"#fff5f5", color:"#ef4444", cursor:"pointer", flexShrink:0 }}>
+                    <button onClick={()=>delContact(safePartner.id,ci)} title="Remove contact" className="inline-flex items-center justify-center w-[26px] h-[26px] rounded-md border border-error-100 bg-error-100/40 text-error-800 cursor-pointer flex-shrink-0 [@media(hover:hover)]:hover:bg-error-100 transition-colors duration-150">
                       <X size={11}/>
                     </button>
                   </div>
@@ -4776,74 +4769,78 @@ function PartnerHub({ employees, partners, savePartners }) {
       )}
 
       {/* Add Partner Modal */}
-      {showAdd && (
-        <Modal title="Add Partner" onClose={()=>setShowAdd(false)}>
-          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            <Inp label="Company Name" value={nP.name} onChange={v=>setNP(p=>({...p,name:v}))}/>
-            <div style={s.grid2}>
-              <Inp label="Region" value={nP.region} onChange={v=>setNP(p=>({...p,region:v}))}/>
-              <Inp label="Email"  value={nP.email}  onChange={v=>setNP(p=>({...p,email:v}))}/>
+      <DSModal open={showAdd} onClose={()=>setShowAdd(false)} title="Add Partner"
+        footer={<>
+          <DSButton variant="ghost" onClick={()=>setShowAdd(false)}>Cancel</DSButton>
+          <DSButton variant="secondary" icon={Plus} disabled={!nP.name} onClick={add}>Add Partner</DSButton>
+        </>}>
+        <div className="flex flex-col gap-3">
+          <DSForm.Field>
+            <DSForm.Label required>Company Name</DSForm.Label>
+            <DSInput value={nP.name} onChange={e=>setNP(p=>({...p,name:e.target.value}))}/>
+          </DSForm.Field>
+          <DSForm.Row>
+            <DSForm.Field>
+              <DSForm.Label>Region</DSForm.Label>
+              <DSInput value={nP.region} onChange={e=>setNP(p=>({...p,region:e.target.value}))}/>
+            </DSForm.Field>
+            <DSForm.Field>
+              <DSForm.Label>Email</DSForm.Label>
+              <DSInput value={nP.email} onChange={e=>setNP(p=>({...p,email:e.target.value}))}/>
+            </DSForm.Field>
+          </DSForm.Row>
+          <DSForm.Field>
+            <DSForm.Label>Notes</DSForm.Label>
+            <DSInput value={nP.notes} onChange={e=>setNP(p=>({...p,notes:e.target.value}))}/>
+          </DSForm.Field>
+          <DSForm.Field>
+            <DSForm.Label>Partner Type</DSForm.Label>
+            <div className="flex gap-2 mt-1">
+              {["operational","commission"].map(t=>(
+                <button key={t} onClick={()=>setNP(p=>({...p,partnerType:t}))} className={`flex-1 py-1.5 rounded-sm text-xs font-bold cursor-pointer capitalize border transition-colors duration-150 ${nP.partnerType===t?"border-secondary bg-secondary/10 text-secondary":"border-stone-200 bg-white text-stone-500 [@media(hover:hover)]:hover:border-stone-400"}`}>{t}</button>
+              ))}
             </div>
-            <Inp label="Notes" value={nP.notes} onChange={v=>setNP(p=>({...p,notes:v}))}/>
-            <div>
-              <label style={s.label}>Partner Type</label>
-              <div style={{ display:"flex", gap:8, marginTop:4 }}>
-                {["operational","commission"].map(t=>(
-                  <button key={t} onClick={()=>setNP(p=>({...p,partnerType:t}))} style={{ flex:1, padding:"7px 0", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", border:`1.5px solid ${nP.partnerType===t?PC:"#e5e7eb"}`, backgroundColor:nP.partnerType===t?`${PC}10`:"white", color:nP.partnerType===t?PC:"#6b7280", textTransform:"capitalize" }}>{t}</button>
-                ))}
-              </div>
-            </div>
-            <div style={{ display:"flex", gap:12, marginTop:8 }}>
-              <Btn variant="ghost" onClick={()=>setShowAdd(false)} full>Cancel</Btn>
-              <Btn onClick={add} disabled={!nP.name} full style={{ backgroundColor:PC, color:"white" }}><Plus size={14}/> Add Partner</Btn>
-            </div>
-          </div>
-        </Modal>
-      )}
+          </DSForm.Field>
+        </div>
+      </DSModal>
 
       {/* New Action Modal */}
-      {showNewAction && safePartner && (
-        <Modal title={`New Action · ${safePartner.name}`} onClose={()=>{ setShowNewAction(false); setNewAction({desc:"",type:"Handover"}); }}>
-          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-            <div>
-              <label style={s.label}>Type</label>
-              <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:4 }}>
+      {safePartner && (
+        <DSModal open={showNewAction} onClose={()=>{ setShowNewAction(false); setNewAction({desc:"",type:"Handover"}); }} title={`New Action · ${safePartner.name}`}
+          footer={<>
+            <DSButton variant="ghost" onClick={()=>{ setShowNewAction(false); setNewAction({desc:"",type:"Handover"}); }}>Cancel</DSButton>
+            <DSButton variant="secondary" icon={Plus} disabled={!newAction.desc.trim()} onClick={()=>{
+              if(!newAction.desc.trim()) return;
+              addRequest(safePartner.id,{ ts:new Date().toISOString(), type:newAction.type, employee:newAction.desc, status:"Pending" });
+              setShowNewAction(false); setNewAction({desc:"",type:"Handover"});
+              setDetailTab("actions");
+            }}>Add Action</DSButton>
+          </>}>
+          <div className="flex flex-col gap-3.5">
+            <DSForm.Field>
+              <DSForm.Label>Type</DSForm.Label>
+              <div className="flex flex-wrap gap-1.5 mt-1">
                 {["Handover","Docs Request","GOSI","Iqama","Payment","Other"].map(t=>(
-                  <button key={t} onClick={()=>setNewAction(a=>({...a,type:t}))} style={{ padding:"5px 12px", borderRadius:20, fontSize:11, fontWeight:700, cursor:"pointer", border:`1.5px solid ${newAction.type===t?PC:"#e5e7eb"}`, backgroundColor:newAction.type===t?`${PC}12`:"white", color:newAction.type===t?PC:"#6b7280" }}>{t}</button>
+                  <button key={t} onClick={()=>setNewAction(a=>({...a,type:t}))} className={`px-3 py-1 rounded-full text-[11px] font-bold cursor-pointer border transition-colors duration-150 ${newAction.type===t?"border-secondary bg-secondary/10 text-secondary":"border-stone-200 bg-white text-stone-500 [@media(hover:hover)]:hover:border-stone-400"}`}>{t}</button>
                 ))}
               </div>
-            </div>
-            <div>
-              <label style={s.label}>Description</label>
-              <textarea autoFocus value={newAction.desc} onChange={e=>setNewAction(a=>({...a,desc:e.target.value}))} placeholder="Describe the action…" rows={3} style={{ ...s.inp, resize:"vertical", marginTop:4 }}/>
-            </div>
-            <div style={{ display:"flex", gap:10, marginTop:4 }}>
-              <Btn variant="ghost" onClick={()=>{ setShowNewAction(false); setNewAction({desc:"",type:"Handover"}); }} full>Cancel</Btn>
-              <Btn onClick={()=>{
-                if(!newAction.desc.trim()) return;
-                addRequest(safePartner.id,{ ts:new Date().toISOString(), type:newAction.type, employee:newAction.desc, status:"Pending" });
-                setShowNewAction(false); setNewAction({desc:"",type:"Handover"});
-                setDetailTab("actions");
-              }} disabled={!newAction.desc.trim()} full style={{ backgroundColor:PC, color:"white" }}>
-                <Plus size={14}/> Add Action
-              </Btn>
-            </div>
+            </DSForm.Field>
+            <DSForm.Field>
+              <DSForm.Label>Description</DSForm.Label>
+              <textarea autoFocus value={newAction.desc} onChange={e=>setNewAction(a=>({...a,desc:e.target.value}))} placeholder="Describe the action…" rows={3} className="w-full font-sans text-sm rounded-sm border border-stone-200 bg-white px-3 py-2 outline-none resize-y focus:border-secondary focus:ring-2 focus:ring-secondary/20 mt-1"/>
+            </DSForm.Field>
           </div>
-        </Modal>
+        </DSModal>
       )}
 
       {/* Delete Confirmation Modal */}
-      {confirmDeleteId && (
-        <Modal title="Delete Partner?" onClose={()=>setConfirmDeleteId(null)}>
-          <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-            <p style={{ margin:0, fontSize:13, color:"#374151" }}>هتتحذف بيانات الـ partner دي نهائياً. مش ممكن تتراجعي.</p>
-            <div style={{ display:"flex", gap:10 }}>
-              <Btn variant="ghost" onClick={()=>setConfirmDeleteId(null)} full>Cancel</Btn>
-              <Btn onClick={()=>deleteP(confirmDeleteId)} full style={{ backgroundColor:"#dc2626", color:"white" }}>Delete</Btn>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <DSModal open={!!confirmDeleteId} onClose={()=>setConfirmDeleteId(null)} title="Delete Partner?"
+        footer={<>
+          <DSButton variant="ghost" onClick={()=>setConfirmDeleteId(null)}>Cancel</DSButton>
+          <DSButton variant="danger" onClick={()=>deleteP(confirmDeleteId)}>Delete</DSButton>
+        </>}>
+        <p className="m-0 text-[13px] text-stone-700">هتتحذف بيانات الـ partner دي نهائياً. مش ممكن تتراجعي.</p>
+      </DSModal>
     </div>
   );
 }
