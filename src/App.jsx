@@ -5339,7 +5339,7 @@ function LumpSumDealFields({ deal, onChange, positionOptions }) {
         </>
       )}
       <p style={{ margin: 0, fontSize: 10.5, color: "#9ca3af", lineHeight: 1.5 }}>
-        This is a project-level margin, not split across individual employees — it isn't wired into per-employee profit figures elsewhere in the app yet.
+        This is a project-level margin, not split across individual employees — it still isn't wired into any single employee's own profit figure elsewhere in this app. It IS read by the CRM's Financial Overview for this client, though: the Position Rates and the Monthly Timesheet Hours logged here are its real, exact source for this project's monthly revenue/margin (falling back to an estimate only for a month nothing's been logged for yet). Keep logging hours here every month and the CRM stays accurate automatically — no code changes needed for this or any future Lump Sum client.
       </p>
     </>
   );
