@@ -25,6 +25,14 @@ import {
 } from "lucide-react";
 import { ActionCenter } from './ActionCenterV2';
 import AuthGate, { useAuth } from './AuthGate';
+// Design system component library ("Refined Editorial Enterprise" -- see DESIGN_SYSTEM.md and
+// /style-guide). Aliased with a DS prefix because this file already has its own long-standing
+// Btn/Modal/Inp helpers (defined below, used in ~1,300 other inline-styled places) -- importing
+// under the same names would silently shadow every one of those call sites.
+import {
+  Button as DSButton, Card as DSCard, Badge as DSBadge, Input as DSInput,
+  Select as DSSelect, Modal as DSModal, Tabs as DSTabs, Table as DSTable, Form as DSForm,
+} from './components/ui';
 
 // ملاحظة: إضافة الموظفين تتم من خلال handleAddSingle داخل WorkforceView
 // WhatsApp Helper for Client Communications
@@ -3767,63 +3775,56 @@ function ClientHub({ employees, clients, saveClients }) {
   ];
 
   return (
-    <div style={{ display:"flex", height:"calc(100vh - 140px)", gap:0, backgroundColor:"#f3f4f6", borderRadius:16, border:"1px solid #e5e7eb", overflow:"hidden" }}>
+    <div className="flex h-[calc(100vh-140px)] gap-0 bg-stone-100 rounded-2xl border border-stone-200 overflow-hidden">
 
       {/* ── LEFT SIDEBAR ── */}
-      <div style={{ width:256, flexShrink:0, display:"flex", flexDirection:"column", borderRight:"1px solid #e5e7eb", backgroundColor:"white" }}>
+      <div className="w-64 flex-shrink-0 flex flex-col border-r border-stone-200 bg-white">
 
         {/* Sidebar header */}
-        <div style={{ padding:"16px 16px 12px", background:`linear-gradient(135deg,${MD},${M})`, flexShrink:0 }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:7 }}>
-              <Building2 size={16} style={{ color:"white" }}/>
-              <span style={{ fontWeight:800, fontSize:15, color:"white", letterSpacing:"-0.01em" }}>Client Hub</span>
+        <div className="px-4 pt-4 pb-3 bg-gradient-to-br from-secondary to-primary flex-shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Building2 size={16} className="text-white"/>
+              <span className="font-serif font-bold text-[15px] text-white tracking-tight">Client Hub</span>
             </div>
-            <button onClick={()=>setShowAdd(true)} title="Add Client" style={{ width:26, height:26, borderRadius:7, border:"1px solid rgba(255,255,255,0.35)", backgroundColor:"rgba(255,255,255,0.15)", color:"white", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0 }}>
+            <button onClick={()=>setShowAdd(true)} title="Add Client" className="w-[26px] h-[26px] rounded-md border border-white/35 bg-white/15 text-white flex items-center justify-center cursor-pointer flex-shrink-0 [@media(hover:hover)]:hover:bg-white/25 transition-colors duration-150">
               <Plus size={13}/>
             </button>
           </div>
           {/* Mini KPI strip inside header */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:6 }}>
+          <div className="grid grid-cols-4 gap-1.5">
             {[
               { l:"Clients",   v:clients.filter(c=>c.status==="active").length, alert:false },
               { l:"Pending",   v:totalPending,   alert:totalOverdue>0 },
               { l:"No PO",     v:totalPOIssues,  alert:totalPOIssues>0 },
               { l:"No Margin", v:totalNoMargin,  alert:totalNoMargin>0 },
             ].map(k => (
-              <div key={k.l} style={{ backgroundColor:"rgba(255,255,255,0.13)", borderRadius:8, padding:"7px 8px", textAlign:"center" }}>
-                <div style={{ fontSize:9, color:"rgba(255,210,210,0.85)", fontWeight:700, textTransform:"uppercase", marginBottom:3 }}>{k.l}</div>
-                <div style={{ fontSize:17, fontWeight:900, color:k.alert?"#fca5a5":"white", fontFamily:"monospace", lineHeight:1 }}>{k.v}</div>
+              <div key={k.l} className="bg-white/15 rounded-md px-2 py-1.5 text-center">
+                <div className="text-[9px] text-white/70 font-bold uppercase mb-0.5 tracking-wide">{k.l}</div>
+                <div className={`text-[17px] font-black font-mono tabular-nums leading-none ${k.alert?"text-red-300":"text-white"}`}>{k.v}</div>
               </div>
             ))}
           </div>
         </div>
 
         {/* Filter pills */}
-        <div style={{ padding:"8px 10px", borderBottom:"1px solid #f3f4f6", display:"flex", gap:4 }}>
+        <div className="px-2.5 py-2 border-b border-stone-100 flex gap-1">
           {[["active","Active"],["archived","Archived"],["all","All"]].map(([k,l]) => (
-            <button key={k} onClick={()=>setFilter(k)} style={{ flex:1, padding:"4px 0", border:"none", fontSize:10, fontWeight:700, cursor:"pointer", borderRadius:6, backgroundColor:filter===k?M:"#f3f4f6", color:filter===k?"white":"#9ca3af", transition:"all 0.12s" }}>{l}</button>
+            <button key={k} onClick={()=>setFilter(k)} className={`flex-1 py-1 border-none text-[10px] font-bold cursor-pointer rounded-md transition-colors duration-150 ${filter===k?"bg-primary text-white":"bg-stone-100 text-stone-400 [@media(hover:hover)]:hover:bg-stone-200"}`}>{l}</button>
           ))}
         </div>
 
         {/* Search */}
-        <div style={{ padding:"6px 10px", borderBottom:"1px solid #f3f4f6" }}>
-          <div style={{ position:"relative" }}>
-            <Search size={11} style={{ position:"absolute", left:8, top:"50%", transform:"translateY(-50%)", color:"#9ca3af", pointerEvents:"none" }}/>
-            <input
-              value={search} onChange={e=>setSearch(e.target.value)}
-              placeholder="Search clients…"
-              style={{ width:"100%", padding:"5px 8px 5px 24px", borderRadius:7, border:"1px solid #e5e7eb", fontSize:11, outline:"none", backgroundColor:"white", boxSizing:"border-box" }}
-            />
-          </div>
+        <div className="px-2.5 py-1.5 border-b border-stone-100">
+          <DSInput value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search clients…" icon={Search} className="text-[11px] py-1.5"/>
         </div>
 
         {/* Client list */}
-        <div style={{ flex:1, overflowY:"auto" }}>
+        <div className="flex-1 overflow-y-auto">
           {displayed.length===0 && (
-            <div style={{ textAlign:"center", padding:"32px 16px", color:"#9ca3af" }}>
-              <Building2 size={24} style={{ opacity:0.25, margin:"0 auto 8px", display:"block" }}/>
-              <p style={{ fontSize:12, margin:0 }}>No clients</p>
+            <div className="text-center px-4 py-8 text-stone-400">
+              <Building2 size={24} className="opacity-25 mx-auto mb-2 block"/>
+              <p className="text-xs m-0">No clients</p>
             </div>
           )}
           {displayed.map(c => {
@@ -3838,30 +3839,32 @@ function ClientHub({ employees, clients, saveClients }) {
             return (
               <div key={c.id}
                 onClick={()=>{ setOpenId(c.id===openId?null:c.id); setDetailTab("overview"); setEditingInfo(false); }}
-                style={{ padding:"10px 14px", cursor:"pointer", borderLeft:`3px solid ${isSelected?accentColor:"transparent"}`, backgroundColor:isSelected?`${accentColor}14`:"transparent", transition:"background 0.1s, border-color 0.1s", borderBottom:"1px solid #f9fafb" }}
-                onMouseEnter={e=>{ if(!isSelected) e.currentTarget.style.backgroundColor="#f9fafb"; }}
+                className="px-3.5 py-2.5 cursor-pointer border-b border-stone-50 transition-colors duration-150"
+                style={{ borderLeft:`3px solid ${isSelected?accentColor:"transparent"}`, backgroundColor:isSelected?`${accentColor}14`:"transparent" }}
+                onMouseEnter={e=>{ if(!isSelected) e.currentTarget.style.backgroundColor="#fafaf9"; }}
                 onMouseLeave={e=>{ if(!isSelected) e.currentTarget.style.backgroundColor="transparent"; }}>
 
-                <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+                <div className="flex items-center gap-2.5">
                   {/* Avatar */}
-                  <div style={{ width:33, height:33, borderRadius:9, background:isArchived?"#e5e7eb":`linear-gradient(135deg,${MD},${M})`, display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontWeight:900, fontSize:11, flexShrink:0, opacity:isArchived?0.5:1 }}>
+                  <div className={`w-[33px] h-[33px] rounded-lg flex items-center justify-center text-white font-black text-[11px] flex-shrink-0 ${isArchived?"opacity-50":""}`}
+                    style={{ background:isArchived?"#e5e7eb":`linear-gradient(135deg,${MD},${M})` }}>
                     {c.name.split(" ").map(w=>w[0]).join("").slice(0,2)}
                   </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontWeight:700, fontSize:12, color:isArchived?"#9ca3af":"#111827", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.name}</div>
-                    <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:2 }}>
-                      {!isArchived && <span style={{ width:6, height:6, borderRadius:"50%", backgroundColor:health.color, flexShrink:0, display:"inline-block" }}/>}
-                      <span style={{ fontSize:10, color:"#9ca3af", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  <div className="flex-1 min-w-0">
+                    <div className={`font-bold text-xs truncate ${isArchived?"text-stone-400":"text-stone-900"}`}>{c.name}</div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {!isArchived && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 inline-block" style={{ backgroundColor:health.color }}/>}
+                      <span className="text-[10px] text-stone-400 truncate">
                         {isArchived ? "Archived" : `${hc} employees · ${health.label}`}
                       </span>
                     </div>
                   </div>
                   {/* Alert badges */}
-                  <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:2, flexShrink:0 }}>
-                    {overdue>0 && <span style={{ fontSize:9, fontWeight:700, padding:"2px 5px", borderRadius:999, backgroundColor:"#fef2f2", color:"#dc2626", border:"1px solid #fecaca" }}>{overdue}!</span>}
-                    {pending>0 && overdue===0 && <span style={{ fontSize:9, fontWeight:700, padding:"2px 5px", borderRadius:999, backgroundColor:"#fffbeb", color:"#d97706", border:"1px solid #fde68a" }}>{pending}</span>}
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    {overdue>0 && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-error-100 text-error-800 border border-error-100">{overdue}!</span>}
+                    {pending>0 && overdue===0 && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-warning-100 text-warning-800 border border-warning-100">{pending}</span>}
                     {noMargin>0 && (
-                      <span title={`${noMargin} employee${noMargin!==1?'s':''} with no Profit Mode/margin set`} style={{ fontSize:9, fontWeight:700, padding:"2px 5px", borderRadius:999, backgroundColor:"#faf5ff", color:"#7e22ce", border:"1px solid #e9d5ff" }}>{noMargin} no margin</span>
+                      <span title={`${noMargin} employee${noMargin!==1?'s':''} with no Profit Mode/margin set`} className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-info-100 text-info-800 border border-info-100">{noMargin} no margin</span>
                     )}
                   </div>
                 </div>
@@ -3873,167 +3876,163 @@ function ClientHub({ employees, clients, saveClients }) {
 
       {/* ── RIGHT DETAIL PANEL ── */}
       {!openClient ? (
-        <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:10 }}>
-          <Building2 size={44} style={{ color:"#e5e7eb" }}/>
-          <p style={{ fontSize:14, fontWeight:600, margin:0, color:"#9ca3af" }}>Select a client to view details</p>
-          <p style={{ fontSize:11, margin:0, color:"#d1d5db" }}>{clients.filter(c=>c.status==="active").length} active clients</p>
+        <div className="flex-1 flex items-center justify-center flex-col gap-2.5">
+          <Building2 size={44} className="text-stone-200"/>
+          <p className="text-sm font-semibold m-0 text-stone-400">Select a client to view details</p>
+          <p className="text-[11px] m-0 text-stone-300">{clients.filter(c=>c.status==="active").length} active clients</p>
         </div>
       ) : (
-        <div key={`detail-${openId}`} style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", backgroundColor:"white" }}>
+        <div key={`detail-${openId}`} className="flex-1 flex flex-col overflow-hidden bg-white">
 
           {/* Detail Header */}
-          <div style={{ padding:"18px 24px 14px", background:`linear-gradient(135deg,${MD},${M})`, flexShrink:0 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+          <div className="px-6 pt-[18px] pb-3.5 bg-gradient-to-br from-secondary to-primary flex-shrink-0">
+            <div className="flex justify-between items-start">
               {editingInfo ? (
-                <div style={{ display:"flex", flexDirection:"column", gap:7, flex:1, marginRight:12 }}>
+                <div className="flex flex-col gap-1.5 flex-1 mr-3">
                   <input
                     autoFocus
                     value={infoForm.name}
                     onChange={e=>setInfoForm(f=>({...f,name:e.target.value}))}
                     placeholder="Client name"
-                    style={{ fontSize:17, fontWeight:800, color:"white", background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.35)", borderRadius:8, padding:"5px 10px", outline:"none", letterSpacing:"-0.01em", fontFamily:"inherit" }}
+                    className="text-[17px] font-extrabold text-white bg-white/15 border border-white/35 rounded-md px-2.5 py-1 outline-none tracking-tight font-serif placeholder:text-white/50"
                   />
-                  <div style={{ display:"flex", gap:7 }}>
+                  <div className="flex gap-1.5">
                     <input
                       value={infoForm.region}
                       onChange={e=>setInfoForm(f=>({...f,region:e.target.value}))}
                       placeholder="Region"
-                      style={{ flex:1, fontSize:12, color:"white", background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:7, padding:"4px 9px", outline:"none", fontFamily:"inherit" }}
+                      className="flex-1 text-xs text-white bg-white/10 border border-white/25 rounded-sm px-2.5 py-1 outline-none placeholder:text-white/50"
                     />
                     <input
                       value={infoForm.email}
                       onChange={e=>setInfoForm(f=>({...f,email:e.target.value}))}
                       placeholder="Email"
                       type="email"
-                      style={{ flex:2, fontSize:12, color:"white", background:"rgba(255,255,255,0.12)", border:"1px solid rgba(255,255,255,0.25)", borderRadius:7, padding:"4px 9px", outline:"none", fontFamily:"inherit" }}
+                      className="flex-[2] text-xs text-white bg-white/10 border border-white/25 rounded-sm px-2.5 py-1 outline-none placeholder:text-white/50"
                     />
                   </div>
                   <input
                     value={infoForm.notes}
                     onChange={e=>setInfoForm(f=>({...f,notes:e.target.value}))}
                     placeholder="Notes…"
-                    style={{ fontSize:12, color:"white", background:"rgba(255,255,255,0.10)", border:"1px solid rgba(255,255,255,0.20)", borderRadius:7, padding:"4px 9px", outline:"none", fontFamily:"inherit", width:"100%" }}
+                    className="text-xs text-white bg-white/10 border border-white/20 rounded-sm px-2.5 py-1 outline-none w-full placeholder:text-white/50"
                   />
                 </div>
               ) : (
-                <div style={{ flex:1, minWidth:0 }}>
-                  <h3 style={{ margin:0, fontSize:19, fontWeight:800, color:"white", letterSpacing:"-0.01em" }}>{safeClient.name}</h3>
-                  <p style={{ margin:"4px 0 0", fontSize:12, color:"rgba(255,210,210,0.9)" }}>
+                <div className="flex-1 min-w-0">
+                  <h3 className="m-0 text-[19px] font-serif font-bold text-white tracking-tight">{safeClient.name}</h3>
+                  <p className="mt-1 mb-0 text-xs text-white/75">
                     {[safeClient.region, safeClient.email].filter(Boolean).join(" · ") || "—"}
                   </p>
                 </div>
               )}
-              <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+              <div className="flex gap-1.5 flex-shrink-0">
                 {editingInfo ? (
                   <>
-                    <button onClick={()=>{ if(infoForm.name.trim()) save(clients.map(c=>c.id===openId?{...c,...infoForm}:c)); setEditingInfo(false); }} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.5)", backgroundColor:"rgba(255,255,255,0.22)", color:"white", cursor:"pointer" }}>Save</button>
-                    <button onClick={()=>setEditingInfo(false)} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.2)", backgroundColor:"transparent", color:"rgba(255,255,255,0.7)", cursor:"pointer" }}>Cancel</button>
+                    <DSButton size="sm" variant="secondary" onClick={()=>{ if(infoForm.name.trim()) save(clients.map(c=>c.id===openId?{...c,...infoForm}:c)); setEditingInfo(false); }}>Save</DSButton>
+                    <DSButton size="sm" variant="ghost" onClick={()=>setEditingInfo(false)}>Cancel</DSButton>
                   </>
                 ) : (
                   <>
-                    <button onClick={()=>{ setInfoForm({name:safeClient.name||"",region:safeClient.region||"",email:safeClient.email||"",notes:safeClient.notes||""}); setEditingInfo(true); }} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.3)", backgroundColor:"rgba(255,255,255,0.12)", color:"white", cursor:"pointer" }}>Edit</button>
-                    <button onClick={()=>safeClient.status==="archived"?unarchive(openId):archive(openId)} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,255,255,0.3)", backgroundColor:"rgba(255,255,255,0.12)", color:"white", cursor:"pointer" }}>
+                    <DSButton size="sm" variant="ghost" onClick={()=>{ setInfoForm({name:safeClient.name||"",region:safeClient.region||"",email:safeClient.email||"",notes:safeClient.notes||""}); setEditingInfo(true); }}>Edit</DSButton>
+                    <DSButton size="sm" variant="secondary" onClick={()=>safeClient.status==="archived"?unarchive(openId):archive(openId)}>
                       {safeClient.status==="archived" ? "Restore" : "Archive"}
-                    </button>
-                    <button onClick={()=>setConfirmDeleteId(openId)} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:"1px solid rgba(255,100,100,0.4)", backgroundColor:"rgba(255,100,100,0.15)", color:"#fca5a5", cursor:"pointer" }}>Delete</button>
+                    </DSButton>
+                    <DSButton size="sm" variant="danger" onClick={()=>setConfirmDeleteId(openId)}>Delete</DSButton>
                   </>
                 )}
               </div>
             </div>
             {/* Health bar */}
             {selHealth && (
-              <div style={{ marginTop:13 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
-                  <span style={{ fontSize:11, color:"rgba(255,210,210,0.85)", fontWeight:600 }}>Health Score</span>
-                  <span style={{ fontSize:12, fontWeight:800, color:"white" }}>{selHealth.label} · {selHealth.score}/100</span>
+              <div className="mt-3.5">
+                <div className="flex justify-between mb-1.5">
+                  <span className="text-[11px] text-white/75 font-semibold">Health Score</span>
+                  <span className="text-xs font-extrabold text-white font-mono">{selHealth.label} · {selHealth.score}/100</span>
                 </div>
-                <div style={{ height:5, backgroundColor:"rgba(255,255,255,0.2)", borderRadius:999, overflow:"hidden" }}>
-                  <div style={{ height:"100%", width:`${selHealth.score}%`, backgroundColor:"white", borderRadius:999 }}/>
+                <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full bg-white transition-[width] duration-300 ease-out" style={{ width:`${selHealth.score}%` }}/>
                 </div>
               </div>
             )}
           </div>
 
           {/* Quick stats row */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", borderBottom:"1px solid #f3f4f6", flexShrink:0, backgroundColor:"white" }}>
+          <div className="grid grid-cols-4 border-b border-stone-100 flex-shrink-0 bg-white">
             {[
-              { l:"Employees",    v:selEmps.length,                                                               c:"#374151" },
-              { l:"Expiring ≤30d",v:selEmps.filter(e=>{const d=daysUntil(e.endDate);return d>=0&&d<=30;}).length, c:"#d97706" },
-              { l:"WF Pending",   v:selEmps.filter(e=>{ const wf=(e.workflowStatus||"").trim(); return wf && !isWFDone(wf); }).length, c:"#7c3aed" },
-              { l:isSela?"Missing PO":"Projects", v:isSela?missingPO.length:byProject.length,                     c:isSela&&missingPO.length>0?"#dc2626":"#374151" },
-            ].map(({l,v,c})=>(
-              <div key={l} style={{ padding:"11px 8px", textAlign:"center", borderRight:"1px solid #f3f4f6" }}>
-                <div style={{ fontSize:9, color:"#9ca3af", fontWeight:700, textTransform:"uppercase", marginBottom:3 }}>{l}</div>
-                <div style={{ fontSize:19, fontWeight:900, color:c, lineHeight:1 }}>{v}</div>
+              { l:"Employees",    v:selEmps.length,                                                               tone:"stone" },
+              { l:"Expiring ≤30d",v:selEmps.filter(e=>{const d=daysUntil(e.endDate);return d>=0&&d<=30;}).length, tone:"warning" },
+              { l:"WF Pending",   v:selEmps.filter(e=>{ const wf=(e.workflowStatus||"").trim(); return wf && !isWFDone(wf); }).length, tone:"info" },
+              { l:isSela?"Missing PO":"Projects", v:isSela?missingPO.length:byProject.length,                     tone:isSela&&missingPO.length>0?"error":"stone" },
+            ].map(({l,v,tone})=>(
+              <div key={l} className="px-2 py-2.5 text-center border-r border-stone-100 last:border-r-0">
+                <div className="text-[9px] text-stone-400 font-bold uppercase mb-0.5 tracking-wide">{l}</div>
+                <div className={`text-[19px] font-black font-mono tabular-nums leading-none ${tone==="warning"?"text-warning-800":tone==="info"?"text-info-800":tone==="error"?"text-error-800":"text-stone-700"}`}>{v}</div>
               </div>
             ))}
           </div>
 
           {/* Tabs */}
-          <div style={{ display:"flex", borderBottom:"1px solid #f3f4f6", flexShrink:0, overflowX:"auto", backgroundColor:"white" }}>
-            {TABS.map(t=>(
-              <button key={t.k} onClick={()=>setDetailTab(t.k)} style={{ padding:"10px 16px", fontSize:11, fontWeight:700, border:"none", cursor:"pointer", whiteSpace:"nowrap", flexShrink:0, backgroundColor:"transparent", color:detailTab===t.k?M:"#9ca3af", borderBottom:`2px solid ${detailTab===t.k?M:"transparent"}`, transition:"color 0.1s" }}>{t.l}</button>
-            ))}
-            <div style={{ flex:1, display:"flex", justifyContent:"flex-end", alignItems:"center", padding:"0 16px" }}>
-              <button onClick={()=>{
-                setShowNewAction(true);
-              }} style={{ fontSize:10, fontWeight:700, padding:"5px 11px", borderRadius:7, border:`1px solid ${M}`, backgroundColor:M, color:"white", cursor:"pointer" }}>
-                + New Action
-              </button>
+          <div className="flex items-center flex-shrink-0 bg-white">
+            <div className="flex-1 overflow-x-auto">
+              <DSTabs tabs={TABS.map(t=>({key:t.k,label:t.l}))} active={detailTab} onChange={setDetailTab}/>
+            </div>
+            <div className="flex items-center pr-4 pl-2 border-b border-stone-200 h-full flex-shrink-0">
+              <DSButton size="sm" variant="primary" icon={Plus} onClick={()=>setShowNewAction(true)}>New Action</DSButton>
             </div>
           </div>
 
           {/* Tab Content */}
-          <div style={{ flex:1, overflowY:"auto", padding:"18px 24px" }}>
+          <div className="flex-1 overflow-y-auto px-6 py-[18px]">
 
             {/* OVERVIEW */}
             {detailTab==="overview" && (
-              <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+              <div className="flex flex-col gap-3.5">
                 {noMarginEmps.length>0 && (
-                  <div style={{ padding:"10px 14px", borderRadius:10, backgroundColor:"#faf5ff", border:"1px solid #e9d5ff" }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:"#7e22ce", marginBottom:6 }}>
-                      ⚠ {noMarginEmps.length} EMPLOYEE{noMarginEmps.length!==1?"S":""} WITH NO PROFIT MODE / MARGIN SET
+                  <div className="px-3.5 py-2.5 rounded-lg bg-info-100/60 border border-info-100">
+                    <div className="text-[10px] font-extrabold text-info-800 mb-1.5 uppercase tracking-wide">
+                      ⚠ {noMarginEmps.length} Employee{noMarginEmps.length!==1?"s":""} with no Profit Mode / margin set
                     </div>
-                    <p style={{ fontSize:11, color:"#6b21a8", margin:"0 0 8px", lineHeight:1.5 }}>
+                    <p className="text-[11px] text-info-800/90 mb-2 leading-relaxed">
                       These have a salary on file but no Direct/Partner terms — they count as 0 SAR margin everywhere
                       (this app's Finance tab, the CRM's Financial Overview) until a real Profit Mode + rate is set.
                     </p>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                    <div className="flex flex-wrap gap-1">
                       {noMarginEmps.map(e=>(
-                        <span key={e._id} style={{ fontSize:11, padding:"2px 8px", borderRadius:999, backgroundColor:"white", border:"1px solid #e9d5ff", color:"#6b21a8" }}>{e.name}</span>
+                        <DSBadge key={e._id} color="info">{e.name}</DSBadge>
                       ))}
                     </div>
                   </div>
                 )}
-                <div style={{ padding:"10px 14px", borderRadius:10, backgroundColor:"#fefce8", border:"1px solid #fef9c3" }}>
-                  <div style={{ fontSize:10, fontWeight:700, color:"#854d0e", marginBottom:6 }}>NOTES</div>
+                <div className="px-3.5 py-2.5 rounded-lg bg-warning-100/50 border border-warning-100">
+                  <div className="text-[10px] font-extrabold text-warning-800 mb-1.5 uppercase tracking-wide">Notes</div>
                   <textarea
                     value={notesVal}
                     onChange={e=>handleNotesChange(e.target.value)}
                     placeholder="Add notes about this client…"
                     rows={3}
-                    style={{ width:"100%", border:"none", backgroundColor:"transparent", fontSize:12, color:"#374151", lineHeight:1.6, resize:"vertical", outline:"none", fontFamily:"inherit", padding:0, margin:0 }}
+                    className="w-full border-none bg-transparent text-xs text-stone-700 leading-relaxed resize-y outline-none font-sans p-0 m-0"
                   />
                 </div>
                 {(showAllProjects ? byProject : byProject.slice(0,4)).map(([prj,emps])=>(
-                  <div key={prj} style={{ padding:"10px 14px", borderRadius:10, border:"1px solid #f3f4f6", backgroundColor:"#f9fafb" }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-                      <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{prj}</span>
-                      <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:`${M}15`, color:M }}>{emps.length}</span>
+                  <div key={prj} className="px-3.5 py-2.5 rounded-lg border border-stone-100 bg-stone-50">
+                    <div className="flex justify-between mb-1.5">
+                      <span className="text-xs font-bold text-stone-700">{prj}</span>
+                      <DSBadge color="primary">{emps.length}</DSBadge>
                     </div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                    <div className="flex flex-wrap gap-1">
                       {emps.slice(0,6).map(e=>{
                         const d=daysUntil(e.endDate);
                         const urg=d>=0&&d<=14;
-                        return <span key={e._id} style={{ fontSize:11, padding:"2px 8px", borderRadius:999, backgroundColor:urg?"#fff7ed":"white", border:`1px solid ${urg?"#fed7aa":"#e5e7eb"}`, color:urg?"#c2410c":"#374151" }}>{e.name}{urg?` ⚠${d}d`:""}</span>;
+                        return <span key={e._id} className={`text-[11px] px-2 py-0.5 rounded-full border ${urg?"bg-warning-100/60 border-warning-100 text-warning-800":"bg-white border-stone-200 text-stone-700"}`}>{e.name}{urg?` ⚠${d}d`:""}</span>;
                       })}
-                      {emps.length>6 && <span style={{ fontSize:11, color:"#9ca3af" }}>+{emps.length-6}</span>}
+                      {emps.length>6 && <span className="text-[11px] text-stone-400">+{emps.length-6}</span>}
                     </div>
                   </div>
                 ))}
-                {byProject.length===0 && <p style={{ textAlign:"center", color:"#9ca3af", padding:"32px 0", fontSize:13 }}>No employees assigned.</p>}
+                {byProject.length===0 && <p className="text-center text-stone-400 py-8 text-sm">No employees assigned.</p>}
                 {byProject.length>4 && (
-                  <button onClick={()=>setShowAllProjects(v=>!v)} style={{ fontSize:11, fontWeight:700, color:M, background:"none", border:"none", cursor:"pointer", padding:"4px 0" }}>
+                  <button onClick={()=>setShowAllProjects(v=>!v)} className="text-[11px] font-bold text-primary bg-transparent border-none cursor-pointer py-1 text-left [@media(hover:hover)]:hover:underline">
                     {showAllProjects ? "▲ Show less" : `▼ Show all ${byProject.length} projects`}
                   </button>
                 )}
@@ -4042,7 +4041,7 @@ function ClientHub({ employees, clients, saveClients }) {
 
             {/* ACTIONS */}
             {detailTab==="actions" && (
-              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              <div className="flex flex-col gap-2.5">
                 {/* Filter pills */}
                 {(() => {
                   const allActions = safeClient.requestLog.map((r,i)=>({...r,i,dw:Math.floor((Date.now()-new Date(r.ts))/864e5)}));
@@ -4051,33 +4050,33 @@ function ClientHub({ employees, clients, saveClients }) {
                   const shown = actionsFilter==="all" ? allActions : allActions.filter(r=>r.status===(actionsFilter==="pending"?"Pending":"Completed"));
                   return (
                     <>
-                      <div style={{ display:"flex", gap:5, marginBottom:2 }}>
+                      <div className="flex gap-1.5 mb-0.5">
                         {[["pending",`Pending · ${pendingCnt}`],["completed",`Completed · ${completedCnt}`],["all","All"]].map(([k,l])=>(
-                          <button key={k} onClick={()=>setActionsFilter(k)} style={{ padding:"4px 11px", borderRadius:20, fontSize:10, fontWeight:700, cursor:"pointer", border:`1.5px solid ${actionsFilter===k?M:"#e5e7eb"}`, backgroundColor:actionsFilter===k?`${M}10`:"white", color:actionsFilter===k?M:"#6b7280" }}>{l}</button>
+                          <button key={k} onClick={()=>setActionsFilter(k)} className={`px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer border transition-colors duration-150 ${actionsFilter===k?"border-primary bg-primary-pale text-primary":"border-stone-200 bg-white text-stone-500 [@media(hover:hover)]:hover:border-stone-400"}`}>{l}</button>
                         ))}
                       </div>
                       {shown.length===0 && (
-                        <div style={{ textAlign:"center", padding:"32px 0" }}>
-                          <CheckCircle size={28} style={{ margin:"0 auto 8px", display:"block", color:"#16a34a", opacity:0.4 }}/>
-                          <p style={{ fontWeight:600, fontSize:13, color:"#374151", margin:"0 0 4px" }}>No {actionsFilter==="all"?"":actionsFilter} actions</p>
+                        <div className="text-center py-8">
+                          <CheckCircle size={28} className="mx-auto mb-2 block text-success-600 opacity-40"/>
+                          <p className="font-semibold text-sm text-stone-700 mb-1">No {actionsFilter==="all"?"":actionsFilter} actions</p>
                         </div>
                       )}
                       {shown.map(r=>(
-                        <div key={r.i} style={{ padding:"12px 14px", borderRadius:12, border:`1px solid ${r.status==="Completed"?"#bbf7d0":r.dw>5?"#fecaca":"#f3f4f6"}`, backgroundColor:r.status==="Completed"?"#f0fdf4":r.dw>5?"#fef2f2":"#f9fafb", display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
-                          <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:4 }}>
-                              <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#e0f2fe", color:"#0369a1" }}>{r.type}</span>
-                              {r.status==="Pending" && r.dw>5 && <span style={{ fontSize:10, fontWeight:700, color:"#dc2626" }}>⚠ Delayed {r.dw}d</span>}
-                              {r.status==="Completed" && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:999, backgroundColor:"#dcfce7", color:"#166534" }}>✓ Done</span>}
+                        <div key={r.i} className={`px-3.5 py-3 rounded-xl border flex justify-between items-start gap-2.5 ${r.status==="Completed"?"border-success-100 bg-success-100/40":r.dw>5?"border-error-100 bg-error-100/40":"border-stone-100 bg-stone-50"}`}>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <DSBadge color="info">{r.type}</DSBadge>
+                              {r.status==="Pending" && r.dw>5 && <span className="text-[10px] font-bold text-error-800">⚠ Delayed {r.dw}d</span>}
+                              {r.status==="Completed" && <DSBadge color="success">✓ Done</DSBadge>}
                             </div>
-                            <p style={{ fontWeight:600, fontSize:13, margin:"0 0 2px", color:"#1f2937" }}>{r.employee}</p>
-                            <p style={{ fontSize:11, color:"#9ca3af", margin:0 }}>
+                            <p className="font-semibold text-[13px] mb-0.5 text-stone-800">{r.employee}</p>
+                            <p className="text-[11px] text-stone-400 m-0">
                               {new Date(r.ts).toLocaleDateString("en-GB")}
-                              {r.status==="Pending" && r.dw>0 && <span style={{ marginLeft:6, fontWeight:700, color:r.dw>5?"#dc2626":"#d97706" }}>· {r.dw}d waiting</span>}
+                              {r.status==="Pending" && r.dw>0 && <span className={`ml-1.5 font-bold ${r.dw>5?"text-error-800":"text-warning-800"}`}>· {r.dw}d waiting</span>}
                             </p>
                           </div>
                           {r.status==="Pending" && (
-                            <button onClick={()=>updReqStatus(safeClient.id,r.i,"Completed")} style={{ fontSize:11, fontWeight:700, padding:"5px 10px", borderRadius:8, border:"1px solid #bbf7d0", backgroundColor:"#f0fdf4", color:"#16a34a", cursor:"pointer", whiteSpace:"nowrap" }}>✓ Done</button>
+                            <DSButton size="sm" variant="success" onClick={()=>updReqStatus(safeClient.id,r.i,"Completed")}>✓ Done</DSButton>
                           )}
                         </div>
                       ))}
@@ -4089,26 +4088,26 @@ function ClientHub({ employees, clients, saveClients }) {
 
             {/* PROJECTS */}
             {detailTab==="projects" && (
-              <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-                {byProject.length===0 && <p style={{ textAlign:"center", color:"#9ca3af", padding:"32px 0", fontSize:13 }}>No employees assigned.</p>}
+              <div className="flex flex-col gap-3.5">
+                {byProject.length===0 && <p className="text-center text-stone-400 py-8 text-sm">No employees assigned.</p>}
                 {byProject.map(([prj,emps])=>(
                   <div key={prj}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:7 }}>
-                      <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{prj}</span>
-                      <span style={{ fontSize:11, fontWeight:700, padding:"2px 9px", borderRadius:999, backgroundColor:`${M}15`, color:M }}>{emps.length} employees</span>
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className="text-xs font-bold text-stone-700">{prj}</span>
+                      <DSBadge color="primary">{emps.length} employees</DSBadge>
                     </div>
                     {emps.map(e=>{
                       const d=daysUntil(e.endDate);
                       const urg=d>=0&&d<=30;
                       return (
-                        <div key={e._id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", borderRadius:9, border:`1px solid ${urg?"#fed7aa":"#f3f4f6"}`, backgroundColor:urg?"#fffbf5":"#f9fafb", marginBottom:4 }}>
+                        <div key={e._id} className={`flex items-center justify-between px-3 py-2 rounded-lg border mb-1 ${urg?"border-warning-100 bg-warning-100/30":"border-stone-100 bg-stone-50"}`}>
                           <div>
-                            <span style={{ fontSize:12, fontWeight:600, color:"#1f2937" }}>{e.name}</span>
-                            <span style={{ fontSize:11, color:"#9ca3af", marginLeft:7 }}>{e.position||"—"}</span>
+                            <span className="text-xs font-semibold text-stone-800">{e.name}</span>
+                            <span className="text-[11px] text-stone-400 ml-1.5">{e.position||"—"}</span>
                           </div>
-                          <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                          <div className="flex items-center gap-1.5">
                             <WFBadge status={e.workflowStatus}/>
-                            <span style={{ fontSize:11, fontWeight:600, color:urg?"#d97706":d<0?"#9ca3af":"#374151" }}>{d<0?"Expired":urg?`⚠ ${d}d`:fmt(e.endDate)}</span>
+                            <span className={`text-[11px] font-semibold ${urg?"text-warning-800":d<0?"text-stone-400":"text-stone-700"}`}>{d<0?"Expired":urg?`⚠ ${d}d`:fmt(e.endDate)}</span>
                           </div>
                         </div>
                       );
@@ -4120,34 +4119,34 @@ function ClientHub({ employees, clients, saveClients }) {
 
             {/* PO (Sela only) */}
             {detailTab==="po" && (
-              <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                  <div style={{ padding:"14px", borderRadius:11, border:"1px solid #bbf7d0", backgroundColor:"#f0fdf4", textAlign:"center" }}>
-                    <div style={{ fontSize:11, fontWeight:700, color:"#16a34a", marginBottom:4 }}>Has PO</div>
-                    <div style={{ fontSize:26, fontWeight:900, color:"#16a34a" }}>{hasPO.length}</div>
+              <div className="flex flex-col gap-3.5">
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="p-3.5 rounded-xl border border-success-100 bg-success-100/40 text-center">
+                    <div className="text-[11px] font-bold text-success-800 mb-1">Has PO</div>
+                    <div className="text-[26px] font-black text-success-800">{hasPO.length}</div>
                   </div>
-                  <div style={{ padding:"14px", borderRadius:11, border:`1px solid ${missingPO.length>0?"#fecaca":"#e5e7eb"}`, backgroundColor:missingPO.length>0?"#fef2f2":"#f9fafb", textAlign:"center" }}>
-                    <div style={{ fontSize:11, fontWeight:700, color:missingPO.length>0?"#dc2626":"#9ca3af", marginBottom:4 }}>Missing PO</div>
-                    <div style={{ fontSize:26, fontWeight:900, color:missingPO.length>0?"#dc2626":"#9ca3af" }}>{missingPO.length}</div>
+                  <div className={`p-3.5 rounded-xl border text-center ${missingPO.length>0?"border-error-100 bg-error-100/40":"border-stone-200 bg-stone-50"}`}>
+                    <div className={`text-[11px] font-bold mb-1 ${missingPO.length>0?"text-error-800":"text-stone-400"}`}>Missing PO</div>
+                    <div className={`text-[26px] font-black ${missingPO.length>0?"text-error-800":"text-stone-400"}`}>{missingPO.length}</div>
                   </div>
                 </div>
                 {missingPO.map(e=>(
-                  <div key={e._id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 13px", borderRadius:10, backgroundColor:"#fef2f2", border:"1px solid #fecaca" }}>
+                  <div key={e._id} className="flex justify-between items-center px-3.5 py-2.5 rounded-lg bg-error-100/40 border border-error-100">
                     <div>
-                      <span style={{ fontSize:12, fontWeight:600, color:"#1f2937" }}>{e.name}</span>
-                      <span style={{ fontSize:11, color:"#9ca3af", marginLeft:7 }}>{e.project||"—"}</span>
+                      <span className="text-xs font-semibold text-stone-800">{e.name}</span>
+                      <span className="text-[11px] text-stone-400 ml-1.5">{e.project||"—"}</span>
                     </div>
-                    <span style={{ fontSize:10, fontWeight:700, color:"#dc2626", padding:"2px 8px", borderRadius:999, backgroundColor:"#fee2e2" }}>No PO</span>
+                    <DSBadge color="error">No PO</DSBadge>
                   </div>
                 ))}
                 {hasPO.length>0 && (
                   <details>
-                    <summary style={{ fontSize:11, color:"#9ca3af", cursor:"pointer", fontWeight:600 }}>{hasPO.length} with PO ▸</summary>
-                    <div style={{ display:"flex", flexDirection:"column", gap:4, marginTop:8 }}>
+                    <summary className="text-[11px] text-stone-400 cursor-pointer font-semibold">{hasPO.length} with PO ▸</summary>
+                    <div className="flex flex-col gap-1 mt-2">
                       {hasPO.map(e=>(
-                        <div key={e._id} style={{ display:"flex", justifyContent:"space-between", padding:"8px 12px", borderRadius:9, backgroundColor:"#f0fdf4", border:"1px solid #bbf7d0" }}>
-                          <span style={{ fontSize:12, fontWeight:600, color:"#1f2937" }}>{e.name}</span>
-                          <span style={{ fontSize:11, fontWeight:700, color:"#16a34a" }}>PO: {e.poNumbers}</span>
+                        <div key={e._id} className="flex justify-between px-3 py-2 rounded-lg bg-success-100/40 border border-success-100">
+                          <span className="text-xs font-semibold text-stone-800">{e.name}</span>
+                          <span className="text-[11px] font-bold text-success-800 font-mono">PO: {e.poNumbers}</span>
                         </div>
                       ))}
                     </div>
@@ -4159,25 +4158,25 @@ function ClientHub({ employees, clients, saveClients }) {
             {/* CONTACTS */}
             {detailTab==="contacts" && (
               <div>
-                <div style={{ ...s.flexBetween, marginBottom:12 }}>
-                  <span style={{ fontSize:11, fontWeight:700, color:"#9ca3af", textTransform:"uppercase" }}>Contacts ({safeClient.contacts.length})</span>
-                  <button onClick={()=>addContact(safeClient.id)} style={{ fontSize:11, fontWeight:700, color:M, background:"none", border:"none", cursor:"pointer" }}>+ Add</button>
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wide">Contacts ({safeClient.contacts.length})</span>
+                  <button onClick={()=>addContact(safeClient.id)} className="text-[11px] font-bold text-primary bg-transparent border-none cursor-pointer [@media(hover:hover)]:hover:underline">+ Add</button>
                 </div>
-                {safeClient.contacts.length===0 && <p style={{ textAlign:"center", color:"#9ca3af", padding:"24px 0", fontSize:13 }}>No contacts yet.</p>}
+                {safeClient.contacts.length===0 && <p className="text-center text-stone-400 py-6 text-sm">No contacts yet.</p>}
                 {safeClient.contacts.map((co,ci)=>(
-                  <div key={ci} style={{ display:"flex", alignItems:"center", gap:10, padding:10, borderRadius:10, backgroundColor:"#f9fafb", marginBottom:6, border:"1px solid #f3f4f6" }}>
-                    <div style={{ width:34, height:34, borderRadius:10, background:`linear-gradient(135deg,${MD},${M})`, display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:13, fontWeight:700, flexShrink:0 }}>{(co.name||"?")[0]}</div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <input value={co.name} onChange={e=>updContact(safeClient.id,ci,"name",e.target.value)} style={{ width:"100%", border:"none", backgroundColor:"transparent", fontSize:12, fontWeight:600, outline:"none" }}/>
-                      <input value={co.role} onChange={e=>updContact(safeClient.id,ci,"role",e.target.value)} style={{ width:"100%", border:"none", backgroundColor:"transparent", fontSize:11, color:"#9ca3af", outline:"none" }}/>
+                  <div key={ci} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-stone-50 mb-1.5 border border-stone-100">
+                    <div className="w-[34px] h-[34px] rounded-lg flex items-center justify-center text-white text-[13px] font-bold flex-shrink-0" style={{ background:`linear-gradient(135deg,${MD},${M})` }}>{(co.name||"?")[0]}</div>
+                    <div className="flex-1 min-w-0">
+                      <input value={co.name} onChange={e=>updContact(safeClient.id,ci,"name",e.target.value)} className="w-full border-none bg-transparent text-xs font-semibold outline-none text-stone-800"/>
+                      <input value={co.role} onChange={e=>updContact(safeClient.id,ci,"role",e.target.value)} className="w-full border-none bg-transparent text-[11px] text-stone-400 outline-none"/>
                     </div>
-                    <input value={co.phone} onChange={e=>updContact(safeClient.id,ci,"phone",e.target.value)} style={{ width:130, border:"none", backgroundColor:"transparent", fontSize:11, textAlign:"right", outline:"none", direction:"ltr" }}/>
+                    <input value={co.phone} onChange={e=>updContact(safeClient.id,ci,"phone",e.target.value)} className="w-[130px] border-none bg-transparent text-[11px] text-right outline-none text-stone-700" style={{ direction:"ltr" }}/>
                     {co.phone && (
-                      <button onClick={()=>{ const msg=`مرحباً ${co.name},\n\nأتواصل معك بخصوص ${safeClient.name}.\n\nتحياتي`; window.open(`https://wa.me/${co.phone.replace(/\D/g,"")}?text=${encodeURIComponent(msg)}`,"_blank"); }} style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:30, height:30, borderRadius:8, border:"1px solid #16a34a", backgroundColor:"white", color:"#16a34a", cursor:"pointer", flexShrink:0 }}>
+                      <button onClick={()=>{ const msg=`مرحباً ${co.name},\n\nأتواصل معك بخصوص ${safeClient.name}.\n\nتحياتي`; window.open(`https://wa.me/${co.phone.replace(/\D/g,"")}?text=${encodeURIComponent(msg)}`,"_blank"); }} className="inline-flex items-center justify-center w-[30px] h-[30px] rounded-lg border border-success-600 bg-white text-success-600 cursor-pointer flex-shrink-0 [@media(hover:hover)]:hover:bg-success-100 transition-colors duration-150">
                         <MessageCircle size={13}/>
                       </button>
                     )}
-                    <button onClick={()=>delContact(safeClient.id,ci)} title="Remove contact" style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:26, height:26, borderRadius:7, border:"1px solid #fecaca", backgroundColor:"#fff5f5", color:"#ef4444", cursor:"pointer", flexShrink:0 }}>
+                    <button onClick={()=>delContact(safeClient.id,ci)} title="Remove contact" className="inline-flex items-center justify-center w-[26px] h-[26px] rounded-md border border-error-100 bg-error-100/40 text-error-800 cursor-pointer flex-shrink-0 [@media(hover:hover)]:hover:bg-error-100 transition-colors duration-150">
                       <X size={11}/>
                     </button>
                   </div>
@@ -4189,78 +4188,80 @@ function ClientHub({ employees, clients, saveClients }) {
       )}
 
       {/* Add Client Modal */}
-      {showAdd && (
-        <Modal title="Add Client" onClose={()=>setShowAdd(false)}>
-          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            <Inp label="Company Name" value={nC.name} onChange={v=>setNC(c=>({...c,name:v}))}/>
-            <div style={s.grid2}>
-              <Inp label="Region" value={nC.region} onChange={v=>setNC(c=>({...c,region:v}))}/>
-              <Inp label="Email"  value={nC.email}  onChange={v=>setNC(c=>({...c,email:v}))}/>
-            </div>
-            <Inp label="Notes" value={nC.notes} onChange={v=>setNC(c=>({...c,notes:v}))}/>
-            <div style={{ display:"flex", gap:12, marginTop:8 }}>
-              <Btn variant="ghost" onClick={()=>setShowAdd(false)} full>Cancel</Btn>
-              <Btn onClick={add} disabled={!nC.name} full style={{ backgroundColor:M, color:"white" }}><Plus size={14}/> Add Client</Btn>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <DSModal open={showAdd} onClose={()=>setShowAdd(false)} title="Add Client"
+        footer={<>
+          <DSButton variant="ghost" onClick={()=>setShowAdd(false)}>Cancel</DSButton>
+          <DSButton variant="primary" icon={Plus} disabled={!nC.name} onClick={add}>Add Client</DSButton>
+        </>}>
+        <div className="flex flex-col gap-3">
+          <DSForm.Field>
+            <DSForm.Label required>Company Name</DSForm.Label>
+            <DSInput value={nC.name} onChange={e=>setNC(c=>({...c,name:e.target.value}))}/>
+          </DSForm.Field>
+          <DSForm.Row>
+            <DSForm.Field>
+              <DSForm.Label>Region</DSForm.Label>
+              <DSInput value={nC.region} onChange={e=>setNC(c=>({...c,region:e.target.value}))}/>
+            </DSForm.Field>
+            <DSForm.Field>
+              <DSForm.Label>Email</DSForm.Label>
+              <DSInput value={nC.email} onChange={e=>setNC(c=>({...c,email:e.target.value}))}/>
+            </DSForm.Field>
+          </DSForm.Row>
+          <DSForm.Field>
+            <DSForm.Label>Notes</DSForm.Label>
+            <DSInput value={nC.notes} onChange={e=>setNC(c=>({...c,notes:e.target.value}))}/>
+          </DSForm.Field>
+        </div>
+      </DSModal>
 
       {/* New Action Modal */}
-      {showNewAction && safeClient && (
-        <Modal title={`New Action · ${safeClient.name}`} onClose={()=>{ setShowNewAction(false); setNewAction({desc:"",type:"Invoice"}); }}>
-          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-            <div>
-              <label style={s.label}>Type</label>
-              <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:4 }}>
+      {safeClient && (
+        <DSModal open={showNewAction} onClose={()=>{ setShowNewAction(false); setNewAction({desc:"",type:"Invoice"}); }} title={`New Action · ${safeClient.name}`}
+          footer={<>
+            <DSButton variant="ghost" onClick={()=>{ setShowNewAction(false); setNewAction({desc:"",type:"Invoice"}); }}>Cancel</DSButton>
+            <DSButton variant="primary" icon={Plus} disabled={!newAction.desc.trim()} onClick={()=>{
+              if(!newAction.desc.trim()) return;
+              addRequest(safeClient.id,{ ts:new Date().toISOString(), type:newAction.type, employee:newAction.desc, status:"Pending" });
+              setShowNewAction(false);
+              setNewAction({desc:"",type:"Invoice"});
+              setDetailTab("actions");
+            }}>Add Action</DSButton>
+          </>}>
+          <div className="flex flex-col gap-3.5">
+            <DSForm.Field>
+              <DSForm.Label>Type</DSForm.Label>
+              <div className="flex flex-wrap gap-1.5 mt-1">
                 {["Invoice","Contract Update","Approval","Payment","Other"].map(t=>(
-                  <button key={t} onClick={()=>setNewAction(a=>({...a,type:t}))} style={{ padding:"5px 12px", borderRadius:20, fontSize:11, fontWeight:700, cursor:"pointer", border:`1.5px solid ${newAction.type===t?M:"#e5e7eb"}`, backgroundColor:newAction.type===t?`${M}12`:"white", color:newAction.type===t?M:"#6b7280" }}>{t}</button>
+                  <button key={t} onClick={()=>setNewAction(a=>({...a,type:t}))} className={`px-3 py-1 rounded-full text-[11px] font-bold cursor-pointer border transition-colors duration-150 ${newAction.type===t?"border-primary bg-primary-pale text-primary":"border-stone-200 bg-white text-stone-500 [@media(hover:hover)]:hover:border-stone-400"}`}>{t}</button>
                 ))}
               </div>
-            </div>
-            <div>
-              <label style={s.label}>Description</label>
+            </DSForm.Field>
+            <DSForm.Field>
+              <DSForm.Label>Description</DSForm.Label>
               <textarea
                 autoFocus
                 value={newAction.desc}
                 onChange={e=>setNewAction(a=>({...a,desc:e.target.value}))}
                 placeholder="Describe the action…"
                 rows={3}
-                style={{ ...s.inp, resize:"vertical", marginTop:4 }}
+                className="w-full font-sans text-sm rounded-sm border border-stone-200 bg-white px-3 py-2 outline-none resize-y focus:border-primary focus:ring-2 focus:ring-primary-pale mt-1"
               />
-            </div>
-            <div style={{ display:"flex", gap:10, marginTop:4 }}>
-              <Btn variant="ghost" onClick={()=>{ setShowNewAction(false); setNewAction({desc:"",type:"Invoice"}); }} full>Cancel</Btn>
-              <Btn onClick={()=>{
-                if(!newAction.desc.trim()) return;
-                addRequest(safeClient.id,{ ts:new Date().toISOString(), type:newAction.type, employee:newAction.desc, status:"Pending" });
-                setShowNewAction(false);
-                setNewAction({desc:"",type:"Invoice"});
-                setDetailTab("actions");
-              }} disabled={!newAction.desc.trim()} full style={{ backgroundColor:M, color:"white" }}>
-                <Plus size={14}/> Add Action
-              </Btn>
-            </div>
+            </DSForm.Field>
           </div>
-        </Modal>
+        </DSModal>
       )}
 
       {/* Delete Confirmation Modal */}
-      {confirmDeleteId && (
-        <Modal title="Delete Client?" onClose={()=>setConfirmDeleteId(null)}>
-          <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-            <p style={{ margin:0, fontSize:13, color:"#374151" }}>
-              هتتحذف بيانات الـ client دي نهائياً. مش ممكن تتراجعي.
-            </p>
-            <div style={{ display:"flex", gap:10 }}>
-              <Btn variant="ghost" onClick={()=>setConfirmDeleteId(null)} full>Cancel</Btn>
-              <Btn onClick={()=>deleteC(confirmDeleteId)} full style={{ backgroundColor:"#dc2626", color:"white" }}>
-                Delete
-              </Btn>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <DSModal open={!!confirmDeleteId} onClose={()=>setConfirmDeleteId(null)} title="Delete Client?"
+        footer={<>
+          <DSButton variant="ghost" onClick={()=>setConfirmDeleteId(null)}>Cancel</DSButton>
+          <DSButton variant="danger" onClick={()=>deleteC(confirmDeleteId)}>Delete</DSButton>
+        </>}>
+        <p className="m-0 text-[13px] text-stone-700">
+          هتتحذف بيانات الـ client دي نهائياً. مش ممكن تتراجعي.
+        </p>
+      </DSModal>
     </div>
   );
 }
