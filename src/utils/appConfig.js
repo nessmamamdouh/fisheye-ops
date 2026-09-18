@@ -324,9 +324,13 @@ export function getLumpSumPositionMargin(emp) {
     if (matched) { effectiveDeal = d; break; }
   }
   if (!effectiveDeal) effectiveDeal = deals[0];
-  if (!effectiveDeal || effectiveDeal.billingModel !== "lump_sum" || effectiveDeal.lumpSumStructure !== "positions") {
-    return null;
-  }
+  if (!effectiveDeal || effectiveDeal.billingModel !== "lump_sum") return null;
+  // lumpSumStructure defaults to "positions" in the Settings UI (see
+  // LumpSumDealFields) and is only ever written to the saved deal when the
+  // user actively switches the dropdown -- so an unset value here still
+  // means "positions", exactly like the UI shows it.
+  const structure = effectiveDeal.lumpSumStructure || "positions";
+  if (structure !== "positions") return null;
 
   const rates = effectiveDeal.positionRates || [];
   const posNorm = (emp?.position || "").trim().toLowerCase();
