@@ -3652,8 +3652,15 @@ const DEF_CLIENTS=[
   {id:"C-04",name:"Riva Engineering 2",region:"Riyadh",email:"ops@riva.sa",status:"active",contacts:[{name:"Mohammed CEO",role:"Executive",phone:"+966501111111"}],notes:"CEO projects",requestLog:[]},
 ];
 
-function ClientHub({ employees, clients, saveClients }) {
+function ClientHub({ employees, clients, saveClients, partners }) {
   if (!clients) clients = [];
+  // Structured partner names from the Partner Hub (People > Partners) --
+  // offered as suggestions for the Lump Sum Position Rates "Partner" field
+  // so a rate row can link back to an existing partner instead of a loose
+  // spelling. Free text still works for a partner not yet in the Hub.
+  const partnerNameOptions = [...new Set(
+    (partners || []).filter(p => p.status !== "archived").map(p => (p.name || "").trim()).filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b));
   const [showAdd,setShowAdd]=useState(false);
   const [filter,setFilter]=useState("active");
   const [search,setSearch]=useState("");
@@ -5034,7 +5041,7 @@ function winningDealIndexForProject(deals, project) {
 // exact deal would apply to -- used to show a live "here's what this margin
 // actually comes out to" preview, since the same percentage means a
 // different SAR amount for every employee's own salary.
-function DealFields({ deal, onChange, previewEmployees, positionOptions }) {
+function DealFields({ deal, onChange, previewEmployees, positionOptions, partnerOptions }) {
   // "per_employee" was retired as its own option in the dropdown -- Cost
   // Plus renders the exact same fields/logic, so any deal that isn't
   // explicitly Lump Sum (including old deals saved before this change, with
@@ -5051,7 +5058,7 @@ function DealFields({ deal, onChange, previewEmployees, positionOptions }) {
         </select>
       </div>
 
-      {billingModel === "lump_sum" && <LumpSumDealFields deal={deal} onChange={onChange} positionOptions={positionOptions} />}
+      {billingModel === "lump_sum" && <LumpSumDealFields deal={deal} onChange={onChange} positionOptions={positionOptions} partnerOptions={partnerOptions} />}
       {billingModel === "cost_plus" && <CostPlusDealFields deal={deal} onChange={onChange} previewEmployees={previewEmployees} />}
 
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
@@ -5204,7 +5211,7 @@ function PerEmployeeDealFields({ deal, onChange, previewEmployees }) {
 // only know how to compute a margin off one employee's own salary. It's
 // tracked and totalled here so it's visible and auditable, but folding it
 // into the company-wide profit rollups in the Finance module is a separate step.
-function LumpSumDealFields({ deal, onChange, positionOptions }) {
+function LumpSumDealFields({ deal, onChange, positionOptions, partnerOptions }) {
   const structure = deal?.lumpSumStructure || "positions";
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const rates = deal?.positionRates || [];
@@ -5278,6 +5285,7 @@ function LumpSumDealFields({ deal, onChange, positionOptions }) {
                 <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                   <label style={{ fontSize: 9.5, fontWeight: 700, color: "#6b7280" }}>Partner (optional)</label>
                   <input value={r.partnerName || ""} onChange={e => updateRate(r.id, { partnerName: e.target.value })} placeholder="e.g. Baraa Al-Memar"
+                    list={partnerOptions ? `ls-partners-${deal?.id || "x"}` : undefined}
                     style={{ padding: "5px 7px", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, width: 130 }}/>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -5297,6 +5305,11 @@ function LumpSumDealFields({ deal, onChange, positionOptions }) {
             {positionOptions && (
               <datalist id="ls-positions">
                 {positionOptions.map(p => <option key={p} value={p} />)}
+              </datalist>
+            )}
+            {partnerOptions && (
+              <datalist id={`ls-partners-${deal?.id || "x"}`}>
+                {partnerOptions.map(p => <option key={p} value={p} />)}
               </datalist>
             )}
             <Btn onClick={addRate} variant="ghost" style={{ ...s.btnSm, alignSelf: "flex-start" }}><Plus size={12}/> Add Position Rate</Btn>
@@ -5747,7 +5760,7 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                       <p style={{ margin: 0, fontSize: 10.5, fontWeight: 700, color: MD, textTransform: "uppercase", letterSpacing: "0.05em" }}>Default margin for all of this client's projects</p>
                       <DealFields deal={deals[0]} onChange={patch => updateDeal(row.id, deals[0].id, patch)}
                         previewEmployees={dealPreviewPool.filter(e => winningDealIndexForProject(deals, e.project) === 0)}
-                        positionOptions={positionOptions} />
+                        positionOptions={positionOptions} partnerOptions={partnerNameOptions} />
                     </div>
 
                     {deals.slice(1).map((d, dIdx) => (
@@ -5760,7 +5773,7 @@ function ConfigurationPanel({ employees, setEmployees, clients, saveClients }) {
                         </div>
                         <DealFields deal={d} onChange={patch => updateDeal(row.id, d.id, patch)}
                           previewEmployees={dealPreviewPool.filter(e => winningDealIndexForProject(deals, e.project) === dIdx + 1)}
-                          positionOptions={positionOptions} />
+                          positionOptions={positionOptions} partnerOptions={partnerNameOptions} />
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                           {(d.projectMatches || []).map(pm => (
                             <div key={pm.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -5993,8 +6006,8 @@ function SettingsView({
       )}
       {tab==="logic"&&(
         <Card style={{padding:"4px 20px"}}>
-          {["Pending = workflow NOT in [Agreement Signed, Complete]","Morning report excludes: Expired, Resigned, Combuzz HR","PO Alert: Sela only · Empty PO field","Expiry: Rolling 30-day window","Finance: Excludes resigned always. Excludes expired UNLESS Sela with no PO","Profit Direct: effective margin % × Total Package (employee's own value if set, else the client's Deal — see Clients & Deals) — or fixed SAR if type = fixed","Profit Partner: Net = Client Price − Partner Cost (each can be % of Total Package or fixed SAR)","SAR Discrepancy: Only shown after uploading partner invoice CSV"].map((r,i)=>(
-            <div key={r} style={{display:"flex",gap:14,padding:"14px 0",borderBottom:i<7?"1px solid #f3f4f6":"none"}}>
+          {["Pending = workflow NOT in [Agreement Signed, Complete]","Morning report excludes: Expired, Resigned, Combuzz HR","PO Alert: Sela only · Empty PO field","Expiry: Rolling 30-day window","Finance: Excludes resigned always. Excludes expired UNLESS Sela with no PO","Profit Direct: effective margin % × Total Package (employee's own value if set, else the client's Deal — see Clients & Deals) — or fixed SAR if type = fixed","Profit Partner: Net = Client Price − Partner Cost (each can be % of Total Package or fixed SAR)","SAR Discrepancy: Only shown after uploading partner invoice CSV","Lump Sum (Rate-per-position deals): revenue & margin come from the Monthly Timesheet Hours ledger (real hours logged × each position's rate) whenever a month has logged hours — falls back to Total Package ÷ contract span only for months with no hours logged yet. Computed per deal, not split per employee. Read live by the CRM's \"Live from Fisheye Ops\" Financial Overview widget."].map((r,i)=>(
+            <div key={r} style={{display:"flex",gap:14,padding:"14px 0",borderBottom:i<8?"1px solid #f3f4f6":"none"}}>
               <span style={{fontFamily:"monospace",fontSize:12,fontWeight:700,color:M,flexShrink:0,width:20}}>{String(i+1).padStart(2,"0")}</span>
               <p style={{fontSize:12.5,color:"#374151",margin:0,lineHeight:1.6}}>{r}</p>
             </div>
@@ -7365,7 +7378,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
 
           {/* ── ENTITY VIEWS ── */}
           {nav==="workforce"  && <WorkforceView employees={employees} setEmployees={setEmployees} partners={partners} clients={clients} exportCSV={exportCSV} pendingOpenEmpId={pendingOpenEmpId} onPendingOpenHandled={() => setPendingOpenEmpId(null)}/>}
-          {nav==="clients"    && <ClientHub employees={employees} clients={clients} saveClients={saveClients}/>}
+          {nav==="clients"    && <ClientHub employees={employees} clients={clients} saveClients={saveClients} partners={partners}/>}
           {nav==="partners"   && <PartnerHub employees={employees} partners={partners} savePartners={savePartners}/>}
 
           {/* ── FINANCE (consolidated: Payroll · Billing · Settlements) ── */}
