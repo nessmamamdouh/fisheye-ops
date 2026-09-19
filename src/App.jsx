@@ -3745,7 +3745,7 @@ function ClientHub({ employees, clients, saveClients, onNavigate }) {
   } : null;
   const selEmps=safeClient?employees.filter(e=>sameClientName(e.client,safeClient.name)&&!isExcluded(e)):[];
   const selHealth=safeClient ? (clientStats[safeClient.id]?.health || calcClientHealth(safeClient.name,employees)) : null;
-  const isSela=safeClient?.name==="Sela";
+  const isSela=sameClientName(safeClient?.name,"Sela"); // "Sela" (config/coded default) vs "SELA" (the real client profile name) — see sameClientName note above
   // For PO tab: include expired (can't invoice without PO) — exclude only resigned
   const selEmpsForPO=safeClient?employees.filter(e=>sameClientName(e.client,safeClient.name)&&!isResignedEmp(e)):[];
   const missingPO=selEmpsForPO.filter(hasMissingPO);
@@ -3758,7 +3758,12 @@ function ClientHub({ employees, clients, saveClients, onNavigate }) {
   // Settings itself uses via dealsFor()) — never editable from here, so
   // there's only ever one place a deal can drift from what's actually saved.
   const clientDeals=useMemo(()=>{
-    const meta=CLIENT_META[safeClient?.name]||{};
+    // CLIENT_META keys come from Settings -> Clients & Deals config, which can carry an
+    // older/differently-cased name (e.g. "Sela") than the client's real profile name
+    // (e.g. "SELA") — same drift sameClientName() exists for above. A plain CLIENT_META[name]
+    // lookup silently misses the saved deal whenever the two disagree, so match the same way.
+    const metaKey=Object.keys(CLIENT_META).find(k=>sameClientName(k,safeClient?.name));
+    const meta=(metaKey?CLIENT_META[metaKey]:CLIENT_META[safeClient?.name])||{};
     return (meta.deals&&meta.deals.length) ? meta.deals : [{ id:`deal-${safeClient?.id}-base`, ...(meta.dealTerms||{}) }];
   },[safeClient]);
   const [portalCopied,setPortalCopied]=useState(false);
@@ -4925,7 +4930,7 @@ function NotificationsSettings({ employees }) {
     // Sela is the one client where an empty PO field is a real compliance
     // flag (see Report Logic reference) -- surface it here too instead of
     // relying on someone remembering to filter for it in the table.
-    const noPOSela = employees.filter(e => !isExcluded(e) && e.client === "Sela" && !(e.poNumbers && String(e.poNumbers).trim()));
+    const noPOSela = employees.filter(e => !isExcluded(e) && sameClientName(e.client, "Sela") && !(e.poNumbers && String(e.poNumbers).trim()));
 
     if (!expiring.length && !noDeal.length && !noPOSela.length) return null;
 
@@ -4972,7 +4977,7 @@ function NotificationsSettings({ employees }) {
   const expCount    = employees.filter(e => !isExcluded(e) && daysUntil(e.endDate) >= 0 && daysUntil(e.endDate) <= 30).length;
   const urgCount    = employees.filter(e => !isExcluded(e) && daysUntil(e.endDate) >= 0 && daysUntil(e.endDate) <= 7).length;
   const noDealCount = employees.filter(e => !isExcluded(e) && e.profitMode === "direct" && getEffectiveMargin(e).source === "none").length;
-  const noPOCount   = employees.filter(e => !isExcluded(e) && e.client === "Sela" && !(e.poNumbers && String(e.poNumbers).trim())).length;
+  const noPOCount   = employees.filter(e => !isExcluded(e) && sameClientName(e.client, "Sela") && !(e.poNumbers && String(e.poNumbers).trim())).length;
   const lastDigest  = localStorage.getItem('fisheye_last_digest_date');
 
   return (
