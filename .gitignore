@@ -36,3 +36,7 @@ logs/
 # Playwright test artifacts (regenerated locally on each run)
 test-results/
 playwright-report/
+
+# scratch/output files, not part of the app
+Claude outputs/
+dist_test_*/
