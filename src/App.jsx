@@ -3667,7 +3667,7 @@ const DEF_CLIENTS=[
   {id:"C-04",name:"Riva Engineering 2",region:"Riyadh",email:"ops@riva.sa",status:"active",contacts:[{name:"Mohammed CEO",role:"Executive",phone:"+966501111111"}],notes:"CEO projects",requestLog:[]},
 ];
 
-function ClientHub({ employees, clients, saveClients }) {
+function ClientHub({ employees, clients, saveClients, onNavigate }) {
   if (!clients) clients = [];
   const [showAdd,setShowAdd]=useState(false);
   const [filter,setFilter]=useState("active");
@@ -3682,7 +3682,6 @@ function ClientHub({ employees, clients, saveClients }) {
   const [actionsFilter,setActionsFilter]=useState("pending");
   const [notesVal,setNotesVal]=useState("");
   const notesTimer=useRef(null);
-  const [showAllProjects,setShowAllProjects]=useState(false);
   const [confirmDeleteId,setConfirmDeleteId]=useState(null);
 
   const save=c=>{ if(saveClients) saveClients(c); else { localStorage.setItem("fisheyeClients_v1",JSON.stringify(c)); } };
@@ -3754,6 +3753,20 @@ function ClientHub({ employees, clients, saveClients }) {
   const byProject=useMemo(()=>{const m={};selEmps.forEach(e=>{const p=e.project||"Unassigned";if(!m[p])m[p]=[];m[p].push(e);});return Object.entries(m).sort((a,b)=>b[1].length-a[1].length);},[selEmps]);
   const noMarginEmps=useMemo(()=>selEmps.filter(hasNoMarginData),[selEmps]);
   const pendingActions=safeClient?safeClient.requestLog.map((r,i)=>({...r,i,dw:Math.floor((Date.now()-new Date(r.ts))/864e5)})).filter(r=>r.status==="Pending").sort((a,b)=>b.dw-a.dw):[];
+  // Read-only view of this client's Deal Terms, exactly as configured in
+  // Settings → Clients & Deals (same CLIENT_META[name].deals shape/fallback
+  // Settings itself uses via dealsFor()) — never editable from here, so
+  // there's only ever one place a deal can drift from what's actually saved.
+  const clientDeals=useMemo(()=>{
+    const meta=CLIENT_META[safeClient?.name]||{};
+    return (meta.deals&&meta.deals.length) ? meta.deals : [{ id:`deal-${safeClient?.id}-base`, ...(meta.dealTerms||{}) }];
+  },[safeClient]);
+  const [portalCopied,setPortalCopied]=useState(false);
+  const copyPortalLink=()=>{
+    if(!safeClient) return;
+    const url=`${window.location.origin}/client/${encodeURIComponent(safeClient.name)}`;
+    navigator.clipboard?.writeText(url).then(()=>{ setPortalCopied(true); setTimeout(()=>setPortalCopied(false),2000); });
+  };
 
   // Sync local notes value when selected client changes
   useEffect(() => { setNotesVal(safeClient?.notes || ""); }, [openId]);
@@ -3772,6 +3785,7 @@ function ClientHub({ employees, clients, saveClients }) {
     {k:"projects", l:"Projects"},
     ...(isSela?[{k:"po",l:`PO${missingPO.length?` (${missingPO.length})`:""}`}]:[]),
     {k:"contacts", l:"Contacts"},
+    {k:"dealterms", l:"Deal Terms"},
   ];
 
   return (
@@ -3934,6 +3948,7 @@ function ClientHub({ employees, clients, saveClients }) {
                   </>
                 ) : (
                   <>
+                    <DSButton size="sm" variant="ghost" onClick={copyPortalLink}>{portalCopied?"✓ Copied":"Copy portal link"}</DSButton>
                     <DSButton size="sm" variant="ghost" onClick={()=>{ setInfoForm({name:safeClient.name||"",region:safeClient.region||"",email:safeClient.email||"",notes:safeClient.notes||""}); setEditingInfo(true); }}>Edit</DSButton>
                     <DSButton size="sm" variant="secondary" onClick={()=>safeClient.status==="archived"?unarchive(openId):archive(openId)}>
                       {safeClient.status==="archived" ? "Restore" : "Archive"}
@@ -4014,27 +4029,16 @@ function ClientHub({ employees, clients, saveClients }) {
                     className="w-full border-none bg-transparent text-xs text-stone-700 leading-relaxed resize-y outline-none font-sans p-0 m-0"
                   />
                 </div>
-                {(showAllProjects ? byProject : byProject.slice(0,4)).map(([prj,emps])=>(
-                  <div key={prj} className="px-3.5 py-2.5 rounded-lg border border-stone-100 bg-stone-50">
-                    <div className="flex justify-between mb-1.5">
-                      <span className="text-xs font-bold text-stone-700">{prj}</span>
-                      <DSBadge color="primary">{emps.length}</DSBadge>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {emps.slice(0,6).map(e=>{
-                        const d=daysUntil(e.endDate);
-                        const urg=d>=0&&d<=14;
-                        return <span key={e._id} className={`text-[11px] px-2 py-0.5 rounded-full border ${urg?"bg-warning-100/60 border-warning-100 text-warning-800":"bg-white border-stone-200 text-stone-700"}`}>{e.name}{urg?` ⚠${d}d`:""}</span>;
-                      })}
-                      {emps.length>6 && <span className="text-[11px] text-stone-400">+{emps.length-6}</span>}
-                    </div>
+                {byProject.length===0 ? (
+                  <p className="text-center text-stone-400 py-8 text-sm">No employees assigned.</p>
+                ) : (
+                  // Full per-project breakdown lives in the Projects tab (below) — this used to
+                  // repeat the same cards here too, which just meant scrolling past the same
+                  // information twice on the way to Notes/Deal Terms. One line + a jump link instead.
+                  <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-lg border border-stone-100 bg-stone-50">
+                    <span className="text-xs text-stone-600">{byProject.length} project{byProject.length!==1?"s":""} · {selEmps.length} employee{selEmps.length!==1?"s":""}</span>
+                    <button onClick={()=>setDetailTab("projects")} className="text-[11px] font-bold text-primary bg-transparent border-none cursor-pointer [@media(hover:hover)]:hover:underline">Full breakdown in Projects →</button>
                   </div>
-                ))}
-                {byProject.length===0 && <p className="text-center text-stone-400 py-8 text-sm">No employees assigned.</p>}
-                {byProject.length>4 && (
-                  <button onClick={()=>setShowAllProjects(v=>!v)} className="text-[11px] font-bold text-primary bg-transparent border-none cursor-pointer py-1 text-left [@media(hover:hover)]:hover:underline">
-                    {showAllProjects ? "▲ Show less" : `▼ Show all ${byProject.length} projects`}
-                  </button>
                 )}
               </div>
             )}
@@ -4181,6 +4185,46 @@ function ClientHub({ employees, clients, saveClients }) {
                     </button>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* DEAL TERMS — read-only mirror of Settings → Clients & Deals. Never
+                editable from here: one place to change a rate (Settings), one
+                place to glance at it without leaving the client (here). */}
+            {detailTab==="dealterms" && (
+              <div className="flex flex-col gap-2.5">
+                <div className="px-3.5 py-2.5 rounded-lg bg-stone-100 border border-stone-200">
+                  <p className="text-[11px] text-stone-500 m-0 leading-relaxed">
+                    View only — configured in <b>Settings → Clients &amp; Deals</b>. An employee's own typed-in margin always overrides these; partner cost/bonus details stay confidential in each employee's own record, unchanged.
+                  </p>
+                </div>
+                {clientDeals.map((d,i)=>{
+                  const isLumpSum = d.billingModel==="lump_sum";
+                  const summary = isLumpSum
+                    ? (d.lumpSumStructure==="flat"
+                        ? (Number(d.lumpSumAmount)||0) ? `SAR ${Math.round(Number(d.lumpSumAmount)).toLocaleString()} ${d.lumpSumPeriod==="one_time"?"(one-time)":"/ month"}` : "No amount set"
+                        : "Position-based rates (see Settings for the full table)")
+                    : (computeDealMargin(d,0).display || "No margin set");
+                  return (
+                    <div key={d.id||i} className="px-3.5 py-3 rounded-xl border border-stone-100 bg-stone-50">
+                      <div className="flex justify-between items-center mb-1.5">
+                        <span className="text-xs font-bold text-stone-700">{i===0 ? "Default — all projects" : "Project-specific"}</span>
+                        <DSBadge color={isLumpSum?"info":"primary"}>{isLumpSum?"Lump Sum":`Cost Plus${d.serviceType?` · ${d.serviceType}`:""}`}</DSBadge>
+                      </div>
+                      <div className="text-[13px] font-semibold text-stone-800 font-mono">{summary}</div>
+                      {i>0 && (d.projectMatches||[]).length>0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {d.projectMatches.map(pm=>(
+                            <span key={pm.id} className="text-[10px] font-mono font-semibold text-primary bg-primary-pale px-2 py-0.5 rounded-full">{pm.matchType==="exact"?"=":"⊃"} {pm.value||"—"}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {onNavigate && (
+                  <button onClick={()=>onNavigate("settings")} className="text-[11px] font-bold text-primary bg-transparent border-none cursor-pointer self-start [@media(hover:hover)]:hover:underline">Edit in Settings →</button>
+                )}
               </div>
             )}
           </div>
@@ -7384,7 +7428,7 @@ function FisheyeOpsPro({ employees, setEmployees }) {
 
           {/* ── ENTITY VIEWS ── */}
           {nav==="workforce"  && <WorkforceView employees={employees} setEmployees={setEmployees} partners={partners} clients={clients} exportCSV={exportCSV} pendingOpenEmpId={pendingOpenEmpId} onPendingOpenHandled={() => setPendingOpenEmpId(null)}/>}
-          {nav==="clients"    && <ClientHub employees={employees} clients={clients} saveClients={saveClients}/>}
+          {nav==="clients"    && <ClientHub employees={employees} clients={clients} saveClients={saveClients} onNavigate={k => { setNav(k); localStorage.setItem("fisheye_nav", k); }}/>}
           {nav==="partners"   && <PartnerHub employees={employees} partners={partners} savePartners={savePartners}/>}
 
           {/* ── FINANCE (consolidated: Payroll · Billing · Settlements) ── */}
