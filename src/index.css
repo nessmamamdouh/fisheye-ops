@@ -525,7 +525,7 @@ body {
 .fe-tab:hover { color: var(--brand) !important; }
 
 /* ─── Content area page transition ──────────────────────────────────── */
-.fe-page { animation: fe-fade-up 200ms var(--ease-out) both; }
+.fe-page { animation: fe-fade-up 200ms var(--ease-out); }
 
 /* ─── Notification badge ─────────────────────────────────────────────── */
 .fe-notif-badge {
