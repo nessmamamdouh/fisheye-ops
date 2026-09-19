@@ -93,7 +93,7 @@ const WORKFLOW_OPTS = [
   "Docs Requested","Docs Received","Docs Received +","Agreement Sent",
   "Agreement Signed","Pending","Complete","Rejected","Qiwa Submitted","Qiwa Approved", "Onboarding", "Iqama Transferred"
 ];
-const STATUS_OPTS = ["active","new","renewal","transfer","expired","resigned","منتهي","مستقيل"];
+const STATUS_OPTS = ["active","new","renewal","transfer","expired","resigned"];
 const QIWA_FIELDS = ["Name","Project","Job Title","Contract Type","Iqama","Sponsor","Start Date","Mobile","Sex","Nationality","D.O.B","IBAN","Email","Bank","Period","Probation","Vacation Days","Basic","HRA","TPT","Total Salary"];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2641,90 +2641,91 @@ const submitRenew = async () => {
       {/* Bulk Modal */}
       
       {showBulk && (
-        <Modal title={`Bulk Action · ${selected.length} selected`} onClose={() => setShowBulk(false)}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-{/* Assign Partner */}
-            <div style={{ padding: 16, borderRadius: 12, border: "1px solid #e5e7eb", backgroundColor: "#f9fafb" }}>
-              <p style={{ fontWeight: 700, fontSize: 13, margin: "0 0 12px", display: "flex", alignItems: "center", gap: 6 }}>
-                <Building2 size={14} style={{ color: M }} /> Assign to Partner
+        <Modal title={`Bulk Action · ${selected.length} selected`} subtitle="Applies to every selected employee at once" onClose={() => setShowBulk(false)} wide>
+          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+{/* ── Assignment ── */}
+            <div style={{ padding: "16px 18px", borderRadius: 14, border: "1px solid #e5e7eb", backgroundColor: "#fafafa" }}>
+              <p style={{ fontWeight: 700, fontSize: 12, letterSpacing: "0.04em", textTransform: "uppercase", color: MD, margin: "0 0 4px", display: "flex", alignItems: "center", gap: 7 }}>
+                <Building2 size={13} style={{ color: M }} /> Assignment
               </p>
-              <div style={{ display: "flex", gap: 8 }}>
-                <select 
-  value={bulkPartner} 
-  onChange={e => setBulkPartner(e.target.value)} 
-  style={{ ...s.sel, flex: 1 }}
->
-  <option value="">— Select Partner —</option>
-  {partners.map(p => (
-    <option key={p.id} value={p.name}> {/* التعديل هنا: نرسل الاسم name وليس الـ id */}
-      {p.name}
-    </option>
-  ))}
-</select>
+
+              {/* Partner */}
+              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", borderBottom: "1px solid #eeeeee" }}>
+                <span style={{ width: 96, flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: "#4b5563" }}>Partner</span>
+                <select
+                  value={bulkPartner}
+                  onChange={e => setBulkPartner(e.target.value)}
+                  className="fe-select"
+                  style={{ ...s.sel, flex: 1 }}
+                >
+                  <option value="">— Select Partner —</option>
+                  {partners.map(p => (
+                    <option key={p.id} value={p.name}> {/* التعديل هنا: نرسل الاسم name وليس الـ id */}
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
                 <Btn disabled={!bulkPartner} onClick={() => bulkUpd("partnerAssigned", bulkPartner)} style={{
                   ...s.btnSm, backgroundColor: bulkPartner ? M : "#e5e7eb",
-                  color: bulkPartner ? "white" : "#9ca3af", border: "none", opacity: 1,
+                  color: bulkPartner ? "white" : "#9ca3af", border: "none", opacity: 1, flexShrink: 0,
                 }}>
                   <Check size={12} /> Assign
                 </Btn>
               </div>
+
+              {/* Client */}
+              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", borderBottom: "1px solid #eeeeee" }}>
+                <span style={{ width: 96, flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: "#4b5563" }}>Client</span>
+                <select
+                  value={bulkClient}
+                  onChange={e => setBulkClient(e.target.value)}
+                  className="fe-select"
+                  style={{ ...s.sel, flex: 1 }}
+                >
+                  <option value="">— Select Client —</option>
+                  {clientsList.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <Btn disabled={!bulkClient} onClick={() => { bulkUpd("client", bulkClient); setBulkClient(""); }} style={{
+                  ...s.btnSm, backgroundColor: bulkClient ? M : "#e5e7eb",
+                  color: bulkClient ? "white" : "#9ca3af", border: "none", opacity: 1, flexShrink: 0,
+                }}>
+                  <Check size={12} /> Apply
+                </Btn>
+              </div>
+
+              {/* Project */}
+              <div style={{ padding: "12px 0 4px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <span style={{ width: 96, flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: "#4b5563" }}>Project</span>
+                  <input
+                    list="fe-bulk-project-options"
+                    value={bulkProject}
+                    onChange={e => setBulkProject(e.target.value)}
+                    placeholder="اكتبي اسم البروجكت..."
+                    className="fe-input"
+                    style={{ ...s.inp, flex: 1 }}
+                  />
+                  <datalist id="fe-bulk-project-options">
+                    {projects.filter(Boolean).map(p => <option key={p} value={p} />)}
+                  </datalist>
+                  <Btn disabled={!bulkProject.trim()} onClick={() => { bulkUpd("project", bulkProject.trim()); setBulkProject(""); }} style={{
+                    ...s.btnSm, backgroundColor: bulkProject.trim() ? M : "#e5e7eb",
+                    color: bulkProject.trim() ? "white" : "#9ca3af", border: "none", opacity: 1, flexShrink: 0,
+                  }}>
+                    <Check size={12} /> Apply
+                  </Btn>
+                </div>
+                <p style={{ fontSize: 10.5, color: "#9ca3af", margin: "6px 0 0", paddingLeft: 110 }}>
+                  بتغيّر حقل الـ Project بس — مش الـ Client. لو عايزة تغيّري العميل كمان, استخدمي Client فوق.
+                </p>
+              </div>
             </div>
-            {/* Change Client */}
-<div style={{ padding: 16, borderRadius: 12, border: "1px solid #e5e7eb", backgroundColor: "#f9fafb" }}>
-  <p style={{ fontWeight: 700, fontSize: 13, margin: "0 0 12px", display: "flex", alignItems: "center", gap: 6 }}>
-    <Building2 size={14} style={{ color: M }} /> Change Client
-  </p>
-  <div style={{ display: "flex", gap: 8 }}>
-    <select
-      value={bulkClient}
-      onChange={e => setBulkClient(e.target.value)}
-      style={{ ...s.sel, flex: 1 }}
-    >
-      <option value="">— Select Client —</option>
-      {clientsList.map(c => (
-        <option key={c} value={c}>{c}</option>
-      ))}
-    </select>
-    <Btn disabled={!bulkClient} onClick={() => { bulkUpd("client", bulkClient); setBulkClient(""); }} style={{
-      ...s.btnSm, backgroundColor: bulkClient ? M : "#e5e7eb",
-      color: bulkClient ? "white" : "#9ca3af", border: "none", opacity: 1,
-    }}>
-      <Check size={12} /> Apply
-    </Btn>
-  </div>
-</div>
 
-            {/* Change Project */}
-<div style={{ padding: 16, borderRadius: 12, border: "1px solid #e5e7eb", backgroundColor: "#f9fafb" }}>
-  <p style={{ fontWeight: 700, fontSize: 13, margin: "0 0 12px", display: "flex", alignItems: "center", gap: 6 }}>
-    <Briefcase size={14} style={{ color: M }} /> Change Project
-  </p>
-  <div style={{ display: "flex", gap: 8 }}>
-    <input
-      list="fe-bulk-project-options"
-      value={bulkProject}
-      onChange={e => setBulkProject(e.target.value)}
-      placeholder="اكتبي اسم البروجكت..."
-      style={{ ...s.inp, flex: 1 }}
-    />
-    <datalist id="fe-bulk-project-options">
-      {projects.filter(Boolean).map(p => <option key={p} value={p} />)}
-    </datalist>
-    <Btn disabled={!bulkProject.trim()} onClick={() => { bulkUpd("project", bulkProject.trim()); setBulkProject(""); }} style={{
-      ...s.btnSm, backgroundColor: bulkProject.trim() ? M : "#e5e7eb",
-      color: bulkProject.trim() ? "white" : "#9ca3af", border: "none", opacity: 1,
-    }}>
-      <Check size={12} /> Apply
-    </Btn>
-  </div>
-  <p style={{ fontSize: 10, color: "#9ca3af", margin: "6px 0 0" }}>
-    بتغيّر حقل الـ Project بس — مش الـ Client. لو عايزة تغيّري العميل كمان, استخدمي Change Client فوق.
-  </p>
-</div>
-
-            {/* GOSI Option */}
-            <div style={{ padding: 16, borderRadius: 12, border: "1px solid #fde68a", backgroundColor: "#fffbeb" }}>
-              <p style={{ fontWeight: 700, fontSize: 13, margin: "0 0 12px", display: "flex", alignItems: "center", gap: 6, color: "#92400e" }}>
+{/* ── Compliance ── */}
+            <div style={{ padding: "16px 18px", borderRadius: 14, border: `1px solid ${WF_TOKENS.warningSolid}30`, backgroundColor: WF_TOKENS.warningBg }}>
+              <p style={{ fontWeight: 700, fontSize: 12, letterSpacing: "0.04em", textTransform: "uppercase", margin: "0 0 12px", display: "flex", alignItems: "center", gap: 7, color: WF_TOKENS.warning }}>
                 🏛 GOSI Registration
               </p>
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
@@ -2743,57 +2744,57 @@ const submitRenew = async () => {
                   <option value="Not Registered to GOSI">Not Registered to GOSI</option>
                 </select>
                 <Btn disabled={!bulkGosi} onClick={() => { bulkUpd("gosiOption", bulkGosi); setBulkGosi(""); }} style={{
-                  ...s.btnSm, backgroundColor: bulkGosi ? "#92400e" : "#e5e7eb",
-                  color: bulkGosi ? "white" : "#9ca3af", border: "none", opacity: 1,
+                  ...s.btnSm, backgroundColor: bulkGosi ? WF_TOKENS.warningSolid : "#e5e7eb",
+                  color: bulkGosi ? "white" : "#9ca3af", border: "none", opacity: 1, flexShrink: 0,
                 }}>
                   <Check size={12} /> Apply
                 </Btn>
               </div>
               <button
                 onClick={() => bulkUpd("gosiOption", "")}
-                style={{ fontSize: 11, color: "#a16207", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
+                style={{ fontSize: 11, color: WF_TOKENS.warning, background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
               >
                 Clear GOSI from selected employees
               </button>
             </div>
 
-            {/* Export Qiwa */}
-            <div style={{ padding: 16, borderRadius: 12, border: "1px solid #bfdbfe", backgroundColor: "#eff6ff" }}>
-              <p style={{ fontWeight: 700, fontSize: 13, color: "#1e3a8a", margin: "0 0 4px" }}>
-                <Download size={13} style={{ display: "inline", marginRight: 4 }} /> Export for Qiwa
-              </p>
-              <p style={{ fontSize: 12, color: "#3b82f6", margin: "0 0 12px" }}>
-                21-field CSV for {selected.length} employee(s)
-              </p>
+            {/* ── Export ── */}
+            <div style={{ padding: "16px 18px", borderRadius: 14, border: `1px solid ${WF_TOKENS.infoSolid}30`, backgroundColor: WF_TOKENS.infoBg, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
+              <div>
+                <p style={{ fontWeight: 700, fontSize: 12, letterSpacing: "0.04em", textTransform: "uppercase", color: WF_TOKENS.info, margin: "0 0 3px", display: "flex", alignItems: "center", gap: 7 }}>
+                  <Download size={13} /> Export for Qiwa
+                </p>
+                <p style={{ fontSize: 12, color: WF_TOKENS.info, opacity: 0.75, margin: 0 }}>
+                  21-field CSV for {selected.length} employee(s)
+                </p>
+              </div>
               <Btn variant="ghost" onClick={() => { exportQiwaCSV(selectedEmps); setShowBulk(false); }} style={s.btnSm}>
-                <Download size={12} /> Download Qiwa CSV
+                <Download size={12} /> Download CSV
               </Btn>
             </div>
-{/* Workflow Status */}
-            <div style={{ padding: 16, borderRadius: 12, border: "1px solid #e5e7eb", backgroundColor: "#f9fafb" }}>
-              <p style={{ fontWeight: 700, fontSize: 13, margin: "0 0 10px", display: "flex", alignItems: "center", gap: 6 }}>
-                <GitBranch size={14} style={{ color: M }} /> Update Workflow Status
+{/* ── Status ── */}
+            <div style={{ padding: "16px 18px", borderRadius: 14, border: "1px solid #e5e7eb", backgroundColor: "#fafafa" }}>
+              <p style={{ fontWeight: 700, fontSize: 12, letterSpacing: "0.04em", textTransform: "uppercase", color: MD, margin: "0 0 14px", display: "flex", alignItems: "center", gap: 7 }}>
+                <GitBranch size={13} style={{ color: M }} /> Status
               </p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+
+              <p style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.03em", margin: "0 0 8px" }}>Workflow</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 16 }}>
                 {WORKFLOW_OPTS.map(o =>
                   <button key={o} onClick={() => bulkUpd("workflowStatus", o)} style={{
                     padding: "6px 8px", borderRadius: 8, textAlign: "center",
                     border: "1px solid #d1d5db", fontSize: 11, fontWeight: 600,
                     cursor: "pointer", backgroundColor: "white", color: "#374151",
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    transition: "background 130ms, border-color 130ms, color 130ms",
                   }}
                   onMouseEnter={e => { e.currentTarget.style.backgroundColor = `${M}10`; e.currentTarget.style.borderColor = M; e.currentTarget.style.color = M; }}
                   onMouseLeave={e => { e.currentTarget.style.backgroundColor = "white"; e.currentTarget.style.borderColor = "#d1d5db"; e.currentTarget.style.color = "#374151"; }}
                   >{o}</button>
                 )}
               </div>
-            </div>
 
-            {/* Contract Status */}
-            <div style={{ padding: 16, borderRadius: 12, border: "1px solid #e5e7eb", backgroundColor: "#f9fafb" }}>
-              <p style={{ fontWeight: 700, fontSize: 13, margin: "0 0 10px", display: "flex", alignItems: "center", gap: 6 }}>
-                <FileText size={14} style={{ color: M }} /> Update Contract Status
-              </p>
+              <p style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.03em", margin: "0 0 8px", paddingTop: 14, borderTop: "1px solid #eeeeee" }}>Contract</p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {STATUS_OPTS.map(o => {
                   const statusColor = { active:"#16a34a", new:"#0369a1", renewal:"#7c3aed", transfer:"#d97706", expired:"#6b7280", resigned:"#dc2626" }[o] || "#374151";
@@ -2803,6 +2804,7 @@ const submitRenew = async () => {
                       border: `1px solid ${statusColor}30`, fontSize: 11, fontWeight: 600,
                       cursor: "pointer", backgroundColor: `${statusColor}10`, color: statusColor,
                       textTransform: "capitalize", whiteSpace: "nowrap",
+                      transition: "background 130ms",
                     }}
                     onMouseEnter={e => { e.currentTarget.style.backgroundColor = `${statusColor}25`; }}
                     onMouseLeave={e => { e.currentTarget.style.backgroundColor = `${statusColor}10`; }}
@@ -2811,9 +2813,9 @@ const submitRenew = async () => {
                 })}
               </div>
             </div>
-            {/* Profit Calculation */}
-            <div style={{ padding: 16, borderRadius: 12, border: "1px solid #e5e7eb", backgroundColor: "#f9fafb" }}>
-              <p style={{ fontWeight: 700, fontSize: 13, margin: "0 0 12px", display: "flex", alignItems: "center", gap: 6 }}>
+            {/* ── Financials ── */}
+            <div style={{ padding: "16px 18px", borderRadius: 14, border: "1px solid #e5e7eb", backgroundColor: "#fafafa" }}>
+              <p style={{ fontWeight: 700, fontSize: 12, letterSpacing: "0.04em", textTransform: "uppercase", color: MD, margin: "0 0 14px", display: "flex", alignItems: "center", gap: 7 }}>
                 <DollarSign size={13} style={{ color: M }} /> Profit Calculation Mode
               </p>
 
@@ -2822,16 +2824,16 @@ const submitRenew = async () => {
                 <button onClick={() => setShowProfitMode(prev => ({ ...prev, mode: "partner" }))}
                   style={{
                     flex: 1, padding: "10px 12px", borderRadius: 12, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                    border: showProfitMode?.mode === "partner" ? "2px solid #3b82f6" : "1px solid #e5e7eb",
-                    backgroundColor: showProfitMode?.mode === "partner" ? "#dbeafe" : "white",
-                    color: showProfitMode?.mode === "partner" ? "#1e40af" : "#6b7280"
+                    border: showProfitMode?.mode === "partner" ? `2px solid ${M}` : "1px solid #e5e7eb",
+                    backgroundColor: showProfitMode?.mode === "partner" ? `${M}12` : "white",
+                    color: showProfitMode?.mode === "partner" ? M : "#6b7280"
                   }}>Partner Mode</button>
                 <button onClick={() => setShowProfitMode(prev => ({ ...prev, mode: "direct" }))}
                   style={{
                     flex: 1, padding: "10px 12px", borderRadius: 12, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                    border: showProfitMode?.mode === "direct" ? "2px solid #ec4899" : "1px solid #e5e7eb",
-                    backgroundColor: showProfitMode?.mode === "direct" ? "#fbf1f8" : "white",
-                    color: showProfitMode?.mode === "direct" ? "#be185d" : "#6b7280"
+                    border: showProfitMode?.mode === "direct" ? `2px solid ${MD}` : "1px solid #e5e7eb",
+                    backgroundColor: showProfitMode?.mode === "direct" ? `${MD}0f` : "white",
+                    color: showProfitMode?.mode === "direct" ? MD : "#6b7280"
                   }}>Direct Mode</button>
               </div>
 
@@ -2845,8 +2847,8 @@ const submitRenew = async () => {
                         <button key={t} onClick={() => setShowProfitMode(prev => ({ ...prev, clientType: t }))}
                           style={{
                             flex: 1, padding: "6px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                            border: showProfitMode?.clientType === t ? "2px solid #3b82f6" : "1px solid #e5e7eb",
-                            backgroundColor: showProfitMode?.clientType === t ? "#dbeafe" : "white"
+                            border: showProfitMode?.clientType === t ? `2px solid ${M}` : "1px solid #e5e7eb",
+                            backgroundColor: showProfitMode?.clientType === t ? `${M}12` : "white"
                           }}>{t === "percent" ? "%" : "SAR"}</button>
                       )}
                     </div>
@@ -2864,8 +2866,8 @@ const submitRenew = async () => {
                         <button key={t} onClick={() => setShowProfitMode(prev => ({ ...prev, partnerType: t }))}
                           style={{
                             flex: 1, padding: "6px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                            border: showProfitMode?.partnerType === t ? "2px solid #ec4899" : "1px solid #e5e7eb",
-                            backgroundColor: showProfitMode?.partnerType === t ? "#fbf1f8" : "white"
+                            border: showProfitMode?.partnerType === t ? `2px solid ${MD}` : "1px solid #e5e7eb",
+                            backgroundColor: showProfitMode?.partnerType === t ? `${MD}0f` : "white"
                           }}>{t === "percent" ? "%" : "SAR"}</button>
                       )}
                        </div>
@@ -2895,8 +2897,8 @@ const submitRenew = async () => {
                       <button key={t} onClick={() => setShowProfitMode(prev => ({ ...prev, fisheyeType: t }))}
                         style={{
                           flex: 1, padding: "6px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                          border: showProfitMode?.fisheyeType === t ? "2px solid #f59e0b" : "1px solid #e5e7eb",
-                          backgroundColor: showProfitMode?.fisheyeType === t ? "#fef3c7" : "white"
+                          border: showProfitMode?.fisheyeType === t ? `2px solid ${MD}` : "1px solid #e5e7eb",
+                          backgroundColor: showProfitMode?.fisheyeType === t ? `${MD}0f` : "white"
                         }}>{t === "percent" ? "%" : "SAR"}</button>
                     )}
                   </div>
@@ -2983,13 +2985,13 @@ const submitRenew = async () => {
 </button>
             </div>
 
-            {/* Delete */}
-            <div style={{ padding: 16, borderRadius: 12, border: "1px solid #fca5a5", backgroundColor: "#fff5f5" }}>
-              <p style={{ fontWeight: 700, fontSize: 13, margin: "0 0 6px", display: "flex", alignItems: "center", gap: 6, color: "#dc2626" }}>
-                <Trash2 size={13} /> Delete Employees
+            {/* ── Danger Zone ── */}
+            <div style={{ padding: "16px 18px", borderRadius: 14, border: `1px solid ${WF_TOKENS.errorSolid}30`, backgroundColor: WF_TOKENS.errorBg }}>
+              <p style={{ fontWeight: 700, fontSize: 12, letterSpacing: "0.04em", textTransform: "uppercase", margin: "0 0 6px", display: "flex", alignItems: "center", gap: 7, color: WF_TOKENS.error }}>
+                <Trash2 size={13} /> Danger Zone
               </p>
-              <p style={{ fontSize: 12, color: "#ef4444", margin: "0 0 12px", opacity: 0.8 }}>
-                Permanently remove {selected.length} selected employee(s)
+              <p style={{ fontSize: 12, color: WF_TOKENS.error, margin: "0 0 12px", opacity: 0.75 }}>
+                Permanently remove {selected.length} selected employee(s) — this cannot be undone.
               </p>
               <Btn onClick={async () => {
                 if (window.confirm("هل أنت متأكد من حذف الموظفين المحددين؟")) {
@@ -3004,7 +3006,7 @@ const submitRenew = async () => {
                     console.error(err);
                   }
                 }
-              }} full style={s.btnSm}>
+              }} full style={{ ...s.btnSm, backgroundColor: WF_TOKENS.errorSolid, color: "white", border: "none" }}>
                 <Trash2 size={12} /> Delete Selected
               </Btn>
             </div>
