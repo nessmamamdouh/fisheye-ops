@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { isExcluded } from './utils/helpers';
 import { supabase } from './utils/supabase';
 
@@ -49,8 +50,14 @@ const WF_MAP = {
 const ONBOARDING_STEPS = ["Docs Requested", "Docs Received", "Docs Received +"];
 
 export default function ClientPortal({ clientName: propClientName }) {
-  // Support both URL params and props
-  const clientName = propClientName || new URLSearchParams(window.location.search).get('client');
+  // Support props, the /client/:clientName route param, and a ?client=
+  // query string (in that order) — the route never actually passed its
+  // own :clientName through before (element={<ClientPortal/>} with no
+  // prop, and this component never called useParams()), so a shared
+  // "/client/<name>" link silently showed nothing. useParams() is always
+  // safe to call even outside a route match — it just returns {}.
+  const { clientName: routeClientName } = useParams();
+  const clientName = propClientName || routeClientName || new URLSearchParams(window.location.search).get('client');
 
   // Public portal: fetches ONLY this client's rows, and only the safe
   // (non-sensitive) columns exposed by employees_portal_safe — no IBAN,

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import { isExcluded } from './utils/helpers';
 import { supabase } from './utils/supabase';
 
@@ -59,7 +60,13 @@ export default function PartnerPortal({ partnerName: propPartnerName }) {
     }
   });
 
-  const partnerName = propPartnerName || new URLSearchParams(window.location.search).get('partner');
+  // Support props, the /partner/:partnerId route param, and a ?partner=
+  // query string (in that order) — same fix as ClientPortal: the route
+  // never actually passed :partnerId through (element={<PartnerPortal/>}
+  // with no prop, and useParams() was never called here), so a shared
+  // "/partner/<name>" link silently showed nothing.
+  const { partnerId: routePartnerId } = useParams();
+  const partnerName = propPartnerName || routePartnerId || new URLSearchParams(window.location.search).get('partner');
 
   useEffect(() => {
     if (partnerName) {
