@@ -759,7 +759,16 @@ function EmployeeModal({ emp, onClose, onSave, partners, allEmployees = [], useO
           <div style={s.grid3}>
             <Sel label="Status" value={form.status} onChange={v=>upd("status",v)} options={STATUS_OPTS}/>
             <Sel label="Workflow" value={form.workflowStatus} onChange={v=>upd("workflowStatus",v)} options={["",...WORKFLOW_OPTS]}/>
-            <Inp label="Client Price (SAR)" value={String(form.clientPrice||"")} onChange={v=>upd("clientPrice",parseFloat(v)||0)} type="number"/>
+            <div>
+              <Inp label="Client Price (SAR)" value={String(form.clientPrice||"")} onChange={v=>upd("clientPrice",parseFloat(v)||0)} type="number"/>
+              {form.profitMode==="partner" && effMargin.source==="deal" && (
+                <p style={{fontSize:10,color:MD,margin:"4px 0 0",fontWeight:600,lineHeight:1.5}}>
+                  ديل العميل في الإعدادات بيدي {effMargin.display} = {fmtSAR(Math.round(effMargin.amount))} — لكن في Partner Mode الرقم ده مبيتطبّقش تلقائي. اكتبي{" "}
+                  <button type="button" onClick={()=>upd("clientPrice",Math.round(effMargin.amount))} style={{border:"none",background:"none",color:M,textDecoration:"underline",cursor:"pointer",padding:0,font:"inherit",fontWeight:700}}>{Math.round(effMargin.amount)}</button>
+                  {" "}هنا كـ Client Price عشان يفضل مطابق لمارجن الديل، وبعدين حطي Partner Cost (1000 مثلاً) — البروفيت هيبقى {Math.round(effMargin.amount)} − Partner Cost.
+                </p>
+              )}
+            </div>
           </div>
           <div style={s.grid2}>
             <Inp label="Start Date" value={form.startDate} onChange={v=>upd("startDate",v)} type="date"/>
@@ -1756,6 +1765,7 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
   const [calOffset, setCalOffset] = useState(0); // months from today
   const [bulkPartner, setBulkPartner] = useState("");
   const [bulkClient, setBulkClient] = useState("");
+  const [bulkProject, setBulkProject] = useState("");
   const [bulkGosi, setBulkGosi] = useState("");
 
   // ── Lightweight toast ─────────────────────────────────────────────────────
@@ -1770,6 +1780,21 @@ function WorkforceView({employees, setEmployees, partners, clients=[], exportCSV
     ["", ...new Set(employees.map(e => e.project).filter(Boolean).sort())],
     [employees]
   );
+  // Shows, inside the bulk Partner-mode panel, what the selected employees'
+  // client Deal (Settings -> Clients & Deals) already computes -- so typing
+  // a Client Price here doesn't silently throw away that configured margin.
+  // See getEffectiveMargin in utils/appConfig.js for the same calc Direct
+  // mode uses.
+  const bulkMarginHint = useMemo(() => {
+    const emps = employees.filter(e => selected.includes(e._id));
+    if (!emps.length) return null;
+    const withDeal = emps
+      .map(e => ({ id: e._id, name: e.name, client: e.client, ...getEffectiveMargin(e) }))
+      .filter(m => m.source === "deal");
+    if (!withDeal.length) return null;
+    const uniqueKey = [...new Set(withDeal.map(m => `${m.client}::${m.display}`))];
+    return { items: withDeal, allSame: uniqueKey.length === 1 };
+  }, [employees, selected]);
   const sourcingOpts = useMemo(() =>
     ["", ...new Set(employees.map(e => e.sourcingThrough).filter(Boolean).sort())],
     [employees]
@@ -2618,12 +2643,6 @@ const submitRenew = async () => {
       {showBulk && (
         <Modal title={`Bulk Action · ${selected.length} selected`} onClose={() => setShowBulk(false)}>
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-{/* Save Button */}
-<div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 16, display: "flex", justifyContent: "flex-end" }}>
-  <Btn onClick={() => { setShowBulk(false); setSelected([]); }} style={{ backgroundColor: M, color: "white" }}>
-  💾 حفظ وإغلاق
-</Btn>
-</div>
 {/* Assign Partner */}
             <div style={{ padding: 16, borderRadius: 12, border: "1px solid #e5e7eb", backgroundColor: "#f9fafb" }}>
               <p style={{ fontWeight: 700, fontSize: 13, margin: "0 0 12px", display: "flex", alignItems: "center", gap: 6 }}>
@@ -2673,6 +2692,34 @@ const submitRenew = async () => {
       <Check size={12} /> Apply
     </Btn>
   </div>
+</div>
+
+            {/* Change Project */}
+<div style={{ padding: 16, borderRadius: 12, border: "1px solid #e5e7eb", backgroundColor: "#f9fafb" }}>
+  <p style={{ fontWeight: 700, fontSize: 13, margin: "0 0 12px", display: "flex", alignItems: "center", gap: 6 }}>
+    <Briefcase size={14} style={{ color: M }} /> Change Project
+  </p>
+  <div style={{ display: "flex", gap: 8 }}>
+    <input
+      list="fe-bulk-project-options"
+      value={bulkProject}
+      onChange={e => setBulkProject(e.target.value)}
+      placeholder="اكتبي اسم البروجكت..."
+      style={{ ...s.inp, flex: 1 }}
+    />
+    <datalist id="fe-bulk-project-options">
+      {projects.filter(Boolean).map(p => <option key={p} value={p} />)}
+    </datalist>
+    <Btn disabled={!bulkProject.trim()} onClick={() => { bulkUpd("project", bulkProject.trim()); setBulkProject(""); }} style={{
+      ...s.btnSm, backgroundColor: bulkProject.trim() ? M : "#e5e7eb",
+      color: bulkProject.trim() ? "white" : "#9ca3af", border: "none", opacity: 1,
+    }}>
+      <Check size={12} /> Apply
+    </Btn>
+  </div>
+  <p style={{ fontSize: 10, color: "#9ca3af", margin: "6px 0 0" }}>
+    بتغيّر حقل الـ Project بس — مش الـ Client. لو عايزة تغيّري العميل كمان, استخدمي Change Client فوق.
+  </p>
 </div>
 
             {/* GOSI Option */}
@@ -2829,7 +2876,18 @@ const submitRenew = async () => {
                     </p>
                   </div>
                 </div>
-              ) : (
+              ) : (null)}
+              {showProfitMode?.mode === "partner" && bulkMarginHint && (
+                <div style={{ padding: "10px 12px", borderRadius: 8, backgroundColor: `${MD}10`, border: `1px solid ${MD}30`, marginTop: -8, marginBottom: 16 }}>
+                  <p style={{ fontSize: 11, color: MD, margin: 0, fontWeight: 600, lineHeight: 1.6 }}>
+                    ⚠️ مهم: وضع With Partner بيلغي المارجن المضاف في الإعدادات خالص ويحسب البروفيت = Client Price − Partner Cost بس.{" "}
+                    {bulkMarginHint.allSame
+                      ? <>ديل {bulkMarginHint.items[0].client} في الإعدادات حالياً: <b>{bulkMarginHint.items[0].display}</b> (مثال: {bulkMarginHint.items[0].name} = {fmtSAR(Math.round(bulkMarginHint.items[0].amount))}). لو عايزة نفس المارجن ده يفضل إيراد قبل ما تخصمي Partner Cost منه, اختاري Client Price = <b>%</b> وحطي نفس نسبة الديل, والـ Partner Cost حطيها <b>SAR</b> ثابت (زي 1000).</>
+                      : <>الموظفين المحددين تحت ديلز مختلفة أو رواتب مختلفة — الأفضل تظبطي Client Price/Partner Cost من كارت كل موظف لوحده (تاب Contract) عشان الرقم يطلع مظبوط.</>}
+                  </p>
+                </div>
+              )}
+              {showProfitMode?.mode !== "partner" && (
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginBottom: 4, display: "block" }}>FISHEYE MARGIN</label>
                   <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
@@ -2948,6 +3006,13 @@ const submitRenew = async () => {
                 }
               }} full style={s.btnSm}>
                 <Trash2 size={12} /> Delete Selected
+              </Btn>
+            </div>
+
+            {/* Done */}
+            <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 16, display: "flex", justifyContent: "flex-end" }}>
+              <Btn onClick={() => { setShowBulk(false); setSelected([]); }} style={{ backgroundColor: M, color: "white" }}>
+                ✅ تم — قفل الشاشة
               </Btn>
             </div>
 
